@@ -319,6 +319,100 @@ export async function deleteCheck(checkId: string): Promise<{ error?: string }> 
   return { error: error?.message };
 }
 
+export type BulkCheckRow = {
+  paymentMethod: "CHECK" | "TRANSFER";
+  bankAccountId: string;
+  payee: string;
+  amount: number;
+  dueDate: string | null;
+  checkNumber: string | null;
+  departmentId: string | null;
+  notes: string | null;
+};
+
+export type BulkRowOutcome = { success: boolean; reason?: string };
+
+// Bulk entry of several checks/transfers at once: each row is inserted
+// individually (not one multi-row insert) so a single bad row never blocks
+// the rest of the batch from saving.
+export async function createCheckBatch(rows: BulkCheckRow[]): Promise<{ outcomes: BulkRowOutcome[] }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const outcomes: BulkRowOutcome[] = [];
+  for (const row of rows) {
+    const { error } = await supabase.from("checks").insert({
+      payment_method: row.paymentMethod,
+      bank_account_id: row.bankAccountId,
+      payee: row.payee,
+      amount: row.amount,
+      due_date: row.dueDate || null,
+      check_number: row.checkNumber || null,
+      department_id: row.departmentId || null,
+      notes: row.notes,
+      created_by: user?.id ?? null,
+    });
+    if (error) {
+      outcomes.push({ success: false, reason: error.message });
+    } else {
+      outcomes.push({ success: true });
+      await ensureSupplier(supabase, row.payee, user?.id ?? null);
+    }
+  }
+
+  revalidateCheckPaths();
+  return { outcomes };
+}
+
+export type BulkExpenseRequestRow = {
+  departmentId: string;
+  paymentMethod: "CHECK" | "TRANSFER";
+  bankAccountId: string;
+  payee: string;
+  amount: number;
+  dueDate: string | null;
+  notes: string | null;
+};
+
+// Bulk version of createDeptExpenseRequest: type several requests at once,
+// save all in one go. Same per-row RLS constraints apply (department
+// managers can't set a date unless granted that permission — such rows
+// simply insert with a null date and land in pending-approval).
+export async function createDeptExpenseRequestBatch(
+  rows: BulkExpenseRequestRow[],
+): Promise<{ outcomes: BulkRowOutcome[] }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const outcomes: BulkRowOutcome[] = [];
+  for (const row of rows) {
+    const { error } = await supabase.from("checks").insert({
+      payment_method: row.paymentMethod,
+      department_id: row.departmentId,
+      bank_account_id: row.bankAccountId,
+      payee: row.payee,
+      amount: row.amount,
+      due_date: row.dueDate || null,
+      notes: row.notes,
+      created_by: user?.id ?? null,
+    });
+    if (error) {
+      outcomes.push({ success: false, reason: error.message });
+    } else {
+      outcomes.push({ success: true });
+      await ensureSupplier(supabase, row.payee, user?.id ?? null);
+    }
+  }
+
+  revalidateCheckPaths();
+  return { outcomes };
+}
+
 export async function updateCheck(
   checkId: string,
   input: {

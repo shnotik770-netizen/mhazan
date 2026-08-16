@@ -12,6 +12,7 @@ import {
 } from "@/components/checks-client";
 import { PasteExistingChecksForm } from "@/components/checks-paste-client";
 import { PaymentSpreadForm } from "@/components/payment-spread-client";
+import { BulkCheckEntryForm, BulkExpenseRequestFormMulti } from "@/components/bulk-checks-client";
 
 export default async function ChecksPage() {
   const user = await requireUser();
@@ -63,6 +64,7 @@ export default async function ChecksPage() {
         {isAdmin && (
           <div className="flex items-center gap-2">
             <NewCheckForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} categories={categories ?? []} />
+            <BulkCheckEntryForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <PaymentSpreadForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <PasteExistingChecksForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
           </div>
@@ -70,11 +72,18 @@ export default async function ChecksPage() {
       </div>
 
       {myDepartments.length > 0 && (
-        <DeptExpenseRequestForm
-          departments={myDepartments}
-          bankAccounts={bankAccounts ?? []}
-          canSetDates={isAdmin || user.profile.can_set_check_dates}
-        />
+        <div className="space-y-2">
+          <DeptExpenseRequestForm
+            departments={myDepartments}
+            bankAccounts={bankAccounts ?? []}
+            canSetDates={isAdmin || user.profile.can_set_check_dates}
+          />
+          <BulkExpenseRequestFormMulti
+            departments={myDepartments}
+            bankAccounts={bankAccounts ?? []}
+            canSetDates={isAdmin || user.profile.can_set_check_dates}
+          />
+        </div>
       )}
 
       {(transfersNeedingVerification ?? []).length > 0 && isAdmin && (
