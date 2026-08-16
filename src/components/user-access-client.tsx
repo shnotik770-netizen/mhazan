@@ -12,17 +12,20 @@ export function UserAccessRow({
   fullName,
   role: initialRole,
   grantedDepartmentIds,
+  canSetCheckDates: initialCanSetCheckDates,
   departments,
 }: {
   userId: string;
   fullName: string;
   role: string;
   grantedDepartmentIds: string[];
+  canSetCheckDates: boolean;
   departments: Department[];
 }) {
   const router = useRouter();
   const [role, setRole] = useState(initialRole);
   const [selected, setSelected] = useState<Set<string>>(new Set(grantedDepartmentIds));
+  const [canSetCheckDates, setCanSetCheckDates] = useState(initialCanSetCheckDates);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -39,7 +42,12 @@ export function UserAccessRow({
     setError(null);
     startTransition(async () => {
       try {
-        await updateUserAccess(userId, role as "DEPT_MANAGER" | "FINANCE_ADMIN", Array.from(selected));
+        await updateUserAccess(
+          userId,
+          role as "DEPT_MANAGER" | "FINANCE_ADMIN",
+          Array.from(selected),
+          canSetCheckDates,
+        );
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "שגיאה בעדכון הרשאות");
@@ -73,6 +81,18 @@ export function UserAccessRow({
             ))}
             {departments.length === 0 && <span className="text-sm text-muted">אין מחלקות מוגדרות</span>}
           </div>
+        )}
+      </td>
+      <td>
+        {role !== "FINANCE_ADMIN" && (
+          <label className="flex items-center gap-1 text-sm whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={canSetCheckDates}
+              onChange={(e) => setCanSetCheckDates(e.target.checked)}
+            />
+            רשאי לקבוע תאריך בבקשות הוצאה
+          </label>
         )}
       </td>
       <td>

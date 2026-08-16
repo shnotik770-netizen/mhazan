@@ -2,18 +2,37 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { formatCurrency } from "@/lib/format";
+import { ManualEntryApprovalRow, NewManualEntryForm } from "@/components/manual-entries-client";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const supabase = await createClient();
 
-  const [{ data: bankAccounts }, { data: pendingSummary }, { data: ledgerBalances }, { data: departments }] =
-    await Promise.all([
-      supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
-      supabase.from("v_pending_queue_summary").select("*"),
-      supabase.from("v_inter_department_balances").select("*"),
-      supabase.from("departments").select("id, name"),
-    ]);
+  const [
+    { data: bankAccounts },
+    { data: pendingSummary },
+    { data: ledgerBalances },
+    { data: departments },
+    { data: grants },
+    { data: pendingManualEntries },
+  ] = await Promise.all([
+    supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
+    supabase.from("v_pending_queue_summary").select("*"),
+    supabase.from("v_inter_department_balances").select("*"),
+    supabase.from("departments").select("*"),
+    supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
+    isAdmin
+      ? supabase
+          .from("manual_department_entries")
+          .select("*, departments(name)")
+          .eq("status", "PENDING")
+          .order("created_at")
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
+  const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
 
   const deptName = (id: string | null) => departments?.find((d) => d.id === id)?.name ?? "—";
 
@@ -76,6 +95,39 @@ export default async function DashboardPage() {
           )}
         </div>
       )}
+
+      {isAdmin && (pendingManualEntries ?? []).length > 0 && (
+        <div className="card p-4 border-warning/40">
+          <h2 className="font-semibold mb-1">
+            ⚠ {pendingManualEntries!.length} רישומים ידניים ממתינים לאישור
+          </h2>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>מחלקה</th>
+                <th>סוג</th>
+                <th>סכום</th>
+                <th>הערות</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingManualEntries!.map((e) => (
+                <ManualEntryApprovalRow
+                  key={e.id}
+                  entryId={e.id}
+                  departmentName={(e as { departments: { name: string } | null }).departments?.name ?? "—"}
+                  direction={e.direction}
+                  amount={Number(e.amount)}
+                  notes={e.notes}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {myDepartments.length > 0 && <NewManualEntryForm departments={myDepartments} />}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card p-4">

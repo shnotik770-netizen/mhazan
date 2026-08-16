@@ -89,11 +89,15 @@ export async function updateUserAccess(
   userId: string,
   role: "DEPT_MANAGER" | "FINANCE_ADMIN",
   departmentIds: string[],
+  canSetCheckDates: boolean,
 ): Promise<void> {
   const admin = await requireFinanceAdmin();
   const supabase = await createClient();
 
-  const { error: roleError } = await supabase.from("user_profiles").update({ role }).eq("id", userId);
+  const { error: roleError } = await supabase
+    .from("user_profiles")
+    .update({ role, can_set_check_dates: canSetCheckDates })
+    .eq("id", userId);
   if (roleError) throw new Error(roleError.message);
 
   const { error: deleteError } = await supabase

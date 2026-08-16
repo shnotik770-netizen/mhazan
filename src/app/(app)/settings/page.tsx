@@ -192,6 +192,7 @@ export default async function SettingsPage() {
               <th>שם</th>
               <th>הרשאה</th>
               <th>מחלקות מאושרות</th>
+              <th>תאריך בבקשות</th>
               <th></th>
             </tr>
           </thead>
@@ -203,12 +204,13 @@ export default async function SettingsPage() {
                 fullName={p.full_name ?? p.id.slice(0, 8)}
                 role={p.role}
                 grantedDepartmentIds={grantsFor(p.id)}
+                canSetCheckDates={p.can_set_check_dates}
                 departments={departments ?? []}
               />
             ))}
             {(profiles ?? []).length === 0 && (
               <tr>
-                <td colSpan={4} className="text-center text-muted py-6">
+                <td colSpan={5} className="text-center text-muted py-6">
                   אין משתמשים רשומים עדיין
                 </td>
               </tr>

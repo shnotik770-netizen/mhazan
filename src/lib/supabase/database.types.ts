@@ -143,50 +143,101 @@ export type Database = {
           },
         ]
       }
+      check_allocations: {
+        Row: {
+          amount: number
+          check_id: string
+          created_at: string
+          department_id: string
+          id: string
+        }
+        Insert: {
+          amount: number
+          check_id: string
+          created_at?: string
+          department_id: string
+          id?: string
+        }
+        Update: {
+          amount?: number
+          check_id?: string
+          created_at?: string
+          department_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "check_allocations_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "checks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_allocations_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checks: {
         Row: {
           amount: number
           bank_account_id: string
           category_id: string | null
-          check_number: string
+          check_number: string | null
           cleared_at: string | null
           created_at: string
           created_by: string | null
           department_id: string | null
-          due_date: string
+          due_date: string | null
           id: string
+          internal_beneficiary: string | null
           notes: string | null
           payee: string
+          payment_method: string
+          skip_department_ledger: boolean
+          spread_id: string | null
           status: string
         }
         Insert: {
           amount: number
           bank_account_id: string
           category_id?: string | null
-          check_number: string
+          check_number?: string | null
           cleared_at?: string | null
           created_at?: string
           created_by?: string | null
           department_id?: string | null
-          due_date: string
+          due_date?: string | null
           id?: string
+          internal_beneficiary?: string | null
           notes?: string | null
           payee: string
+          payment_method?: string
+          skip_department_ledger?: boolean
+          spread_id?: string | null
           status?: string
         }
         Update: {
           amount?: number
           bank_account_id?: string
           category_id?: string | null
-          check_number?: string
+          check_number?: string | null
           cleared_at?: string | null
           created_at?: string
           created_by?: string | null
           department_id?: string | null
-          due_date?: string
+          due_date?: string | null
           id?: string
+          internal_beneficiary?: string | null
           notes?: string | null
           payee?: string
+          payment_method?: string
+          skip_department_ledger?: boolean
+          spread_id?: string | null
           status?: string
         }
         Relationships: [
@@ -209,6 +260,13 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_spread_id_fkey"
+            columns: ["spread_id"]
+            isOneToOne: false
+            referencedRelation: "payment_spreads"
             referencedColumns: ["id"]
           },
         ]
@@ -384,6 +442,83 @@ export type Database = {
           },
         ]
       }
+      manual_department_entries: {
+        Row: {
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          department_id: string
+          direction: string
+          id: string
+          notes: string | null
+          status: string
+        }
+        Insert: {
+          amount: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          department_id: string
+          direction: string
+          id?: string
+          notes?: string | null
+          status?: string
+        }
+        Update: {
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          department_id?: string
+          direction?: string
+          id?: string
+          notes?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_department_entries_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_spreads: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          internal_beneficiary: string | null
+          notes: string | null
+          payee: string
+          payment_method: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          internal_beneficiary?: string | null
+          notes?: string | null
+          payee: string
+          payment_method: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          internal_beneficiary?: string | null
+          notes?: string | null
+          payee?: string
+          payment_method?: string
+        }
+        Relationships: []
+      }
       print_queue: {
         Row: {
           created_at: string | null
@@ -519,6 +654,7 @@ export type Database = {
       }
       user_profiles: {
         Row: {
+          can_set_check_dates: boolean
           created_at: string
           department_id: string | null
           full_name: string | null
@@ -526,6 +662,7 @@ export type Database = {
           role: string
         }
         Insert: {
+          can_set_check_dates?: boolean
           created_at?: string
           department_id?: string | null
           full_name?: string | null
@@ -533,6 +670,7 @@ export type Database = {
           role?: string
         }
         Update: {
+          can_set_check_dates?: boolean
           created_at?: string
           department_id?: string | null
           full_name?: string | null
@@ -551,6 +689,72 @@ export type Database = {
       }
     }
     Views: {
+      v_check_department_amounts: {
+        Row: {
+          amount: number | null
+          bank_account_id: string | null
+          check_id: string | null
+          check_number: string | null
+          department_id: string | null
+          due_date: string | null
+          payee: string | null
+          payment_method: string | null
+          skip_department_ledger: boolean | null
+          spread_id: string | null
+          status: string | null
+        }
+        Relationships: []
+      }
+      v_checks_needing_issuance: {
+        Row: {
+          account_number: string | null
+          amount: number | null
+          bank_account_id: string | null
+          bank_name: string | null
+          category_id: string | null
+          check_number: string | null
+          cleared_at: string | null
+          created_at: string | null
+          created_by: string | null
+          department_id: string | null
+          department_name: string | null
+          due_date: string | null
+          id: string | null
+          internal_beneficiary: string | null
+          notes: string | null
+          payee: string | null
+          payment_method: string | null
+          skip_department_ledger: boolean | null
+          spread_id: string | null
+          status: string | null
+        }
+        Relationships: []
+      }
+      v_checks_pending_approval: {
+        Row: {
+          account_number: string | null
+          amount: number | null
+          bank_account_id: string | null
+          bank_name: string | null
+          category_id: string | null
+          check_number: string | null
+          cleared_at: string | null
+          created_at: string | null
+          created_by: string | null
+          department_id: string | null
+          department_name: string | null
+          due_date: string | null
+          id: string | null
+          internal_beneficiary: string | null
+          notes: string | null
+          payee: string | null
+          payment_method: string | null
+          skip_department_ledger: boolean | null
+          spread_id: string | null
+          status: string | null
+        }
+        Relationships: []
+      }
       v_inter_department_balances: {
         Row: {
           creditor_department_id: string | null
@@ -589,35 +793,38 @@ export type Database = {
           payee: string | null
           status: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "checks_bank_account_id_fkey"
-            columns: ["bank_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "checks_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "checks_department_id_fkey"
-            columns: ["department_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       v_pending_queue_summary: {
         Row: {
           pending_amount: number | null
           pending_count: number | null
           source: string | null
+        }
+        Relationships: []
+      }
+      v_transfers_needing_verification: {
+        Row: {
+          account_number: string | null
+          amount: number | null
+          bank_account_id: string | null
+          bank_name: string | null
+          category_id: string | null
+          check_number: string | null
+          cleared_at: string | null
+          created_at: string | null
+          created_by: string | null
+          department_id: string | null
+          department_name: string | null
+          due_date: string | null
+          id: string | null
+          internal_beneficiary: string | null
+          notes: string | null
+          payee: string | null
+          payment_method: string | null
+          skip_department_ledger: boolean | null
+          spread_id: string | null
+          status: string | null
         }
         Relationships: []
       }
@@ -637,29 +844,7 @@ export type Database = {
           imported_at: string | null
           is_classified: boolean | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "bank_transactions_bank_account_id_fkey"
-            columns: ["bank_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bank_transactions_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bank_transactions_department_id_fkey"
-            columns: ["department_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Functions: {
@@ -672,11 +857,21 @@ export type Database = {
           source: string
         }[]
       }
+      get_department_cash_flow_forecast: {
+        Args: { p_department_id: string; p_horizon_days?: number }
+        Returns: {
+          expected_change: number
+          forecast_date: string
+          running_balance: number
+          source: string
+        }[]
+      }
       is_finance_admin: { Args: never; Returns: boolean }
       settle_ledger_between: {
         Args: { p_dept_a: string; p_dept_b: string }
         Returns: number
       }
+      user_can_set_check_dates: { Args: never; Returns: boolean }
       user_has_department: {
         Args: { p_department_id: string }
         Returns: boolean
