@@ -14,7 +14,14 @@ import { PasteExistingChecksForm } from "@/components/checks-paste-client";
 import { PaymentSpreadForm } from "@/components/payment-spread-client";
 import { BulkCheckEntryForm, BulkExpenseRequestFormMulti } from "@/components/bulk-checks-client";
 
-export default async function ChecksPage() {
+export default async function ChecksPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ asOf?: string }>;
+}) {
+  const { asOf: asOfParam } = await searchParams;
+  const asOf = asOfParam || new Date().toISOString().slice(0, 10);
+
   const user = await requireUser();
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const supabase = await createClient();
@@ -23,7 +30,7 @@ export default async function ChecksPage() {
     { data: pendingChecks },
     { data: pendingApproval },
     { data: needingIssuance },
-    { data: transfersNeedingVerification },
+    { data: overdueByAsOf },
     { data: checks },
     { data: departments },
     { data: categories },
@@ -34,7 +41,13 @@ export default async function ChecksPage() {
     supabase.from("v_pending_checks").select("*").order("due_date"),
     supabase.from("v_checks_pending_approval").select("*").order("created_at"),
     supabase.from("v_checks_needing_issuance").select("*").order("created_at"),
-    supabase.from("v_transfers_needing_verification").select("*").order("due_date"),
+    supabase
+      .from("checks")
+      .select("*, bank_accounts(bank_name, account_number), departments(name)")
+      .eq("status", "UNPAID")
+      .not("due_date", "is", null)
+      .lte("due_date", asOf)
+      .order("due_date"),
     supabase
       .from("checks")
       .select("*, bank_accounts(bank_name, account_number), departments(name)")
@@ -47,6 +60,27 @@ export default async function ChecksPage() {
     supabase.from("suppliers").select("name").order("name"),
   ]);
   const supplierNames = (suppliers ?? []).map((s) => s.name);
+  const overdueTransfers = (overdueByAsOf ?? []).filter((c) => c.payment_method === "TRANSFER");
+  const overdueChecks = (overdueByAsOf ?? []).filter((c) => c.payment_method !== "TRANSFER");
+
+  // Sort primarily by check-entry date, but group same-payee rows together
+  // even when their entry date is later, so an admin preparing one payee's
+  // checks sees all of that payee's pending items at once.
+  const sortedNeedingIssuance = (() => {
+    const rows = needingIssuance ?? [];
+    const earliestByPayee = new Map<string, string>();
+    for (const r of rows) {
+      const key = (r.payee ?? "").trim().toLowerCase();
+      const current = earliestByPayee.get(key);
+      if (!current || (r.created_at ?? "") < current) earliestByPayee.set(key, r.created_at ?? "");
+    }
+    return [...rows].sort((a, b) => {
+      const groupA = earliestByPayee.get((a.payee ?? "").trim().toLowerCase()) ?? "";
+      const groupB = earliestByPayee.get((b.payee ?? "").trim().toLowerCase()) ?? "";
+      if (groupA !== groupB) return groupA < groupB ? -1 : 1;
+      return (a.created_at ?? "") < (b.created_at ?? "") ? -1 : 1;
+    });
+  })();
 
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
@@ -67,6 +101,9 @@ export default async function ChecksPage() {
             <BulkCheckEntryForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <PaymentSpreadForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <PasteExistingChecksForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
+            <a href="/settings#recurring-schedules" className="rounded-lg border border-border px-4 py-2 text-sm font-semibold">
+              + הוראת קבע חדשה
+            </a>
           </div>
         )}
       </div>
@@ -86,43 +123,112 @@ export default async function ChecksPage() {
         </div>
       )}
 
-      {(transfersNeedingVerification ?? []).length > 0 && isAdmin && (
-        <div className="card p-4 border-warning/40">
-          <h2 className="font-semibold mb-1">
-            ⚠ {transfersNeedingVerification!.length} העברות שתאריכן עבר טרם אושרו כבוצעו
-          </h2>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>מוטב</th>
-                <th>סכום</th>
-                <th>תאריך</th>
-                <th>מחלקה</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {transfersNeedingVerification!.map((t) => (
-                <tr key={t.id!}>
-                  <td>{t.payee}</td>
-                  <td>{formatCurrency(Number(t.amount))}</td>
-                  <td>{formatDate(t.due_date!)}</td>
-                  <td>{t.department_name ?? "בהמתנה"}</td>
-                  <td>
-                    <VerifyTransferButton checkId={t.id!} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {isAdmin && (
+        <div className="card p-4">
+          <form className="flex flex-wrap items-end gap-3 mb-3" method="get">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                צ׳קים / העברות שהיו אמורים להתבצע עד תאריך
+              </label>
+              <input
+                type="date"
+                name="asOf"
+                defaultValue={asOf}
+                className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+              />
+            </div>
+            <button type="submit" className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold">
+              סנן
+            </button>
+          </form>
+
+          {overdueTransfers.length > 0 && (
+            <div className="mb-4">
+              <h2 className="font-semibold mb-1">⚠ {overdueTransfers.length} העברות שטרם אושרו כבוצעו</h2>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>מוטב</th>
+                    <th>סכום</th>
+                    <th>תאריך</th>
+                    <th>מחלקה</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overdueTransfers.map((t) => {
+                    const row = t as unknown as { id: string; payee: string; amount: number; due_date: string; departments: { name: string } | null };
+                    return (
+                      <tr key={row.id}>
+                        <td>{row.payee}</td>
+                        <td>{formatCurrency(Number(row.amount))}</td>
+                        <td>{formatDate(row.due_date)}</td>
+                        <td>{row.departments?.name ?? "בהמתנה"}</td>
+                        <td>
+                          <VerifyTransferButton checkId={row.id} label="אשר שההעברה בוצעה" />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {overdueChecks.length > 0 && (
+            <div>
+              <h2 className="font-semibold mb-1">⚠ {overdueChecks.length} צ׳קים שטרם אושרו כנפרעו</h2>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>מוטב</th>
+                    <th>מס׳ צ׳ק</th>
+                    <th>סכום</th>
+                    <th>תאריך</th>
+                    <th>מחלקה</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overdueChecks.map((c) => {
+                    const row = c as unknown as {
+                      id: string;
+                      payee: string;
+                      check_number: string | null;
+                      amount: number;
+                      due_date: string;
+                      departments: { name: string } | null;
+                    };
+                    return (
+                      <tr key={row.id}>
+                        <td>{row.payee}</td>
+                        <td>{row.check_number ?? "—"}</td>
+                        <td>{formatCurrency(Number(row.amount))}</td>
+                        <td>{formatDate(row.due_date)}</td>
+                        <td>{row.departments?.name ?? "בהמתנה"}</td>
+                        <td>
+                          <VerifyTransferButton checkId={row.id} label="סמן כנפרע" />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {overdueTransfers.length === 0 && overdueChecks.length === 0 && (
+            <p className="text-sm text-muted">אין צ׳קים/העברות שטרם אושרו עד התאריך שנבחר</p>
+          )}
         </div>
       )}
 
-      {(needingIssuance ?? []).length > 0 && isAdmin && (
+      {sortedNeedingIssuance.length > 0 && isAdmin && (
         <div className="card p-4 border-warning/40">
           <h2 className="font-semibold mb-1">
-            ⚠ {needingIssuance!.length} בקשות הוצאה ממתינות להנפקה (חסר מספר צ׳ק ו/או תאריך)
+            ⚠ {sortedNeedingIssuance.length} בקשות הוצאה ממתינות להנפקה (חסר מספר צ׳ק ו/או תאריך)
           </h2>
+          <p className="text-xs text-muted mb-2">ממוין לפי תאריך הזנה, עם קיבוץ של אותו ספק יחד</p>
           <table className="data-table">
             <thead>
               <tr>
@@ -134,7 +240,7 @@ export default async function ChecksPage() {
               </tr>
             </thead>
             <tbody>
-              {needingIssuance!.map((c) => (
+              {sortedNeedingIssuance.map((c) => (
                 <tr key={c.id!}>
                   <td>{c.payee}</td>
                   <td>{formatCurrency(Number(c.amount))}</td>

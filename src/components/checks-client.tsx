@@ -118,7 +118,7 @@ export function CheckStatusControls({ checkId, status }: { checkId: string; stat
 
 // "Confirm executed" is exactly marking a transfer CLEARED — the same
 // status transition, framed for the overdue-transfer verification queue.
-export function VerifyTransferButton({ checkId }: { checkId: string }) {
+export function VerifyTransferButton({ checkId, label }: { checkId: string; label?: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -133,7 +133,7 @@ export function VerifyTransferButton({ checkId }: { checkId: string }) {
       }
       className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
     >
-      אשר שההעברה בוצעה
+      {label ?? "אשר שההעברה בוצעה"}
     </button>
   );
 }

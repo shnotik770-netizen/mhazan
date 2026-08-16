@@ -103,7 +103,7 @@ export default async function SettingsPage() {
         </Link>
       </section>
 
-      <section className="card p-4 space-y-3">
+      <section id="recurring-schedules" className="card p-4 space-y-3">
         <h2 className="font-semibold">הוראות קבע (מנוע תחזית)</h2>
         <table className="data-table">
           <thead>

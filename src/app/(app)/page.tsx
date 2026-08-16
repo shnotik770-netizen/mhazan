@@ -65,6 +65,12 @@ export default async function DashboardPage() {
               ניהול קטגוריות
             </Link>
             <Link
+              href="/settings#recurring-schedules"
+              className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
+            >
+              + הוראת קבע חדשה
+            </Link>
+            <Link
               href="/settings"
               className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
             >
