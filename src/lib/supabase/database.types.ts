@@ -1,0 +1,766 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type Database = {
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
+  public: {
+    Tables: {
+      bank_accounts: {
+        Row: {
+          account_number: string
+          bank_name: string
+          created_at: string
+          current_balance: number
+          department_id: string
+          id: string
+        }
+        Insert: {
+          account_number: string
+          bank_name: string
+          created_at?: string
+          current_balance?: number
+          department_id: string
+          id?: string
+        }
+        Update: {
+          account_number?: string
+          bank_name?: string
+          created_at?: string
+          current_balance?: number
+          department_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_accounts_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_transactions: {
+        Row: {
+          amount: number
+          bank_account_id: string
+          category_id: string | null
+          date: string
+          department_id: string | null
+          description: string | null
+          direction: string
+          external_ref: string | null
+          id: string
+          imported_at: string
+          is_classified: boolean | null
+        }
+        Insert: {
+          amount: number
+          bank_account_id: string
+          category_id?: string | null
+          date: string
+          department_id?: string | null
+          description?: string | null
+          direction: string
+          external_ref?: string | null
+          id?: string
+          imported_at?: string
+          is_classified?: boolean | null
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string
+          category_id?: string | null
+          date?: string
+          department_id?: string | null
+          description?: string | null
+          direction?: string
+          external_ref?: string | null
+          id?: string
+          imported_at?: string
+          is_classified?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_transactions_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      categories: {
+        Row: {
+          created_at: string
+          department_id: string
+          id: string
+          name: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          id?: string
+          name: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          id?: string
+          name?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checks: {
+        Row: {
+          amount: number
+          bank_account_id: string
+          category_id: string | null
+          check_number: string
+          cleared_at: string | null
+          created_at: string
+          created_by: string | null
+          department_id: string | null
+          due_date: string
+          id: string
+          notes: string | null
+          payee: string
+          status: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id: string
+          category_id?: string | null
+          check_number: string
+          cleared_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          department_id?: string | null
+          due_date: string
+          id?: string
+          notes?: string | null
+          payee: string
+          status?: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string
+          category_id?: string | null
+          check_number?: string
+          cleared_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          department_id?: string | null
+          due_date?: string
+          id?: string
+          notes?: string | null
+          payee?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checks_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      departments: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      incomes: {
+        Row: {
+          amount: number
+          bank_account_id: string
+          category_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          date: string
+          donor_id_number: string | null
+          donor_name: string | null
+          id: string
+          issuing_department_id: string
+          notes: string | null
+          owner_department_id: string
+          receipt_number: string | null
+          requires_inter_settlement: boolean
+          status: string
+          transaction_ref: string | null
+        }
+        Insert: {
+          amount: number
+          bank_account_id: string
+          category_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          date?: string
+          donor_id_number?: string | null
+          donor_name?: string | null
+          id?: string
+          issuing_department_id: string
+          notes?: string | null
+          owner_department_id: string
+          receipt_number?: string | null
+          requires_inter_settlement?: boolean
+          status?: string
+          transaction_ref?: string | null
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string
+          category_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          date?: string
+          donor_id_number?: string | null
+          donor_name?: string | null
+          id?: string
+          issuing_department_id?: string
+          notes?: string | null
+          owner_department_id?: string
+          receipt_number?: string | null
+          requires_inter_settlement?: boolean
+          status?: string
+          transaction_ref?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "incomes_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incomes_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incomes_issuing_department_id_fkey"
+            columns: ["issuing_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incomes_owner_department_id_fkey"
+            columns: ["owner_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inter_department_ledger: {
+        Row: {
+          amount: number
+          created_at: string
+          from_department_id: string
+          id: string
+          income_id: string | null
+          note: string | null
+          settled_at: string | null
+          settled_by: string | null
+          status: string
+          to_department_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          from_department_id: string
+          id?: string
+          income_id?: string | null
+          note?: string | null
+          settled_at?: string | null
+          settled_by?: string | null
+          status?: string
+          to_department_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          from_department_id?: string
+          id?: string
+          income_id?: string | null
+          note?: string | null
+          settled_at?: string | null
+          settled_by?: string | null
+          status?: string
+          to_department_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inter_department_ledger_from_department_id_fkey"
+            columns: ["from_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_department_ledger_income_id_fkey"
+            columns: ["income_id"]
+            isOneToOne: false
+            referencedRelation: "incomes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_department_ledger_to_department_id_fkey"
+            columns: ["to_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      print_queue: {
+        Row: {
+          created_at: string | null
+          id: number
+          label_data: Json
+          printed_at: string | null
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: never
+          label_data: Json
+          printed_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: never
+          label_data?: Json
+          printed_at?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
+      recurring_schedules: {
+        Row: {
+          bank_account_id: string | null
+          category_id: string | null
+          created_at: string
+          day_of_month: number | null
+          day_of_week: number | null
+          department_id: string
+          direction: string
+          expected_amount: number
+          frequency: string
+          id: string
+          is_active: boolean
+          name: string
+          one_time_date: string | null
+          type: string
+        }
+        Insert: {
+          bank_account_id?: string | null
+          category_id?: string | null
+          created_at?: string
+          day_of_month?: number | null
+          day_of_week?: number | null
+          department_id: string
+          direction: string
+          expected_amount: number
+          frequency: string
+          id?: string
+          is_active?: boolean
+          name: string
+          one_time_date?: string | null
+          type: string
+        }
+        Update: {
+          bank_account_id?: string | null
+          category_id?: string | null
+          created_at?: string
+          day_of_month?: number | null
+          day_of_week?: number | null
+          department_id?: string
+          direction?: string
+          expected_amount?: number
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          one_time_date?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_schedules_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_schedules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_schedules_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_profiles: {
+        Row: {
+          created_at: string
+          department_id: string | null
+          full_name: string | null
+          id: string
+          role: string
+        }
+        Insert: {
+          created_at?: string
+          department_id?: string | null
+          full_name?: string | null
+          id: string
+          role?: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string | null
+          full_name?: string | null
+          id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_profiles_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      v_inter_department_balances: {
+        Row: {
+          creditor_department_id: string | null
+          debtor_department_id: string | null
+          dept_a: string | null
+          dept_b: string | null
+          net_amount: number | null
+        }
+        Relationships: []
+      }
+      v_pending_checks: {
+        Row: {
+          account_number: string | null
+          amount: number | null
+          bank_account_id: string | null
+          bank_name: string | null
+          category_id: string | null
+          check_number: string | null
+          cleared_at: string | null
+          created_at: string | null
+          created_by: string | null
+          department_id: string | null
+          due_date: string | null
+          id: string | null
+          notes: string | null
+          payee: string | null
+          status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checks_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_pending_queue_summary: {
+        Row: {
+          pending_amount: number | null
+          pending_count: number | null
+          source: string | null
+        }
+        Relationships: []
+      }
+      v_unclassified_bank_transactions: {
+        Row: {
+          account_number: string | null
+          amount: number | null
+          bank_account_id: string | null
+          bank_name: string | null
+          category_id: string | null
+          date: string | null
+          department_id: string | null
+          description: string | null
+          direction: string | null
+          external_ref: string | null
+          id: string | null
+          imported_at: string | null
+          is_classified: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_transactions_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Functions: {
+      current_user_department: { Args: never; Returns: string }
+      get_cash_flow_forecast: {
+        Args: { p_bank_account_id: string; p_horizon_days?: number }
+        Returns: {
+          expected_change: number
+          forecast_date: string
+          running_balance: number
+          source: string
+        }[]
+      }
+      is_finance_admin: { Args: never; Returns: boolean }
+      settle_ledger_between: {
+        Args: { p_dept_a: string; p_dept_b: string }
+        Returns: number
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const
