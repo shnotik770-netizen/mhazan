@@ -12,6 +12,7 @@ import {
 import { PasteExistingChecksForm } from "@/components/checks-paste-client";
 import { UnifiedCheckForm } from "@/components/unified-check-form";
 import { BulkCheckEntryForm, BulkExpenseRequestFormMulti } from "@/components/bulk-checks-client";
+import { IssuanceQueueTable } from "@/components/issuance-queue-client";
 
 export default async function ChecksPage({
   searchParams,
@@ -226,37 +227,10 @@ export default async function ChecksPage({
           <h2 className="font-semibold mb-1">
             ⚠ {sortedNeedingIssuance.length} בקשות הוצאה ממתינות להנפקה (חסר מספר צ׳ק ו/או תאריך)
           </h2>
-          <p className="text-xs text-muted mb-2">ממוין לפי תאריך הזנה, עם קיבוץ של אותו ספק יחד</p>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>מוטב</th>
-                <th>סכום</th>
-                <th>מחלקה</th>
-                <th>אמצעי</th>
-                <th>הנפקה</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedNeedingIssuance.map((c) => (
-                <tr key={c.id!}>
-                  <td>{c.payee}</td>
-                  <td>{formatCurrency(Number(c.amount))}</td>
-                  <td>{c.department_name ?? "בהמתנה"}</td>
-                  <td>{c.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"}</td>
-                  <td>
-                    <IssueCheckRow
-                      checkId={c.id!}
-                      currentCheckNumber={c.check_number}
-                      currentDueDate={c.due_date}
-                      amount={Number(c.amount)}
-                      departments={departments ?? []}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <p className="text-xs text-muted mb-2">
+            ממוין לפי תאריך הזנה, עם קיבוץ של אותו ספק יחד. ניתן לסמן כמה שורות ולמזג לתשלום אחד או לקבץ לפריסה.
+          </p>
+          <IssuanceQueueTable rows={sortedNeedingIssuance} departments={departments ?? []} />
         </div>
       )}
 

@@ -431,6 +431,106 @@ export async function createDeptExpenseRequestBatch(
   return { outcomes };
 }
 
+// Merges several pending checks/transfers to the same payee (same bank
+// account, same payment method) into a single check. Each original check's
+// amount becomes a department allocation on the merged check when they
+// belonged to different departments, so no department attribution is lost.
+export async function mergeChecks(checkIds: string[]): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (checkIds.length < 2) return { error: "יש לבחור לפחות שני צ׳קים/העברות למיזוג" };
+
+  const { data: checks, error: fetchError } = await supabase.from("checks").select("*").in("id", checkIds);
+  if (fetchError) return { error: fetchError.message };
+  if (!checks || checks.length !== checkIds.length) return { error: "חלק מהצ׳קים לא נמצאו" };
+
+  const payees = new Set(checks.map((c) => c.payee.trim().toLowerCase()));
+  if (payees.size > 1) return { error: "ניתן למזג רק צ׳קים/העברות לאותו מוטב" };
+  const bankAccountIds = new Set(checks.map((c) => c.bank_account_id));
+  if (bankAccountIds.size > 1) return { error: "ניתן למזג רק צ׳קים/העברות מאותו חשבון בנק" };
+  const paymentMethods = new Set(checks.map((c) => c.payment_method));
+  if (paymentMethods.size > 1) return { error: "ניתן למזג רק צ׳קים/העברות מאותו סוג (צ׳ק/העברה)" };
+
+  const totalAmount = checks.reduce((sum, c) => sum + Number(c.amount), 0);
+  const departmentIds = new Set(checks.map((c) => c.department_id).filter((d): d is string => !!d));
+
+  const { data: merged, error: insertError } = await supabase
+    .from("checks")
+    .insert({
+      payment_method: checks[0].payment_method,
+      bank_account_id: checks[0].bank_account_id,
+      payee: checks[0].payee,
+      amount: totalAmount,
+      department_id: departmentIds.size === 1 ? [...departmentIds][0] : null,
+      notes: `מיזוג ${checks.length} צ׳קים/העברות`,
+      created_by: user?.id ?? null,
+    })
+    .select("id")
+    .single();
+  if (insertError) return { error: insertError.message };
+
+  if (departmentIds.size > 1) {
+    const allocRows = checks
+      .filter((c) => c.department_id)
+      .map((c) => ({ departmentId: c.department_id as string, amount: Number(c.amount) }));
+    const allocError = await insertAllocations(supabase, merged.id, allocRows);
+    if (allocError) return { error: allocError };
+  }
+
+  const { error: deleteError } = await supabase.from("checks").delete().in("id", checkIds);
+  if (deleteError) return { error: deleteError.message };
+
+  revalidateCheckPaths();
+  return {};
+}
+
+// Groups several pending checks/transfers to the same payee under one
+// spread, without changing their amounts or count — for when several
+// separate requests to the same supplier should be tracked/prepared
+// together instead of merged into a single payment.
+export async function groupChecksIntoSpread(checkIds: string[]): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (checkIds.length < 2) return { error: "יש לבחור לפחות שני צ׳קים/העברות לקיבוץ" };
+
+  const { data: checks, error: fetchError } = await supabase.from("checks").select("*").in("id", checkIds);
+  if (fetchError) return { error: fetchError.message };
+  if (!checks || checks.length !== checkIds.length) return { error: "חלק מהצ׳קים לא נמצאו" };
+
+  const payees = new Set(checks.map((c) => c.payee.trim().toLowerCase()));
+  if (payees.size > 1) return { error: "ניתן לקבץ רק צ׳קים/העברות לאותו מוטב" };
+  const paymentMethods = new Set(checks.map((c) => c.payment_method));
+  if (paymentMethods.size > 1) return { error: "ניתן לקבץ רק צ׳קים/העברות מאותו סוג (צ׳ק/העברה)" };
+
+  const existingSpreadIds = new Set(checks.map((c) => c.spread_id).filter((s): s is string => !!s));
+  let spreadId: string;
+  if (existingSpreadIds.size === 1) {
+    spreadId = [...existingSpreadIds][0];
+  } else {
+    const { data: spread, error: spreadError } = await supabase
+      .from("payment_spreads")
+      .insert({ payee: checks[0].payee, payment_method: checks[0].payment_method, created_by: user?.id ?? null })
+      .select("id")
+      .single();
+    if (spreadError) return { error: spreadError.message };
+    spreadId = spread.id;
+  }
+
+  const { error: updateError } = await supabase.from("checks").update({ spread_id: spreadId }).in("id", checkIds);
+  if (updateError) return { error: updateError.message };
+
+  revalidateCheckPaths();
+  return {};
+}
+
 export async function updateCheck(
   checkId: string,
   input: {
