@@ -3,7 +3,7 @@ import { requireFinanceAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/format";
 import { UserAccessRow } from "@/components/user-access-client";
-import { createBankAccount, createCategory, createRecurringSchedule } from "./actions";
+import { createBankAccount, createRecurringSchedule } from "./actions";
 
 export default async function SettingsPage() {
   await requireFinanceAdmin();
@@ -87,44 +87,20 @@ export default async function SettingsPage() {
         </form>
       </section>
 
-      <section className="card p-4 space-y-3">
-        <h2 className="font-semibold">קטגוריות</h2>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>שם</th>
-              <th>מחלקה בעלים</th>
-              <th>סוג</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(categories ?? []).map((c) => (
-              <tr key={c.id}>
-                <td>{c.name}</td>
-                <td>{(c as { departments: { name: string } | null }).departments?.name}</td>
-                <td>{c.type === "INCOME" ? "הכנסה" : "הוצאה"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <form action={createCategory} className="flex flex-wrap gap-2 pt-2">
-          <input name="name" placeholder="שם קטגוריה" required className="rounded border border-border bg-transparent px-2 py-1 text-sm" />
-          <select name="department_id" required className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-            <option value="">מחלקה בעלים...</option>
-            {(departments ?? []).map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-          <select name="type" className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-            <option value="INCOME">הכנסה</option>
-            <option value="EXPENSE">הוצאה</option>
-          </select>
-          <button type="submit" className="rounded bg-primary text-primary-foreground text-sm px-3 py-1">
-            הוסף קטגוריה
-          </button>
-        </form>
+      <section className="card p-4 flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold">קטגוריות</h2>
+          <p className="text-sm text-muted">
+            {(categories ?? []).length} קטגוריות מוגדרות. הוספה, עריכה, מחיקה ושיוך קטגוריות ממתינות
+            מתבצעים במסך ניהול הקטגוריות.
+          </p>
+        </div>
+        <Link
+          href="/categories"
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold whitespace-nowrap"
+        >
+          ניהול קטגוריות
+        </Link>
       </section>
 
       <section className="card p-4 space-y-3">

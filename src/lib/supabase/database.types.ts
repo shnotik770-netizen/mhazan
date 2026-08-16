@@ -114,22 +114,25 @@ export type Database = {
       categories: {
         Row: {
           created_at: string
-          department_id: string
+          department_id: string | null
           id: string
+          is_split: boolean
           name: string
           type: string
         }
         Insert: {
           created_at?: string
-          department_id: string
+          department_id?: string | null
           id?: string
+          is_split?: boolean
           name: string
           type: string
         }
         Update: {
           created_at?: string
-          department_id?: string
+          department_id?: string | null
           id?: string
+          is_split?: boolean
           name?: string
           type?: string
         }
@@ -558,6 +561,17 @@ export type Database = {
           dept_a: string | null
           dept_b: string | null
           net_amount: number | null
+        }
+        Relationships: []
+      }
+      v_pending_categories: {
+        Row: {
+          created_at: string | null
+          department_id: string | null
+          id: string | null
+          is_split: boolean | null
+          name: string | null
+          type: string | null
         }
         Relationships: []
       }

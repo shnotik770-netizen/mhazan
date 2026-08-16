@@ -19,6 +19,8 @@ export default async function DashboardPage() {
 
   const totalBalance = (bankAccounts ?? []).reduce((sum, b) => sum + Number(b.current_balance), 0);
   const totalPending = (pendingSummary ?? []).reduce((sum, p) => sum + Number(p.pending_count ?? 0), 0);
+  const pendingCountFor = (source: string) =>
+    Number((pendingSummary ?? []).find((p) => p.source === source)?.pending_count ?? 0);
 
   return (
     <div className="space-y-6">
@@ -38,6 +40,12 @@ export default async function DashboardPage() {
               ניהול מחלקות
             </Link>
             <Link
+              href="/categories"
+              className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+            >
+              ניהול קטגוריות
+            </Link>
+            <Link
               href="/settings"
               className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
             >
@@ -48,12 +56,25 @@ export default async function DashboardPage() {
       </div>
 
       {totalPending > 0 && (
-        <Link
-          href="/checks"
-          className="block card px-4 py-3 bg-warning-bg border-warning/30 text-sm font-medium"
-        >
-          ⚠ ישנם {totalPending} פריטים (צ׳קים / תנועות בנק) הדורשים סיווג מחלקה — לחצו לסיווג
-        </Link>
+        <div className="space-y-2">
+          {pendingCountFor("CHECK") + pendingCountFor("BANK_TRANSACTION") > 0 && (
+            <Link
+              href="/checks"
+              className="block card px-4 py-3 bg-warning-bg border-warning/30 text-sm font-medium"
+            >
+              ⚠ ישנם {pendingCountFor("CHECK") + pendingCountFor("BANK_TRANSACTION")} צ׳קים / תנועות בנק
+              הדורשים סיווג מחלקה — לחצו לסיווג
+            </Link>
+          )}
+          {pendingCountFor("CATEGORY") > 0 && (
+            <Link
+              href="/categories"
+              className="block card px-4 py-3 bg-warning-bg border-warning/30 text-sm font-medium"
+            >
+              ⚠ ישנן {pendingCountFor("CATEGORY")} קטגוריות הדורשות שיוך למחלקה — לחצו לשיוך
+            </Link>
+          )}
+        </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

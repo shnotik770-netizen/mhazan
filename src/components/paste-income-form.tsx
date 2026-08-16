@@ -2,15 +2,70 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { submitIncomeBatch, type IncomeBatchRow } from "@/app/(app)/incomes/actions";
+import {
+  submitIncomeBatch,
+  type IncomeBatchRow,
+  type SplitAllocation,
+} from "@/app/(app)/incomes/actions";
+import { findOrCreateCategoryByName } from "@/app/(app)/categories/actions";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | null };
 type Category = Tables<"categories"> & { departments: { name: string } | null };
+type Department = Tables<"departments">;
 
-type ParsedRow = IncomeBatchRow & { raw: string };
+type ParsedRow = IncomeBatchRow & { raw: string; categoryText: string; isCancelled: boolean };
 
-function parsePastedText(text: string): string[][] {
+// Known header aliases for the real bank/CRM export (16 columns, order
+// varies): תאריך, מקור, תורם, ת"ז, כתובת, טלפון, מייל, קטגוריה, הערות,
+// סוג, סכום, מטבע, סטטוס, מספר קבלה, מספר הוראה, מספר עסקה. Only the
+// columns we actually use are mapped; the rest are ignored.
+const HEADER_FIELD_MAP: Record<string, string> = {
+  תאריך: "date",
+  קטגוריה: "category",
+  תורם: "donorName",
+  שםתורם: "donorName",
+  תז: "donorId",
+  סכום: "amount",
+  מספרקבלה: "receiptNumber",
+  הערות: "notes",
+  סטטוס: "status",
+  מספרעסקה: "transactionRef",
+  מספרהוראה: "orderRef",
+};
+const REQUIRED_HEADER_KEYS = ["date", "category", "amount"];
+
+function normalizeHeaderText(text: string): string {
+  return text.trim().replace(/["'׳״]/g, "").replace(/\s+/g, "");
+}
+
+function detectHeaderMapping(headerCols: string[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  headerCols.forEach((col, idx) => {
+    const key = HEADER_FIELD_MAP[normalizeHeaderText(col)];
+    if (key && !(key in map)) map[key] = idx;
+  });
+  return map;
+}
+
+function normalizeDate(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const dmy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (dmy) {
+    const [, d, m, y] = dmy;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  return trimmed;
+}
+
+function isCancelledStatus(text: string): boolean {
+  return /בוטל/.test(text);
+}
+
+function parsePastedLines(text: string): string[][] {
   return text
     .trim()
     .split("\n")
@@ -29,53 +84,169 @@ function guessCategory(text: string, categories: Category[]): string {
   return partial?.id ?? "";
 }
 
+// Legacy fallback (no header row): fixed 6-column order.
+const LEGACY_POSITIONS: Record<string, number> = {
+  date: 0,
+  category: 1,
+  donorName: 2,
+  amount: 3,
+  receiptNumber: 4,
+  notes: 5,
+};
+
 export function PasteIncomeForm({
   bankAccounts,
-  categories,
+  categories: initialCategories,
+  departments,
 }: {
   bankAccounts: BankAccount[];
   categories: Category[];
+  departments: Department[];
 }) {
   const router = useRouter();
+  const [categoryList, setCategoryList] = useState<Category[]>(initialCategories);
   const [bankAccountId, setBankAccountId] = useState("");
+  const [hasHeaderRow, setHasHeaderRow] = useState(true);
   const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [headerWarning, setHeaderWarning] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const [isResolvingCategories, setIsResolvingCategories] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const validCount = useMemo(() => rows.filter((r) => r.categoryId && r.amount > 0).length, [rows]);
+  const categoryById = (id: string) => categoryList.find((c) => c.id === id);
 
-  function handlePaste(text: string) {
-    const parsed = parsePastedText(text);
-    const nextRows: ParsedRow[] = parsed.map((cols) => {
-      const [date, categoryText, donorName, amountText, receiptNumber, notes] = cols;
-      const amount = Number(String(amountText ?? "").replace(/[^\d.-]/g, "")) || 0;
+  function rowIsSavable(row: ParsedRow): boolean {
+    if (row.isCancelled) return false;
+    const category = row.categoryId ? categoryById(row.categoryId) : undefined;
+    if (!category) return false;
+    if (category.is_split) {
+      return row.splitAllocations.some((a) => a.departmentId && a.amount > 0);
+    }
+    return category.department_id != null && row.amount > 0;
+  }
+
+  const validCount = useMemo(() => rows.filter(rowIsSavable).length, [rows, categoryList]);
+  const pendingCategoryCount = useMemo(
+    () =>
+      rows.filter(
+        (r) => !r.isCancelled && r.categoryId && categoryById(r.categoryId)?.department_id == null && !categoryById(r.categoryId)?.is_split,
+      ).length,
+    [rows, categoryList],
+  );
+
+  async function handlePaste(text: string) {
+    const allLines = parsePastedLines(text);
+    if (allLines.length === 0) {
+      setRows([]);
+      return;
+    }
+
+    let fieldMap: Record<string, number> | null = null;
+    let dataLines = allLines;
+    setHeaderWarning(null);
+
+    if (hasHeaderRow) {
+      fieldMap = detectHeaderMapping(allLines[0]);
+      dataLines = allLines.slice(1);
+      const missing = REQUIRED_HEADER_KEYS.filter((k) => !(fieldMap && k in fieldMap));
+      if (missing.length > 0) {
+        const missingLabels = missing
+          .map((k) => (k === "date" ? "תאריך" : k === "category" ? "קטגוריה" : "סכום"))
+          .join(", ");
+        setHeaderWarning(
+          `לא זוהו בשורת הכותרת העמודות: ${missingLabels} — בדקו שהעמודות תואמות, או סמנו "בלי שורת כותרת" אם הדבקתם רק נתונים.`,
+        );
+      }
+    }
+
+    function getField(cols: string[], key: string): string {
+      if (fieldMap && key in fieldMap) return (cols[fieldMap[key]] ?? "").trim();
+      if (!hasHeaderRow && key in LEGACY_POSITIONS) return (cols[LEGACY_POSITIONS[key]] ?? "").trim();
+      return "";
+    }
+
+    const initialRows: ParsedRow[] = dataLines.map((cols) => {
+      const categoryText = getField(cols, "category");
+      const amountText = getField(cols, "amount");
+      const orderRef = getField(cols, "orderRef");
+      const notesRaw = getField(cols, "notes");
+      const notes = orderRef ? `${notesRaw} [הוראה: ${orderRef}]`.trim() : notesRaw;
       return {
         raw: cols.join(" | "),
-        date: date ?? "",
-        categoryId: guessCategory(categoryText ?? "", categories),
-        donorName: donorName ?? "",
-        amount,
-        receiptNumber: receiptNumber ?? "",
-        notes: notes ?? "",
+        categoryText,
+        date: normalizeDate(getField(cols, "date")),
+        categoryId: guessCategory(categoryText, categoryList),
+        donorName: getField(cols, "donorName"),
+        donorIdNumber: getField(cols, "donorId"),
+        amount: Number(amountText.replace(/[^\d.-]/g, "")) || 0,
+        receiptNumber: getField(cols, "receiptNumber"),
+        transactionRef: getField(cols, "transactionRef"),
+        notes,
+        isCancelled: isCancelledStatus(getField(cols, "status")),
+        splitAllocations: [],
       };
     });
-    setRows(nextRows);
+    setRows(initialRows);
     setMessage(null);
+
+    // Any category text that didn't match an existing category becomes a
+    // new pending category (no department yet) instead of forcing manual
+    // selection for every unrecognized name.
+    const unmatchedNames = Array.from(
+      new Set(
+        initialRows.filter((r) => r.categoryText && !r.categoryId && !r.isCancelled).map((r) => r.categoryText),
+      ),
+    );
+    if (unmatchedNames.length === 0) return;
+
+    setIsResolvingCategories(true);
+    try {
+      const created = await Promise.all(
+        unmatchedNames.map((name) => findOrCreateCategoryByName(name, "INCOME")),
+      );
+      setCategoryList((prev) => {
+        const byId = new Map(prev.map((c) => [c.id, c]));
+        for (const c of created) byId.set(c.id, { ...c, departments: null });
+        return Array.from(byId.values());
+      });
+      setRows((prev) =>
+        prev.map((r) => {
+          if (r.categoryId || !r.categoryText) return r;
+          const match = created.find((c) => c.name.toLowerCase() === r.categoryText.toLowerCase());
+          return match ? { ...r, categoryId: match.id } : r;
+        }),
+      );
+    } catch (e) {
+      setMessage({ type: "error", text: e instanceof Error ? e.message : "שגיאה בזיהוי קטגוריות" });
+    } finally {
+      setIsResolvingCategories(false);
+    }
   }
 
   function updateRow(index: number, patch: Partial<ParsedRow>) {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   }
 
+  function updateAllocations(index: number, allocations: SplitAllocation[]) {
+    updateRow(index, { splitAllocations: allocations });
+  }
+
   function handleSubmit() {
     setMessage(null);
     startTransition(async () => {
-      const result = await submitIncomeBatch(bankAccountId, rows);
+      const savableRows = rows.filter(rowIsSavable);
+      const result = await submitIncomeBatch(bankAccountId, savableRows);
       if (result.error) {
         setMessage({ type: "error", text: result.error });
       } else {
-        setMessage({ type: "success", text: `נשמרו ${result.count} שורות הכנסה בהצלחה` });
-        setRows([]);
+        const skipped = rows.length - savableRows.length;
+        setMessage({
+          type: "success",
+          text:
+            `נשמרו ${result.count} שורות הכנסה בהצלחה` +
+            (skipped > 0 ? ` (${skipped} שורות נותרו — ממתינות לשיוך קטגוריה או בוטלו)` : ""),
+        });
+        setRows((prev) => prev.filter((r) => !rowIsSavable(r)));
         router.refresh();
       }
     });
@@ -102,12 +273,22 @@ export function PasteIncomeForm({
       </div>
 
       <div className="card p-4">
-        <label className="block text-sm font-medium mb-1">
-          הדבק כאן שורות מאקסל (תאריך, קטגוריה, שם תורם, סכום, מס׳ קבלה, הערות)
-        </label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-sm font-medium">
+            הדבק כאן שורות מהבנק/מהמערכת (כולל שורת כותרת בדרך כלל)
+          </label>
+          <label className="flex items-center gap-1 text-sm text-muted">
+            <input
+              type="checkbox"
+              checked={hasHeaderRow}
+              onChange={(e) => setHasHeaderRow(e.target.checked)}
+            />
+            השורה הראשונה היא שורת כותרת
+          </label>
+        </div>
         <textarea
           className="w-full h-28 rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-mono"
-          placeholder="הדבק כאן (Ctrl+V) שורות מודבקות מגיליון אקסל..."
+          placeholder="הדבק כאן (Ctrl+V) שורות מודבקות..."
           onPaste={(e) => {
             const text = e.clipboardData.getData("text");
             if (text) {
@@ -117,14 +298,21 @@ export function PasteIncomeForm({
           }}
           onChange={(e) => handlePaste(e.target.value)}
         />
+        <p className="text-xs text-muted mt-1">
+          שם קטגוריה שלא קיים במערכת ייווצר אוטומטית כקטגוריה חדשה הממתינה לשיוך מחלקה (ניתן לשייך
+          במסך &quot;ניהול קטגוריות&quot;).
+        </p>
+        {headerWarning && <p className="text-xs text-warning mt-1">⚠ {headerWarning}</p>}
       </div>
 
       {rows.length > 0 && (
         <div className="card p-4 overflow-x-auto">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold">
-              תצוגה מקדימה — {rows.length} שורות ({validCount} תקינות)
+              תצוגה מקדימה — {rows.length} שורות ({validCount} תקינות לשמירה
+              {pendingCategoryCount > 0 ? `, ${pendingCategoryCount} ממתינות לשיוך קטגוריה` : ""})
             </h3>
+            {isResolvingCategories && <span className="text-sm text-muted">מזהה קטגוריות...</span>}
           </div>
           <table className="data-table">
             <thead>
@@ -138,63 +326,88 @@ export function PasteIncomeForm({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, i) => (
-                <tr key={i} className={!row.categoryId || row.amount <= 0 ? "bg-warning-bg" : ""}>
-                  <td>
-                    <input
-                      className="w-32 bg-transparent border-b border-border text-sm"
-                      value={row.date}
-                      onChange={(e) => updateRow(i, { date: e.target.value })}
-                      placeholder="YYYY-MM-DD"
-                    />
-                  </td>
-                  <td>
-                    <select
-                      className="bg-transparent border-b border-border text-sm max-w-48"
-                      value={row.categoryId}
-                      onChange={(e) => updateRow(i, { categoryId: e.target.value })}
-                    >
-                      <option value="">לא זוהתה — בחר ידנית</option>
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.departments?.name})
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <input
-                      className="w-32 bg-transparent border-b border-border text-sm"
-                      value={row.donorName}
-                      onChange={(e) => updateRow(i, { donorName: e.target.value })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="w-24 bg-transparent border-b border-border text-sm"
-                      type="number"
-                      value={row.amount || ""}
-                      onChange={(e) => updateRow(i, { amount: Number(e.target.value) || 0 })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="w-20 bg-transparent border-b border-border text-sm"
-                      value={row.receiptNumber}
-                      onChange={(e) => updateRow(i, { receiptNumber: e.target.value })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="w-32 bg-transparent border-b border-border text-sm"
-                      value={row.notes}
-                      onChange={(e) => updateRow(i, { notes: e.target.value })}
-                    />
-                  </td>
-                </tr>
-              ))}
+              {rows.map((row, i) => {
+                const category = row.categoryId ? categoryById(row.categoryId) : undefined;
+                const isPendingCategory = Boolean(row.categoryId) && category?.department_id == null && !category?.is_split;
+                return (
+                  <tr key={i} className={!rowIsSavable(row) ? "bg-warning-bg" : ""}>
+                    <td>
+                      {row.isCancelled ? (
+                        <span className="badge bg-danger-bg text-danger">בוטלה</span>
+                      ) : (
+                        <input
+                          className="w-32 bg-transparent border-b border-border text-sm"
+                          value={row.date}
+                          onChange={(e) => updateRow(i, { date: e.target.value })}
+                          placeholder="YYYY-MM-DD"
+                        />
+                      )}
+                    </td>
+                    <td>
+                      <select
+                        className="bg-transparent border-b border-border text-sm max-w-48"
+                        value={row.categoryId}
+                        onChange={(e) => updateRow(i, { categoryId: e.target.value })}
+                      >
+                        <option value="">לא זוהתה — בחר ידנית</option>
+                        {categoryList.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.is_split ? "מפוצלת בין מחלקות" : c.department_id ? c.departments?.name ?? "משויכת" : "ממתין לשיוך"})
+                          </option>
+                        ))}
+                      </select>
+                      {isPendingCategory && (
+                        <p className="text-xs text-warning">⏳ הקטגוריה ממתינה לשיוך מחלקה</p>
+                      )}
+                      {category?.is_split && (
+                        <SplitAllocationEditor
+                          departments={departments}
+                          totalAmount={row.amount}
+                          allocations={row.splitAllocations}
+                          onChange={(allocs) => updateAllocations(i, allocs)}
+                        />
+                      )}
+                    </td>
+                    <td>
+                      <input
+                        className="w-32 bg-transparent border-b border-border text-sm"
+                        value={row.donorName}
+                        onChange={(e) => updateRow(i, { donorName: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="w-24 bg-transparent border-b border-border text-sm"
+                        type="number"
+                        value={row.amount || ""}
+                        onChange={(e) => updateRow(i, { amount: Number(e.target.value) || 0 })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="w-20 bg-transparent border-b border-border text-sm"
+                        value={row.receiptNumber}
+                        onChange={(e) => updateRow(i, { receiptNumber: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="w-32 bg-transparent border-b border-border text-sm"
+                        value={row.notes}
+                        onChange={(e) => updateRow(i, { notes: e.target.value })}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          {pendingCategoryCount > 0 && (
+            <p className="text-sm text-warning mt-2">
+              ⚠ {pendingCategoryCount} שורות לא יישמרו כרגע כי הקטגוריה שלהן ממתינה לשיוך מחלקה — שייכו
+              אותה ב<a href="/categories" className="underline">ניהול קטגוריות</a> ואז חזרו ולחצו שמור.
+            </p>
+          )}
         </div>
       )}
 
@@ -215,6 +428,69 @@ export function PasteIncomeForm({
       >
         {isPending ? "שומר..." : `שמור ${validCount} שורות הכנסה`}
       </button>
+    </div>
+  );
+}
+
+function SplitAllocationEditor({
+  departments,
+  totalAmount,
+  allocations,
+  onChange,
+}: {
+  departments: Department[];
+  totalAmount: number;
+  allocations: SplitAllocation[];
+  onChange: (allocations: SplitAllocation[]) => void;
+}) {
+  const allocatedSum = allocations.reduce((sum, a) => sum + (a.amount || 0), 0);
+
+  function update(i: number, patch: Partial<SplitAllocation>) {
+    onChange(allocations.map((a, idx) => (idx === i ? { ...a, ...patch } : a)));
+  }
+
+  function add() {
+    onChange([...allocations, { departmentId: "", amount: 0 }]);
+  }
+
+  function remove(i: number) {
+    onChange(allocations.filter((_, idx) => idx !== i));
+  }
+
+  return (
+    <div className="mt-2 space-y-1 border-t border-border pt-2">
+      <p className="text-xs text-muted">פיצול בין מחלקות (סכום מקורי: {totalAmount})</p>
+      {allocations.map((alloc, i) => (
+        <div key={i} className="flex items-center gap-1">
+          <select
+            className="bg-transparent border-b border-border text-xs"
+            value={alloc.departmentId}
+            onChange={(e) => update(i, { departmentId: e.target.value })}
+          >
+            <option value="">מחלקה...</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            className="w-16 bg-transparent border-b border-border text-xs"
+            value={alloc.amount || ""}
+            onChange={(e) => update(i, { amount: Number(e.target.value) || 0 })}
+          />
+          <button type="button" onClick={() => remove(i)} className="text-xs text-danger">
+            ✕
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={add} className="text-xs text-primary underline">
+        + הוסף מחלקה
+      </button>
+      <p className={`text-xs ${allocatedSum === totalAmount ? "text-muted" : "text-warning"}`}>
+        הוקצה: {allocatedSum} מתוך {totalAmount}
+      </p>
     </div>
   );
 }

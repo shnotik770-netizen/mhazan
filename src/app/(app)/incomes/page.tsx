@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 export default async function IncomesPage() {
+  const user = await requireUser();
   const supabase = await createClient();
   const { data: incomes } = await supabase
     .from("incomes")
@@ -17,12 +19,14 @@ export default async function IncomesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">הכנסות</h1>
-        <Link
-          href="/incomes/new"
-          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
-        >
-          + קליטת הכנסות בהדבקה
-        </Link>
+        {user.profile.role === "FINANCE_ADMIN" && (
+          <Link
+            href="/incomes/new"
+            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+          >
+            + קליטת הכנסות בהדבקה
+          </Link>
+        )}
       </div>
 
       <div className="card p-4 overflow-x-auto">

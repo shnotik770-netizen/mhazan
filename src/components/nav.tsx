@@ -9,6 +9,7 @@ const links = [
   { href: "/ledger", label: "התחשבנות פנימית" },
   { href: "/forecast", label: "תחזית תזרים" },
   { href: "/departments", label: "ניהול מחלקות", adminOnly: true },
+  { href: "/categories", label: "ניהול קטגוריות", adminOnly: true },
   { href: "/settings", label: "הגדרות", adminOnly: true },
 ];
 

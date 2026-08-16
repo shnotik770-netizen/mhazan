@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { requireFinanceAdmin } from "@/lib/auth";
 import { PasteIncomeForm } from "@/components/paste-income-form";
 
 export default async function NewIncomePage() {
+  await requireFinanceAdmin();
   const supabase = await createClient();
-  const [{ data: bankAccounts }, { data: categories }] = await Promise.all([
+  const [{ data: bankAccounts }, { data: categories }, { data: departments }] = await Promise.all([
     supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
     supabase.from("categories").select("*, departments(name)").eq("type", "INCOME").order("name"),
+    supabase.from("departments").select("*").order("name"),
   ]);
 
   return (
@@ -20,6 +23,7 @@ export default async function NewIncomePage() {
       <PasteIncomeForm
         bankAccounts={bankAccounts ?? []}
         categories={categories ?? []}
+        departments={departments ?? []}
       />
     </div>
   );

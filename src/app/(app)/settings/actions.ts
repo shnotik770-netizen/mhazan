@@ -62,18 +62,6 @@ export async function createBankAccount(formData: FormData): Promise<void> {
   revalidatePath("/");
 }
 
-export async function createCategory(formData: FormData): Promise<void> {
-  await requireFinanceAdmin();
-  const supabase = await createClient();
-  const { error } = await supabase.from("categories").insert({
-    name: String(formData.get("name") ?? ""),
-    department_id: String(formData.get("department_id") ?? ""),
-    type: String(formData.get("type") ?? "INCOME"),
-  });
-  if (error) throw new Error(error.message);
-  revalidatePath("/settings");
-}
-
 export async function createRecurringSchedule(formData: FormData): Promise<void> {
   await requireFinanceAdmin();
   const supabase = await createClient();
