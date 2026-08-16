@@ -201,7 +201,7 @@ export function UnifiedCheckForm({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         <select
           value={paymentMethod}
           onChange={(e) => setPaymentMethod(e.target.value as "CHECK" | "TRANSFER")}
@@ -295,7 +295,7 @@ export function UnifiedCheckForm({
               ))}
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
             <input
               type="number"
               value={helperTotal || ""}

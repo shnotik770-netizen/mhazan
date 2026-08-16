@@ -42,7 +42,7 @@ export function NewManualEntryForm({ departments }: { departments: Department[] 
     <div className="card p-4 space-y-3">
       <h2 className="font-semibold">רישום ידני של הכנסה / הוצאה</h2>
       <p className="text-xs text-muted">כל רישום ממתין לאישור מנהל כספים לפני שהוא נכנס לדוחות המחלקה.</p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
         <select
           value={departmentId}
           onChange={(e) => setDepartmentId(e.target.value)}

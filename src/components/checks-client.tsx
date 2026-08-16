@@ -256,7 +256,7 @@ export function DeptExpenseRequestForm({
           אין לך הרשאה לקבוע תאריך — הבקשה תיכנס כהוצאה ממתינה לאישור עד שמנהל הכספים יקבע תאריך.
         </p>
       )}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
         <select
           value={departmentId}
           onChange={(e) => setDepartmentId(e.target.value)}

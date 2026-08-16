@@ -146,7 +146,7 @@ export default async function SettingsPage() {
           </tbody>
         </table>
         </div>
-        <form action={createRecurringSchedule} className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2">
+        <form action={createRecurringSchedule} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 pt-2">
           <input name="name" placeholder="שם ההוראה" required className="rounded border border-border bg-transparent px-2 py-1 text-sm" />
           <select name="department_id" required className="rounded border border-border bg-transparent px-2 py-1 text-sm">
             <option value="">מחלקה...</option>
