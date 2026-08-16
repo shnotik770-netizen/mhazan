@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPaymentSpread, type CheckAllocationInput } from "@/app/(app)/checks/actions";
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
+import { MiniCalculator } from "@/components/mini-calculator";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -162,6 +163,7 @@ export function PaymentSpreadForm({
                 placeholder="סכום"
                 className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm"
               />
+              <MiniCalculator onApply={(v) => updateRow(i, { amount: v })} />
               {!involvesMultipleDepartments && (
                 <select
                   value={row.departmentId}

@@ -13,6 +13,7 @@ import {
   type CheckAllocationInput,
 } from "@/app/(app)/checks/actions";
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
+import { MiniCalculator } from "@/components/mini-calculator";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -250,13 +251,16 @@ export function NewCheckForm({
           list="supplier-names"
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         />
-        <input
-          type="number"
-          value={amount || ""}
-          onChange={(e) => setAmount(Number(e.target.value) || 0)}
-          placeholder="סכום"
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        />
+        <div className="flex flex-col gap-1">
+          <input
+            type="number"
+            value={amount || ""}
+            onChange={(e) => setAmount(Number(e.target.value) || 0)}
+            placeholder="סכום"
+            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+          />
+          <MiniCalculator onApply={setAmount} />
+        </div>
         <input
           type="date"
           value={dueDate}
@@ -459,13 +463,16 @@ export function DeptExpenseRequestForm({
           list="supplier-names"
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         />
-        <input
-          type="number"
-          value={amount || ""}
-          onChange={(e) => setAmount(Number(e.target.value) || 0)}
-          placeholder="סכום"
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        />
+        <div className="flex flex-col gap-1">
+          <input
+            type="number"
+            value={amount || ""}
+            onChange={(e) => setAmount(Number(e.target.value) || 0)}
+            placeholder="סכום"
+            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+          />
+          <MiniCalculator onApply={setAmount} />
+        </div>
         {canSetDates && (
           <input
             type="date"
@@ -662,6 +669,7 @@ export function EditDeleteCheckRow({
         placeholder="סכום"
         className="rounded border border-border bg-transparent px-2 py-1 text-xs"
       />
+      <MiniCalculator onApply={setEditAmount} />
       <input
         type="date"
         value={editDueDate}
