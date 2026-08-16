@@ -18,13 +18,16 @@ import { BankReconciliationPanel } from "@/components/bank-reconciliation-client
 export default async function ChecksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ asOf?: string; q?: string; pm?: string; st?: string }>;
+  searchParams: Promise<{ asOf?: string; q?: string; pm?: string; st?: string; dept?: string; bank?: string }>;
 }) {
-  const { asOf: asOfParam, q: qParam, pm: pmParam, st: stParam } = await searchParams;
+  const { asOf: asOfParam, q: qParam, pm: pmParam, st: stParam, dept: deptParam, bank: bankParam } =
+    await searchParams;
   const asOf = asOfParam || new Date().toISOString().slice(0, 10);
   const q = (qParam ?? "").trim();
   const pmFilter = pmParam === "CHECK" || pmParam === "TRANSFER" ? pmParam : "ALL";
   const stFilter = ["UNPAID", "CLEARED", "CANCELLED"].includes(stParam ?? "") ? stParam! : "ALL";
+  const deptFilter = deptParam ?? "";
+  const bankFilter = bankParam ?? "";
 
   const user = await requireUser();
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
@@ -53,6 +56,12 @@ export default async function ChecksPage({
   }
   if (pmFilter !== "ALL") allChecksQuery = allChecksQuery.eq("payment_method", pmFilter);
   if (stFilter !== "ALL") allChecksQuery = allChecksQuery.eq("status", stFilter);
+  if (bankFilter) {
+    pendingApprovalQuery = pendingApprovalQuery.eq("bank_account_id", bankFilter);
+    needingIssuanceQuery = needingIssuanceQuery.eq("bank_account_id", bankFilter);
+    overdueQuery = overdueQuery.eq("bank_account_id", bankFilter);
+    allChecksQuery = allChecksQuery.eq("bank_account_id", bankFilter);
+  }
 
   const [
     { data: pendingChecks },
@@ -80,8 +89,6 @@ export default async function ChecksPage({
     supabase.from("check_allocations").select("check_id, department_id, amount, departments(name)"),
   ]);
   const supplierNames = (suppliers ?? []).map((s) => s.name);
-  const overdueTransfers = (overdueByAsOf ?? []).filter((c) => c.payment_method === "TRANSFER");
-  const overdueChecks = (overdueByAsOf ?? []).filter((c) => c.payment_method !== "TRANSFER");
 
   const allocationsByCheck = new Map<
     string,
@@ -98,11 +105,27 @@ export default async function ChecksPage({
     allocationsByCheck.set(a.check_id, list);
   }
 
+  // Matches a split check via its allocations too, not just a direct
+  // department_id — otherwise filtering by department would silently hide
+  // any check that's split across departments.
+  function matchesDeptFilter(row: { id: string | null; department_id: string | null }) {
+    if (!deptFilter) return true;
+    if (row.department_id === deptFilter) return true;
+    return (allocationsByCheck.get(row.id ?? "") ?? []).some((a) => a.departmentId === deptFilter);
+  }
+
+  const filteredPendingApproval = (pendingApproval ?? []).filter(matchesDeptFilter);
+  const filteredNeedingIssuance = (needingIssuance ?? []).filter(matchesDeptFilter);
+  const filteredChecks = (checks ?? []).filter(matchesDeptFilter);
+  const filteredOverdue = (overdueByAsOf ?? []).filter(matchesDeptFilter);
+  const overdueTransfers = filteredOverdue.filter((c) => c.payment_method === "TRANSFER");
+  const overdueChecks = filteredOverdue.filter((c) => c.payment_method !== "TRANSFER");
+
   // Sort primarily by check-entry date, but group same-payee rows together
   // even when their entry date is later, so an admin preparing one payee's
   // checks sees all of that payee's pending items at once.
   const sortedNeedingIssuance = (() => {
-    const rows = needingIssuance ?? [];
+    const rows = filteredNeedingIssuance;
     const earliestByPayee = new Map<string, string>();
     for (const r of rows) {
       const key = (r.payee ?? "").trim().toLowerCase();
@@ -158,7 +181,7 @@ export default async function ChecksPage({
         )}
       </div>
 
-      <form className="flex items-center gap-2" method="get">
+      <form className="flex items-center gap-2 flex-wrap" method="get">
         <input type="hidden" name="asOf" value={asOf} />
         <input type="hidden" name="pm" value={pmFilter} />
         <input type="hidden" name="st" value={stFilter} />
@@ -168,12 +191,28 @@ export default async function ChecksPage({
           placeholder="חיפוש לפי מוטב / הערות — בכל הרשימות בעמוד"
           className="w-full max-w-sm rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
         />
+        <select name="dept" defaultValue={deptFilter} className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm">
+          <option value="">כל המחלקות</option>
+          {(departments ?? []).map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+        <select name="bank" defaultValue={bankFilter} className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm">
+          <option value="">כל חשבונות הבנק</option>
+          {(bankAccounts ?? []).map((b) => (
+            <option key={b.id} value={b.id}>
+              {(b as { departments: { name: string } | null }).departments?.name} — {b.bank_name}
+            </option>
+          ))}
+        </select>
         <button type="submit" className="rounded-lg border border-border px-4 py-2 text-sm font-semibold">
-          חיפוש
+          חיפוש / סינון
         </button>
-        {q && (
+        {(q || deptFilter || bankFilter) && (
           <a href="/checks" className="text-sm text-muted underline">
-            נקה
+            נקה הכל
           </a>
         )}
       </form>
@@ -197,6 +236,8 @@ export default async function ChecksPage({
         <div className="card p-4">
           <form className="flex flex-wrap items-end gap-3 mb-3" method="get">
             <input type="hidden" name="q" value={q} />
+            <input type="hidden" name="dept" value={deptFilter} />
+            <input type="hidden" name="bank" value={bankFilter} />
             <div>
               <label className="block text-sm font-medium mb-1">
                 צ׳קים / העברות שהיו אמורים להתבצע עד תאריך
@@ -310,7 +351,7 @@ export default async function ChecksPage({
         </div>
       )}
 
-      {(pendingApproval ?? []).length > 0 && (
+      {filteredPendingApproval.length > 0 && (
         <div className="card p-4">
           <h2 className="font-semibold mb-1">הוצאות לתשלום — ממתינות לאישור/תאריך (לא משפיעות על התחזית)</h2>
           {isAdmin && (
@@ -330,7 +371,7 @@ export default async function ChecksPage({
               </tr>
             </thead>
             <tbody>
-              {pendingApproval!.map((c) => (
+              {filteredPendingApproval.map((c) => (
                 <tr key={c.id!}>
                   <td>{c.payee}</td>
                   <td>{formatCurrency(Number(c.amount))}</td>
@@ -400,6 +441,8 @@ export default async function ChecksPage({
           <form className="flex items-center gap-2" method="get">
             <input type="hidden" name="q" value={q} />
             <input type="hidden" name="asOf" value={asOf} />
+            <input type="hidden" name="dept" value={deptFilter} />
+            <input type="hidden" name="bank" value={bankFilter} />
             <select name="pm" defaultValue={pmFilter} className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm">
               <option value="ALL">צ׳קים והעברות</option>
               <option value="CHECK">צ׳קים בלבד</option>
@@ -431,7 +474,7 @@ export default async function ChecksPage({
             </tr>
           </thead>
           <tbody>
-            {(checks ?? []).map((c) => {
+            {filteredChecks.map((c) => {
               const row = c as unknown as {
                 id: string;
                 check_number: string | null;
@@ -495,7 +538,7 @@ export default async function ChecksPage({
                 </tr>
               );
             })}
-            {(checks ?? []).length === 0 && (
+            {filteredChecks.length === 0 && (
               <tr>
                 <td colSpan={isAdmin ? 9 : 8} className="text-center text-muted py-6">
                   אין צ׳קים רשומים עדיין
