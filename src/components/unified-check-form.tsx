@@ -2,15 +2,16 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createPaymentSpread, type CheckAllocationInput } from "@/app/(app)/checks/actions";
+import { createCheck, createPaymentSpread, type CheckAllocationInput } from "@/app/(app)/checks/actions";
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { MiniCalculator } from "@/components/mini-calculator";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
+type Category = Tables<"categories">;
 type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | null };
 
-type SpreadRow = {
+type Row = {
   date: string;
   amount: number;
   checkNumber: string;
@@ -18,7 +19,7 @@ type SpreadRow = {
   allocations: CheckAllocationInput[];
 };
 
-function blankSpreadRow(): SpreadRow {
+function blankRow(): Row {
   return { date: "", amount: 0, checkNumber: "", departmentId: "", allocations: [] };
 }
 
@@ -28,36 +29,73 @@ function addMonths(iso: string, months: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function PaymentSpreadForm({
+// A single button/flow for issuing a check or transfer that covers three
+// cases the app used to split across separate buttons: one plain
+// check/transfer, one check/transfer split across departments, and several
+// checks/transfers to the same payee (a "spread"). With one row it behaves
+// like a simple new-check form; adding rows turns it into a spread — the
+// admin never has to pick which flow to start in.
+export function UnifiedCheckForm({
   bankAccounts,
   departments,
+  categories,
 }: {
   bankAccounts: BankAccount[];
   departments: Department[];
+  categories: Category[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [payee, setPayee] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"CHECK" | "TRANSFER">("CHECK");
-  const [notes, setNotes] = useState("");
   const [bankAccountId, setBankAccountId] = useState("");
-  const [involvesMultipleDepartments, setInvolvesMultipleDepartments] = useState(false);
-  const [rows, setRows] = useState<SpreadRow[]>([blankSpreadRow()]);
+  const [categoryId, setCategoryId] = useState("");
+  const [notes, setNotes] = useState("");
+  const [skipDepartmentLedger, setSkipDepartmentLedger] = useState(false);
+  const [isSplitting, setIsSplitting] = useState(false);
+  const [rows, setRows] = useState<Row[]>([blankRow()]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Setup helper: instead of adding/filling rows one at a time, declare the
-  // departments involved + the total planned expense + how many checks it's
-  // being spread into (+ optional first date/check number), and generate
-  // the row skeletons in one go. Amounts and per-row department allocations
-  // are still left for manual entry/adjustment afterward.
   const [helperOpen, setHelperOpen] = useState(false);
   const [helperDepartmentIds, setHelperDepartmentIds] = useState<string[]>([]);
   const [helperTotal, setHelperTotal] = useState(0);
   const [helperCount, setHelperCount] = useState(1);
   const [helperFirstDate, setHelperFirstDate] = useState("");
   const [helperFirstCheckNumber, setHelperFirstCheckNumber] = useState("");
+
+  const isSpread = rows.length > 1;
+
+  function reset() {
+    setPayee("");
+    setPaymentMethod("CHECK");
+    setBankAccountId("");
+    setCategoryId("");
+    setNotes("");
+    setSkipDepartmentLedger(false);
+    setIsSplitting(false);
+    setRows([blankRow()]);
+    setError(null);
+    setHelperOpen(false);
+    setHelperDepartmentIds([]);
+    setHelperTotal(0);
+    setHelperCount(1);
+    setHelperFirstDate("");
+    setHelperFirstCheckNumber("");
+  }
+
+  function updateRow(i: number, patch: Partial<Row>) {
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  }
+
+  function addRow() {
+    setRows((prev) => [...prev, blankRow()]);
+  }
+
+  function removeRow(i: number) {
+    setRows((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+  }
 
   function toggleHelperDepartment(id: string) {
     setHelperDepartmentIds((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
@@ -70,7 +108,7 @@ export function PaymentSpreadForm({
     const firstCheckNumberNum = Number(helperFirstCheckNumber);
     const hasSequentialCheckNumber = helperFirstCheckNumber !== "" && !isNaN(firstCheckNumberNum);
 
-    const generated: SpreadRow[] = Array.from({ length: count }, (_, i) => ({
+    const generated: Row[] = Array.from({ length: count }, (_, i) => ({
       date: helperFirstDate ? addMonths(helperFirstDate, i) : "",
       amount: i === count - 1 ? base + remainder : base,
       checkNumber: hasSequentialCheckNumber ? String(firstCheckNumberNum + i) : "",
@@ -78,26 +116,40 @@ export function PaymentSpreadForm({
       allocations: helperDepartmentIds.map((id) => ({ departmentId: id, amount: 0 })),
     }));
 
-    if (helperDepartmentIds.length > 0) setInvolvesMultipleDepartments(true);
+    if (helperDepartmentIds.length > 0) setIsSplitting(true);
     setRows(generated);
-  }
-
-  function updateRow(i: number, patch: Partial<SpreadRow>) {
-    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  }
-
-  function addRow() {
-    setRows((prev) => [...prev, blankSpreadRow()]);
-  }
-
-  function removeRow(i: number) {
-    setRows((prev) => prev.filter((_, idx) => idx !== i));
   }
 
   function submit() {
     setError(null);
     setMessage(null);
     startTransition(async () => {
+      if (!isSpread) {
+        const row = rows[0];
+        const result = await createCheck({
+          paymentMethod,
+          bankAccountId,
+          payee,
+          amount: row.amount,
+          dueDate: row.date || null,
+          checkNumber: row.checkNumber || null,
+          departmentId: isSplitting ? null : row.departmentId || null,
+          categoryId: categoryId || null,
+          internalBeneficiary: null,
+          notes: notes || null,
+          skipDepartmentLedger,
+          allocations: isSplitting ? row.allocations : [],
+        });
+        if (result.error) {
+          setError(result.error);
+        } else {
+          reset();
+          setOpen(false);
+          router.refresh();
+        }
+        return;
+      }
+
       const result = await createPaymentSpread({
         payee,
         paymentMethod,
@@ -108,16 +160,15 @@ export function PaymentSpreadForm({
           date: r.date || null,
           amount: r.amount,
           checkNumber: r.checkNumber || null,
-          departmentId: involvesMultipleDepartments ? null : r.departmentId || null,
-          allocations: involvesMultipleDepartments ? r.allocations : [],
+          departmentId: isSplitting ? null : r.departmentId || null,
+          allocations: isSplitting ? r.allocations : [],
         })),
       });
       if (result.error) {
         setError(result.error);
       } else {
-        setMessage("הפריסה נוצרה בהצלחה");
-        setPayee("");
-        setRows([blankSpreadRow()]);
+        setMessage("נוצר בהצלחה");
+        reset();
         router.refresh();
       }
     });
@@ -125,8 +176,11 @@ export function PaymentSpreadForm({
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold">
-        + פריסת צ׳קים / העברות לספק
+      <button
+        onClick={() => setOpen(true)}
+        className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+      >
+        + צ׳ק / העברה חדשה
       </button>
     );
   }
@@ -134,27 +188,27 @@ export function PaymentSpreadForm({
   return (
     <div className="card p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold">פריסת צ׳קים / העברות לספק</h2>
-        <button onClick={() => setOpen(false)} className="text-sm text-muted">
+        <h2 className="font-semibold">{isSpread ? "פריסת צ׳קים / העברות לספק" : "צ׳ק / העברה חדשה"}</h2>
+        <button
+          type="button"
+          onClick={() => {
+            reset();
+            setOpen(false);
+          }}
+          className="text-sm text-muted"
+        >
           סגור
         </button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <input
-          value={payee}
-          onChange={(e) => setPayee(e.target.value)}
-          placeholder="שם הספק"
-          list="supplier-names"
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        />
         <select
           value={paymentMethod}
           onChange={(e) => setPaymentMethod(e.target.value as "CHECK" | "TRANSFER")}
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         >
-          <option value="CHECK">צ׳קים</option>
-          <option value="TRANSFER">העברות בנקאיות</option>
+          <option value="CHECK">צ׳ק</option>
+          <option value="TRANSFER">העברה בנקאית</option>
         </select>
         <select
           value={bankAccountId}
@@ -169,6 +223,27 @@ export function PaymentSpreadForm({
           ))}
         </select>
         <input
+          value={payee}
+          onChange={(e) => setPayee(e.target.value)}
+          placeholder="מוטב"
+          list="supplier-names"
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+        />
+        {!isSpread && (
+          <select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+          >
+            <option value="">קטגוריה (אופציונלי)</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <input
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="הערות"
@@ -176,18 +251,26 @@ export function PaymentSpreadForm({
         />
       </div>
 
-      <label className="flex items-center gap-1 text-sm">
-        <input
-          type="checkbox"
-          checked={involvesMultipleDepartments}
-          onChange={(e) => setInvolvesMultipleDepartments(e.target.checked)}
-        />
-        הפריסה הזו מכילה כמה מחלקות (לחלק כל תשלום בנפרד בין המחלקות)
-      </label>
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-1 text-sm">
+          <input type="checkbox" checked={isSplitting} onChange={(e) => setIsSplitting(e.target.checked)} />
+          פצל בין מחלקות
+        </label>
+        {!isSpread && (
+          <label className="flex items-center gap-1 text-sm">
+            <input
+              type="checkbox"
+              checked={skipDepartmentLedger}
+              onChange={(e) => setSkipDepartmentLedger(e.target.checked)}
+            />
+            כבר נכלל בחישוב הישן (לא לכלול במאזן הפנימי של המחלקה)
+          </label>
+        )}
+      </div>
 
       {!helperOpen ? (
         <button type="button" onClick={() => setHelperOpen(true)} className="text-sm text-primary underline">
-          עזר להגדרת הפריסה
+          עזר להגדרת פריסה (כמה תשלומים לאותו מוטב)
         </button>
       ) : (
         <div className="card bg-background p-3 space-y-2">
@@ -244,7 +327,7 @@ export function PaymentSpreadForm({
           </div>
           <p className="text-xs text-muted">
             {helperCount > 0 && helperTotal > 0
-              ? `כל תשלום: ${(Math.floor((helperTotal / Math.max(1, helperCount)) * 100) / 100).toLocaleString()} (התאריך והמספר יעלו אוטומטית מהראשון, אם הוזנו)`
+              ? `כל תשלום: ${(Math.floor((helperTotal / Math.max(1, helperCount)) * 100) / 100).toLocaleString()}`
               : "הזן סכום כולל ומספר תשלומים כדי לראות חישוב"}
           </p>
           <button
@@ -258,10 +341,9 @@ export function PaymentSpreadForm({
       )}
 
       <div className="space-y-2">
-        <p className="text-sm font-medium">תשלומים (הזנה ידנית לכל תשלום — ללא חלוקה אוטומטית)</p>
         {rows.map((row, i) => (
           <div key={i} className="border-t border-border pt-2 space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 type="date"
                 value={row.date}
@@ -269,23 +351,25 @@ export function PaymentSpreadForm({
                 className="rounded border border-border bg-transparent px-2 py-1 text-sm"
                 title="ניתן להשאיר ריק"
               />
-              <input
-                type="number"
-                value={row.amount || ""}
-                onChange={(e) => updateRow(i, { amount: Number(e.target.value) || 0 })}
-                placeholder="סכום"
-                className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm"
-              />
-              <MiniCalculator onApply={(v) => updateRow(i, { amount: v })} />
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={row.amount || ""}
+                  onChange={(e) => updateRow(i, { amount: Number(e.target.value) || 0 })}
+                  placeholder="סכום"
+                  className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm"
+                />
+                <MiniCalculator onApply={(v) => updateRow(i, { amount: v })} />
+              </div>
               {paymentMethod === "CHECK" && (
                 <input
                   value={row.checkNumber}
                   onChange={(e) => updateRow(i, { checkNumber: e.target.value })}
-                  placeholder="מס׳ צ׳ק (אופציונלי)"
-                  className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm"
+                  placeholder="מספר צ׳ק (ניתן להשאיר ריק)"
+                  className="w-32 rounded border border-border bg-transparent px-2 py-1 text-sm"
                 />
               )}
-              {!involvesMultipleDepartments && (
+              {!isSplitting && (
                 <select
                   value={row.departmentId}
                   onChange={(e) => updateRow(i, { departmentId: e.target.value })}
@@ -299,11 +383,13 @@ export function PaymentSpreadForm({
                   ))}
                 </select>
               )}
-              <button type="button" onClick={() => removeRow(i)} className="text-xs text-danger">
-                הסר
-              </button>
+              {rows.length > 1 && (
+                <button type="button" onClick={() => removeRow(i)} className="text-xs text-danger">
+                  הסר תשלום
+                </button>
+              )}
             </div>
-            {involvesMultipleDepartments && (
+            {isSplitting && (
               <SplitAllocationEditor
                 departments={departments}
                 totalAmount={row.amount}
@@ -314,17 +400,17 @@ export function PaymentSpreadForm({
           </div>
         ))}
         <button type="button" onClick={addRow} className="text-sm text-primary underline">
-          + הוסף תשלום
+          + הוסף תשלום נוסף לאותו מוטב (פריסה)
         </button>
       </div>
 
       <div className="flex items-center gap-2">
         <button
-          disabled={isPending || !payee || !bankAccountId}
+          disabled={isPending || !bankAccountId || !payee || rows.every((r) => r.amount <= 0)}
           onClick={submit}
           className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
         >
-          צור פריסה
+          שמור
         </button>
         {error && <span className="text-sm text-danger">{error}</span>}
         {message && <span className="text-sm text-success">{message}</span>}

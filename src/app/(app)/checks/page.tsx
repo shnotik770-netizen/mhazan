@@ -7,11 +7,10 @@ import {
   DeptExpenseRequestForm,
   EditDeleteCheckRow,
   IssueCheckRow,
-  NewCheckForm,
   VerifyTransferButton,
 } from "@/components/checks-client";
 import { PasteExistingChecksForm } from "@/components/checks-paste-client";
-import { PaymentSpreadForm } from "@/components/payment-spread-client";
+import { UnifiedCheckForm } from "@/components/unified-check-form";
 import { BulkCheckEntryForm, BulkExpenseRequestFormMulti } from "@/components/bulk-checks-client";
 
 export default async function ChecksPage({
@@ -97,9 +96,8 @@ export default async function ChecksPage({
         <h1 className="text-xl font-bold">ניהול צ׳קים והעברות</h1>
         {isAdmin && (
           <div className="flex items-center gap-2">
-            <NewCheckForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} categories={categories ?? []} />
+            <UnifiedCheckForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} categories={categories ?? []} />
             <BulkCheckEntryForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
-            <PaymentSpreadForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <PasteExistingChecksForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <a href="/settings#recurring-schedules" className="rounded-lg border border-border px-4 py-2 text-sm font-semibold">
               + הוראת קבע חדשה
