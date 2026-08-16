@@ -172,7 +172,13 @@ export async function createPaymentSpread(input: {
   internalBeneficiary: string | null;
   notes: string | null;
   bankAccountId: string;
-  rows: { date: string | null; amount: number; departmentId: string | null; allocations: CheckAllocationInput[] }[];
+  rows: {
+    date: string | null;
+    amount: number;
+    checkNumber?: string | null;
+    departmentId: string | null;
+    allocations: CheckAllocationInput[];
+  }[];
 }): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const supabase = await createClient();
@@ -206,6 +212,7 @@ export async function createPaymentSpread(input: {
         payee: input.payee,
         amount: row.amount,
         due_date: row.date || null,
+        check_number: row.checkNumber || null,
         department_id: isSplit ? null : row.departmentId,
         internal_beneficiary: input.internalBeneficiary || null,
         spread_id: spread.id,
