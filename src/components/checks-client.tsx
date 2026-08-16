@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   classifyCheck,
+  convertPendingCheckToSpread,
   createDeptExpenseRequest,
   deleteCheck,
   issueCheck,
@@ -334,51 +335,244 @@ export function DeptExpenseRequestForm({
   );
 }
 
+type SpreadDraftRow = {
+  date: string;
+  amount: number;
+  checkNumber: string;
+  departmentId: string;
+};
+
 // Finance admin's finalization step for a request that's missing a check
-// number and/or a due date.
+// number and/or a due date. Clicking "הנפק" with the fields already
+// complete (date, plus a check number for CHECK payment method) saves
+// immediately — the row then drops out of the issuance queue and shows up
+// among the regular unpaid checks/transfers awaiting clearance. If the
+// fields aren't complete yet, it asks how to proceed instead of silently
+// saving a half-filled row: issue as one payment (optionally split across
+// departments), or turn it into a spread of several payments.
 export function IssueCheckRow({
   checkId,
   currentCheckNumber,
   currentDueDate,
+  currentPaymentMethod,
   amount,
   departments,
 }: {
   checkId: string;
   currentCheckNumber: string | null;
   currentDueDate: string | null;
+  currentPaymentMethod?: string;
   amount: number;
   departments: Department[];
 }) {
   const router = useRouter();
+  const [mode, setMode] = useState<"collapsed" | "choose" | "single" | "spread">("collapsed");
+  const [paymentMethod, setPaymentMethod] = useState<"CHECK" | "TRANSFER">(
+    currentPaymentMethod === "TRANSFER" ? "TRANSFER" : "CHECK",
+  );
   const [checkNumber, setCheckNumber] = useState(currentCheckNumber ?? "");
   const [dueDate, setDueDate] = useState(currentDueDate ?? "");
   const [isSplitting, setIsSplitting] = useState(false);
   const [allocations, setAllocations] = useState<CheckAllocationInput[]>([]);
+  const [spreadRows, setSpreadRows] = useState<SpreadDraftRow[]>([
+    { date: "", amount, checkNumber: "", departmentId: "" },
+  ]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function submit() {
+  const isComplete = Boolean(dueDate) && (paymentMethod !== "CHECK" || Boolean(checkNumber));
+
+  function submitSingle() {
     setError(null);
     startTransition(async () => {
       const result = await issueCheck(checkId, {
         checkNumber: checkNumber || null,
         dueDate: dueDate || null,
+        paymentMethod,
         allocations: isSplitting ? allocations : [],
       });
       if (result.error) setError(result.error);
-      else router.refresh();
+      else {
+        setMode("collapsed");
+        router.refresh();
+      }
     });
+  }
+
+  function submitSpread() {
+    setError(null);
+    startTransition(async () => {
+      const result = await convertPendingCheckToSpread(
+        checkId,
+        spreadRows
+          .filter((r) => r.amount > 0)
+          .map((r) => ({
+            date: r.date || null,
+            amount: r.amount,
+            checkNumber: r.checkNumber || null,
+            departmentId: r.departmentId || null,
+            allocations: [],
+          })),
+      );
+      if (result.error) setError(result.error);
+      else {
+        setMode("collapsed");
+        router.refresh();
+      }
+    });
+  }
+
+  function handleIssueClick() {
+    if (isComplete) {
+      submitSingle();
+    } else {
+      setMode("choose");
+    }
+  }
+
+  if (mode === "collapsed") {
+    return (
+      <button
+        disabled={isPending}
+        onClick={handleIssueClick}
+        className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
+      >
+        הנפק
+      </button>
+    );
+  }
+
+  if (mode === "choose") {
+    return (
+      <div className="flex flex-col gap-1">
+        <p className="text-xs text-muted">חסרים פרטים — איך להנפיק?</p>
+        <div className="flex flex-wrap gap-1">
+          <button onClick={() => setMode("single")} className="rounded border border-border text-xs px-2 py-1">
+            צ׳ק / העברה בודדת
+          </button>
+          <button
+            onClick={() => {
+              setIsSplitting(true);
+              setMode("single");
+            }}
+            className="rounded border border-border text-xs px-2 py-1"
+          >
+            פיצול בין מחלקות
+          </button>
+          <button onClick={() => setMode("spread")} className="rounded border border-border text-xs px-2 py-1">
+            פריסה לכמה תשלומים
+          </button>
+          <button onClick={() => setMode("collapsed")} className="text-xs text-muted">
+            ביטול
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === "spread") {
+    return (
+      <div className="flex flex-col gap-1 min-w-[260px]">
+        <p className="text-xs text-muted">פריסה לכמה תשלומים — הסכומים המקוריים לא מחושבים אוטומטית</p>
+        {spreadRows.map((row, i) => (
+          <div key={i} className="flex items-center gap-1">
+            <input
+              type="date"
+              value={row.date}
+              onChange={(e) =>
+                setSpreadRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, date: e.target.value } : r)))
+              }
+              className="rounded border border-border bg-transparent px-1 py-0.5 text-xs"
+            />
+            <input
+              type="number"
+              value={row.amount || ""}
+              onChange={(e) =>
+                setSpreadRows((prev) =>
+                  prev.map((r, idx) => (idx === i ? { ...r, amount: Number(e.target.value) || 0 } : r)),
+                )
+              }
+              placeholder="סכום"
+              className="w-20 rounded border border-border bg-transparent px-1 py-0.5 text-xs"
+            />
+            {paymentMethod === "CHECK" && (
+              <input
+                value={row.checkNumber}
+                onChange={(e) =>
+                  setSpreadRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, checkNumber: e.target.value } : r)))
+                }
+                placeholder="מס׳ צ׳ק"
+                className="w-20 rounded border border-border bg-transparent px-1 py-0.5 text-xs"
+              />
+            )}
+            <select
+              value={row.departmentId}
+              onChange={(e) =>
+                setSpreadRows((prev) =>
+                  prev.map((r, idx) => (idx === i ? { ...r, departmentId: e.target.value } : r)),
+                )
+              }
+              className="rounded border border-border bg-transparent px-1 py-0.5 text-xs"
+            >
+              <option value="">מחלקה</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+            {spreadRows.length > 1 && (
+              <button
+                onClick={() => setSpreadRows((prev) => prev.filter((_, idx) => idx !== i))}
+                className="text-xs text-danger"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        ))}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSpreadRows((prev) => [...prev, { date: "", amount: 0, checkNumber: "", departmentId: "" }])}
+            className="text-xs text-primary underline"
+          >
+            + תשלום
+          </button>
+          <button
+            disabled={isPending}
+            onClick={submitSpread}
+            className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
+          >
+            שמור פריסה
+          </button>
+          <button onClick={() => setMode("choose")} className="text-xs text-muted">
+            חזרה
+          </button>
+        </div>
+        {error && <p className="text-xs text-danger">{error}</p>}
+      </div>
+    );
   }
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        <input
-          value={checkNumber}
-          onChange={(e) => setCheckNumber(e.target.value)}
-          placeholder="מספר צ׳ק"
-          className="w-24 rounded border border-border bg-transparent px-2 py-1 text-xs"
-        />
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={paymentMethod}
+          onChange={(e) => setPaymentMethod(e.target.value as "CHECK" | "TRANSFER")}
+          className="rounded border border-border bg-transparent px-1 py-0.5 text-xs"
+        >
+          <option value="CHECK">צ׳ק</option>
+          <option value="TRANSFER">העברה</option>
+        </select>
+        {paymentMethod === "CHECK" && (
+          <input
+            value={checkNumber}
+            onChange={(e) => setCheckNumber(e.target.value)}
+            placeholder="מספר צ׳ק"
+            className="w-24 rounded border border-border bg-transparent px-2 py-1 text-xs"
+          />
+        )}
         <input
           type="date"
           value={dueDate}
@@ -391,10 +585,13 @@ export function IssueCheckRow({
         </label>
         <button
           disabled={isPending}
-          onClick={submit}
+          onClick={submitSingle}
           className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
         >
           הנפק
+        </button>
+        <button onClick={() => setMode("choose")} className="text-xs text-muted">
+          חזרה
         </button>
       </div>
       {isSplitting && (
@@ -420,6 +617,7 @@ export function EditDeleteCheckRow({
   checkNumber,
   departmentId,
   notes,
+  paymentMethod,
   departments,
 }: {
   checkId: string;
@@ -429,6 +627,7 @@ export function EditDeleteCheckRow({
   checkNumber: string | null;
   departmentId: string | null;
   notes: string | null;
+  paymentMethod?: string;
   departments: Department[];
 }) {
   const router = useRouter();
@@ -439,6 +638,9 @@ export function EditDeleteCheckRow({
   const [editCheckNumber, setEditCheckNumber] = useState(checkNumber ?? "");
   const [editDepartmentId, setEditDepartmentId] = useState(departmentId ?? "");
   const [editNotes, setEditNotes] = useState(notes ?? "");
+  const [editPaymentMethod, setEditPaymentMethod] = useState<"CHECK" | "TRANSFER">(
+    paymentMethod === "TRANSFER" ? "TRANSFER" : "CHECK",
+  );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -452,6 +654,7 @@ export function EditDeleteCheckRow({
         checkNumber: editCheckNumber || null,
         departmentId: editDepartmentId || null,
         notes: editNotes || null,
+        paymentMethod: editPaymentMethod,
       });
       if (result.error) setError(result.error);
       else {
@@ -493,6 +696,14 @@ export function EditDeleteCheckRow({
         list="supplier-names"
         className="rounded border border-border bg-transparent px-2 py-1 text-xs"
       />
+      <select
+        value={editPaymentMethod}
+        onChange={(e) => setEditPaymentMethod(e.target.value as "CHECK" | "TRANSFER")}
+        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+      >
+        <option value="CHECK">צ׳ק</option>
+        <option value="TRANSFER">העברה</option>
+      </select>
       <input
         type="number"
         value={editAmount || ""}
@@ -507,12 +718,14 @@ export function EditDeleteCheckRow({
         onChange={(e) => setEditDueDate(e.target.value)}
         className="rounded border border-border bg-transparent px-2 py-1 text-xs"
       />
-      <input
-        value={editCheckNumber}
-        onChange={(e) => setEditCheckNumber(e.target.value)}
-        placeholder="מספר צ׳ק"
-        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
-      />
+      {editPaymentMethod === "CHECK" && (
+        <input
+          value={editCheckNumber}
+          onChange={(e) => setEditCheckNumber(e.target.value)}
+          placeholder="מספר צ׳ק"
+          className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+        />
+      )}
       <select
         value={editDepartmentId}
         onChange={(e) => setEditDepartmentId(e.target.value)}

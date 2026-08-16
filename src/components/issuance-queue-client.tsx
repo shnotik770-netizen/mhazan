@@ -111,6 +111,7 @@ export function IssuanceQueueTable({ rows, departments }: { rows: QueueRow[]; de
                   checkId={c.id!}
                   currentCheckNumber={c.check_number}
                   currentDueDate={c.due_date}
+                  currentPaymentMethod={c.payment_method ?? undefined}
                   amount={Number(c.amount)}
                   departments={departments}
                 />

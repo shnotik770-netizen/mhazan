@@ -265,6 +265,7 @@ export default async function ChecksPage({
                         checkId={c.id!}
                         currentCheckNumber={c.check_number}
                         currentDueDate={c.due_date}
+                        currentPaymentMethod={c.payment_method ?? undefined}
                         amount={Number(c.amount)}
                         departments={departments ?? []}
                       />
@@ -385,6 +386,7 @@ export default async function ChecksPage({
                         checkNumber={row.check_number}
                         departmentId={row.department_id}
                         notes={row.notes}
+                        paymentMethod={row.payment_method}
                         departments={departments ?? []}
                       />
                     </td>

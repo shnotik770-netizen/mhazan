@@ -136,7 +136,12 @@ export async function createDeptExpenseRequest(input: {
 // this point.
 export async function issueCheck(
   checkId: string,
-  input: { checkNumber: string | null; dueDate: string | null; allocations: CheckAllocationInput[] },
+  input: {
+    checkNumber: string | null;
+    dueDate: string | null;
+    paymentMethod?: "CHECK" | "TRANSFER";
+    allocations: CheckAllocationInput[];
+  },
 ): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const supabase = await createClient();
@@ -148,6 +153,7 @@ export async function issueCheck(
     .update({
       check_number: input.checkNumber || null,
       due_date: input.dueDate || null,
+      ...(input.paymentMethod ? { payment_method: input.paymentMethod } : {}),
       department_id: isSplit ? null : undefined,
     })
     .eq("id", checkId);
@@ -158,6 +164,37 @@ export async function issueCheck(
     const allocError = await insertAllocations(supabase, checkId, input.allocations);
     if (allocError) return { error: allocError };
   }
+
+  revalidateCheckPaths();
+  return {};
+}
+
+// Used from the issuance queue when a pending request turns out to need
+// several payments instead of one: replaces the single pending check with
+// a full spread (reusing createPaymentSpread), then removes the original
+// row so it isn't double-counted.
+export async function convertPendingCheckToSpread(
+  checkId: string,
+  rows: { date: string | null; amount: number; checkNumber: string | null; departmentId: string | null; allocations: CheckAllocationInput[] }[],
+): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+
+  const { data: original, error: fetchError } = await supabase.from("checks").select("*").eq("id", checkId).single();
+  if (fetchError || !original) return { error: fetchError?.message ?? "הצ׳ק/הבקשה לא נמצא/ה" };
+
+  const spreadResult = await createPaymentSpread({
+    payee: original.payee,
+    paymentMethod: original.payment_method as "CHECK" | "TRANSFER",
+    internalBeneficiary: null,
+    notes: original.notes,
+    bankAccountId: original.bank_account_id,
+    rows,
+  });
+  if (spreadResult.error) return spreadResult;
+
+  const { error: deleteError } = await supabase.from("checks").delete().eq("id", checkId);
+  if (deleteError) return { error: deleteError.message };
 
   revalidateCheckPaths();
   return {};
@@ -540,6 +577,7 @@ export async function updateCheck(
     checkNumber: string | null;
     departmentId: string | null;
     notes: string | null;
+    paymentMethod?: "CHECK" | "TRANSFER";
   },
 ): Promise<{ error?: string }> {
   await requireFinanceAdmin();
@@ -553,6 +591,7 @@ export async function updateCheck(
       check_number: input.checkNumber || null,
       department_id: input.departmentId || null,
       notes: input.notes,
+      ...(input.paymentMethod ? { payment_method: input.paymentMethod } : {}),
     })
     .eq("id", checkId);
   revalidateCheckPaths();
