@@ -13,18 +13,46 @@ import { PasteExistingChecksForm } from "@/components/checks-paste-client";
 import { UnifiedCheckForm } from "@/components/unified-check-form";
 import { BulkCheckEntryForm, BulkExpenseRequestFormMulti } from "@/components/bulk-checks-client";
 import { IssuanceQueueTable } from "@/components/issuance-queue-client";
+import { BankReconciliationPanel } from "@/components/bank-reconciliation-client";
 
 export default async function ChecksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ asOf?: string }>;
+  searchParams: Promise<{ asOf?: string; q?: string; pm?: string; st?: string }>;
 }) {
-  const { asOf: asOfParam } = await searchParams;
+  const { asOf: asOfParam, q: qParam, pm: pmParam, st: stParam } = await searchParams;
   const asOf = asOfParam || new Date().toISOString().slice(0, 10);
+  const q = (qParam ?? "").trim();
+  const pmFilter = pmParam === "CHECK" || pmParam === "TRANSFER" ? pmParam : "ALL";
+  const stFilter = ["UNPAID", "CLEARED", "CANCELLED"].includes(stParam ?? "") ? stParam! : "ALL";
 
   const user = await requireUser();
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const supabase = await createClient();
+
+  let pendingApprovalQuery = supabase.from("v_checks_pending_approval").select("*").order("created_at");
+  let needingIssuanceQuery = supabase.from("v_checks_needing_issuance").select("*").order("created_at");
+  let overdueQuery = supabase
+    .from("checks")
+    .select("*, bank_accounts(bank_name, account_number), departments(name)")
+    .eq("status", "UNPAID")
+    .not("due_date", "is", null)
+    .lte("due_date", asOf)
+    .order("due_date");
+  let allChecksQuery = supabase
+    .from("checks")
+    .select("*, bank_accounts(bank_name, account_number), departments(name)")
+    .order("due_date", { ascending: false })
+    .limit(200);
+
+  if (q) {
+    pendingApprovalQuery = pendingApprovalQuery.or(`payee.ilike.%${q}%,notes.ilike.%${q}%`);
+    needingIssuanceQuery = needingIssuanceQuery.or(`payee.ilike.%${q}%,notes.ilike.%${q}%`);
+    overdueQuery = overdueQuery.or(`payee.ilike.%${q}%,notes.ilike.%${q}%`);
+    allChecksQuery = allChecksQuery.or(`payee.ilike.%${q}%,notes.ilike.%${q}%`);
+  }
+  if (pmFilter !== "ALL") allChecksQuery = allChecksQuery.eq("payment_method", pmFilter);
+  if (stFilter !== "ALL") allChecksQuery = allChecksQuery.eq("status", stFilter);
 
   const [
     { data: pendingChecks },
@@ -37,31 +65,34 @@ export default async function ChecksPage({
     { data: bankAccounts },
     { data: grants },
     { data: suppliers },
+    { data: checkAllocations },
   ] = await Promise.all([
     supabase.from("v_pending_checks").select("*").order("due_date"),
-    supabase.from("v_checks_pending_approval").select("*").order("created_at"),
-    supabase.from("v_checks_needing_issuance").select("*").order("created_at"),
-    supabase
-      .from("checks")
-      .select("*, bank_accounts(bank_name, account_number), departments(name)")
-      .eq("status", "UNPAID")
-      .not("due_date", "is", null)
-      .lte("due_date", asOf)
-      .order("due_date"),
-    supabase
-      .from("checks")
-      .select("*, bank_accounts(bank_name, account_number), departments(name)")
-      .order("due_date", { ascending: false })
-      .limit(200),
+    pendingApprovalQuery,
+    needingIssuanceQuery,
+    overdueQuery,
+    allChecksQuery,
     supabase.from("departments").select("*").order("name"),
     supabase.from("categories").select("*").order("name"),
     supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
     supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
     supabase.from("suppliers").select("name").order("name"),
+    supabase.from("check_allocations").select("check_id, amount, departments(name)"),
   ]);
   const supplierNames = (suppliers ?? []).map((s) => s.name);
   const overdueTransfers = (overdueByAsOf ?? []).filter((c) => c.payment_method === "TRANSFER");
   const overdueChecks = (overdueByAsOf ?? []).filter((c) => c.payment_method !== "TRANSFER");
+
+  const allocationsByCheck = new Map<string, { departmentName: string | null; amount: number }[]>();
+  for (const a of (checkAllocations ?? []) as unknown as {
+    check_id: string;
+    amount: number;
+    departments: { name: string } | null;
+  }[]) {
+    const list = allocationsByCheck.get(a.check_id) ?? [];
+    list.push({ departmentName: a.departments?.name ?? null, amount: Number(a.amount) });
+    allocationsByCheck.set(a.check_id, list);
+  }
 
   // Sort primarily by check-entry date, but group same-payee rows together
   // even when their entry date is later, so an admin preparing one payee's
@@ -100,12 +131,33 @@ export default async function ChecksPage({
             <UnifiedCheckForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} categories={categories ?? []} />
             <BulkCheckEntryForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <PasteExistingChecksForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
+            <BankReconciliationPanel bankAccounts={bankAccounts ?? []} />
             <a href="/settings#recurring-schedules" className="rounded-lg border border-border px-4 py-2 text-sm font-semibold">
               + הוראת קבע חדשה
             </a>
           </div>
         )}
       </div>
+
+      <form className="flex items-center gap-2" method="get">
+        <input type="hidden" name="asOf" value={asOf} />
+        <input type="hidden" name="pm" value={pmFilter} />
+        <input type="hidden" name="st" value={stFilter} />
+        <input
+          name="q"
+          defaultValue={q}
+          placeholder="חיפוש לפי מוטב / הערות — בכל הרשימות בעמוד"
+          className="w-full max-w-sm rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+        />
+        <button type="submit" className="rounded-lg border border-border px-4 py-2 text-sm font-semibold">
+          חיפוש
+        </button>
+        {q && (
+          <a href="/checks" className="text-sm text-muted underline">
+            נקה
+          </a>
+        )}
+      </form>
 
       {myDepartments.length > 0 && (
         <div className="space-y-2">
@@ -125,6 +177,7 @@ export default async function ChecksPage({
       {isAdmin && (
         <div className="card p-4">
           <form className="flex flex-wrap items-end gap-3 mb-3" method="get">
+            <input type="hidden" name="q" value={q} />
             <div>
               <label className="block text-sm font-medium mb-1">
                 צ׳קים / העברות שהיו אמורים להתבצע עד תאריך
@@ -225,7 +278,7 @@ export default async function ChecksPage({
       {sortedNeedingIssuance.length > 0 && isAdmin && (
         <div className="card p-4 border-warning/40">
           <h2 className="font-semibold mb-1">
-            ⚠ {sortedNeedingIssuance.length} בקשות הוצאה ממתינות להנפקה (חסר מספר צ׳ק ו/או תאריך)
+            ⚠ {sortedNeedingIssuance.length} צ׳קים להנפקה (יש להם תאריך, חסר מספר צ׳ק)
           </h2>
           <p className="text-xs text-muted mb-2">
             ממוין לפי תאריך הזנה, עם קיבוץ של אותו ספק יחד. ניתן לסמן כמה שורות ולמזג לתשלום אחד או לקבץ לפריסה.
@@ -236,10 +289,11 @@ export default async function ChecksPage({
 
       {(pendingApproval ?? []).length > 0 && (
         <div className="card p-4">
-          <h2 className="font-semibold mb-1">הוצאות ממתינות לאישור (ללא תאריך — לא משפיעות על התחזית)</h2>
+          <h2 className="font-semibold mb-1">הוצאות לתשלום — ממתינות לאישור/תאריך (לא משפיעות על התחזית)</h2>
           {isAdmin && (
             <p className="text-xs text-muted mb-2">
-              קביעת תאריך כאן מאשרת את הבקשה ומעבירה אותה מיד למסך &quot;צ׳קים להנפקה&quot; למטה.
+              קביעת תאריך כאן מאשרת את הבקשה. עבור צ׳ק ללא מספר היא תעבור למסך &quot;צ׳קים להנפקה&quot; למעלה; עבור
+              העברה, או צ׳ק עם מספר, היא תמתין לביצוע בתאריך שנקבע.
             </p>
           )}
           <table className="data-table">
@@ -318,7 +372,27 @@ export default async function ChecksPage({
       )}
 
       <div className="card p-4 overflow-x-auto">
-        <h2 className="font-semibold mb-3">כל הצ׳קים וההעברות</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <h2 className="font-semibold">כל הצ׳קים וההעברות</h2>
+          <form className="flex items-center gap-2" method="get">
+            <input type="hidden" name="q" value={q} />
+            <input type="hidden" name="asOf" value={asOf} />
+            <select name="pm" defaultValue={pmFilter} className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm">
+              <option value="ALL">צ׳קים והעברות</option>
+              <option value="CHECK">צ׳קים בלבד</option>
+              <option value="TRANSFER">העברות בלבד</option>
+            </select>
+            <select name="st" defaultValue={stFilter} className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm">
+              <option value="ALL">כל הסטטוסים</option>
+              <option value="UNPAID">לא נפרע</option>
+              <option value="CLEARED">נפרע</option>
+              <option value="CANCELLED">בוטל</option>
+            </select>
+            <button type="submit" className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold">
+              סנן
+            </button>
+          </form>
+        </div>
         <table className="data-table">
           <thead>
             <tr>
@@ -368,7 +442,19 @@ export default async function ChecksPage({
                     {row.bank_accounts?.bank_name} ({row.bank_accounts?.account_number})
                   </td>
                   <td>
-                    {row.departments?.name ?? <span className="text-warning">בהמתנה</span>}
+                    {row.departments?.name ? (
+                      row.departments.name
+                    ) : allocationsByCheck.has(row.id) ? (
+                      <span className="text-xs">
+                        מפוצל:{" "}
+                        {allocationsByCheck
+                          .get(row.id)!
+                          .map((a) => `${a.departmentName ?? "?"} (${formatCurrency(a.amount)})`)
+                          .join(", ")}
+                      </span>
+                    ) : (
+                      <span className="text-warning">בהמתנה</span>
+                    )}
                     {row.skip_department_ledger && (
                       <span className="badge bg-background text-muted mr-1">חוץ מהמאזן הפנימי</span>
                     )}

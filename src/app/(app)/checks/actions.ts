@@ -374,6 +374,39 @@ export async function deleteCheck(checkId: string): Promise<{ error?: string }> 
   return { error: error?.message };
 }
 
+// Candidate list for the bank-reconciliation panel: unpaid, numbered checks
+// on a given bank account, to be matched client-side against a pasted bank
+// statement by check number + amount.
+export async function getUnpaidChecksForReconciliation(
+  bankAccountId: string,
+): Promise<{ id: string; check_number: string; amount: number; payee: string }[]> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("checks")
+    .select("id, check_number, amount, payee")
+    .eq("bank_account_id", bankAccountId)
+    .eq("payment_method", "CHECK")
+    .eq("status", "UNPAID")
+    .not("check_number", "is", null);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((c) => ({ ...c, check_number: c.check_number as string, amount: Number(c.amount) }));
+}
+
+// Bulk-confirms a batch of checks as cleared, for the reconciliation panel.
+export async function bulkMarkChecksCleared(checkIds: string[]): Promise<{ error?: string; count?: number }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  if (checkIds.length === 0) return { count: 0 };
+  const { error, count } = await supabase
+    .from("checks")
+    .update({ status: "CLEARED" }, { count: "exact" })
+    .in("id", checkIds);
+  if (error) return { error: error.message };
+  revalidateCheckPaths();
+  return { count: count ?? checkIds.length };
+}
+
 export type BulkCheckRow = {
   paymentMethod: "CHECK" | "TRANSFER";
   bankAccountId: string;
@@ -481,8 +514,13 @@ export async function mergeChecks(checkIds: string[]): Promise<{ error?: string 
 
   if (checkIds.length < 2) return { error: "יש לבחור לפחות שני צ׳קים/העברות למיזוג" };
 
-  const { data: checks, error: fetchError } = await supabase.from("checks").select("*").in("id", checkIds);
+  const [{ data: checks, error: fetchError }, { data: existingAllocations, error: allocFetchError }] =
+    await Promise.all([
+      supabase.from("checks").select("*").in("id", checkIds),
+      supabase.from("check_allocations").select("*").in("check_id", checkIds),
+    ]);
   if (fetchError) return { error: fetchError.message };
+  if (allocFetchError) return { error: allocFetchError.message };
   if (!checks || checks.length !== checkIds.length) return { error: "חלק מהצ׳קים לא נמצאו" };
 
   const payees = new Set(checks.map((c) => c.payee.trim().toLowerCase()));
@@ -492,8 +530,35 @@ export async function mergeChecks(checkIds: string[]): Promise<{ error?: string 
   const paymentMethods = new Set(checks.map((c) => c.payment_method));
   if (paymentMethods.size > 1) return { error: "ניתן למזג רק צ׳קים/העברות מאותו סוג (צ׳ק/העברה)" };
 
+  // Preserve each original check's department attribution — including
+  // checks that were themselves already split across departments — by
+  // summing per-department amounts across the whole selection, rather than
+  // collapsing to a single department_id whenever more than one is involved.
+  const allocationsByCheck = new Map<string, { department_id: string; amount: number }[]>();
+  for (const a of existingAllocations ?? []) {
+    const list = allocationsByCheck.get(a.check_id) ?? [];
+    list.push({ department_id: a.department_id, amount: Number(a.amount) });
+    allocationsByCheck.set(a.check_id, list);
+  }
+
+  const unclassified = checks.filter((c) => !c.department_id && !allocationsByCheck.has(c.id));
+  if (unclassified.length > 0) {
+    return { error: "יש לסווג למחלקה את כל הצ׳קים/ההעברות הנבחרים לפני מיזוג" };
+  }
+
   const totalAmount = checks.reduce((sum, c) => sum + Number(c.amount), 0);
-  const departmentIds = new Set(checks.map((c) => c.department_id).filter((d): d is string => !!d));
+  const departmentTotals = new Map<string, number>();
+  for (const c of checks) {
+    const existing = allocationsByCheck.get(c.id);
+    if (existing) {
+      for (const a of existing) {
+        departmentTotals.set(a.department_id, (departmentTotals.get(a.department_id) ?? 0) + a.amount);
+      }
+    } else if (c.department_id) {
+      departmentTotals.set(c.department_id, (departmentTotals.get(c.department_id) ?? 0) + Number(c.amount));
+    }
+  }
+  const singleDepartment = departmentTotals.size === 1 ? [...departmentTotals.keys()][0] : null;
 
   const { data: merged, error: insertError } = await supabase
     .from("checks")
@@ -502,7 +567,7 @@ export async function mergeChecks(checkIds: string[]): Promise<{ error?: string 
       bank_account_id: checks[0].bank_account_id,
       payee: checks[0].payee,
       amount: totalAmount,
-      department_id: departmentIds.size === 1 ? [...departmentIds][0] : null,
+      department_id: singleDepartment,
       notes: `מיזוג ${checks.length} צ׳קים/העברות`,
       created_by: user?.id ?? null,
     })
@@ -510,10 +575,8 @@ export async function mergeChecks(checkIds: string[]): Promise<{ error?: string 
     .single();
   if (insertError) return { error: insertError.message };
 
-  if (departmentIds.size > 1) {
-    const allocRows = checks
-      .filter((c) => c.department_id)
-      .map((c) => ({ departmentId: c.department_id as string, amount: Number(c.amount) }));
+  if (!singleDepartment) {
+    const allocRows = [...departmentTotals.entries()].map(([departmentId, amount]) => ({ departmentId, amount }));
     const allocError = await insertAllocations(supabase, merged.id, allocRows);
     if (allocError) return { error: allocError };
   }

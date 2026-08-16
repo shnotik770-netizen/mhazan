@@ -4,11 +4,18 @@ import { requireUser } from "@/lib/auth";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { DeleteIncomeButton } from "@/components/delete-income-button";
 
-export default async function IncomesPage() {
+export default async function IncomesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q: qParam } = await searchParams;
+  const q = (qParam ?? "").trim();
+
   const user = await requireUser();
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const supabase = await createClient();
-  const { data: incomes } = await supabase
+  let incomesQuery = supabase
     .from("incomes")
     .select(
       "*, categories(name), bank_accounts(bank_name, account_number), owner:owner_department_id(name), issuer:issuing_department_id(name)",
@@ -16,10 +23,12 @@ export default async function IncomesPage() {
     .order("date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(200);
+  if (q) incomesQuery = incomesQuery.or(`donor_name.ilike.%${q}%,notes.ilike.%${q}%,order_ref.ilike.%${q}%`);
+  const { data: incomes } = await incomesQuery;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-xl font-bold">הכנסות</h1>
         {user.profile.role === "FINANCE_ADMIN" && (
           <Link
@@ -30,6 +39,23 @@ export default async function IncomesPage() {
           </Link>
         )}
       </div>
+
+      <form className="flex items-center gap-2" method="get">
+        <input
+          name="q"
+          defaultValue={q}
+          placeholder="חיפוש לפי שם תורם / הערות / מספר הוראה"
+          className="w-full max-w-sm rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+        />
+        <button type="submit" className="rounded-lg border border-border px-4 py-2 text-sm font-semibold">
+          חיפוש
+        </button>
+        {q && (
+          <Link href="/incomes" className="text-sm text-muted underline">
+            נקה
+          </Link>
+        )}
+      </form>
 
       <div className="card p-4 overflow-x-auto">
         <table className="data-table">
