@@ -95,3 +95,22 @@ table.data-table td {
 table.data-table tbody tr:hover {
   background: color-mix(in srgb, var(--primary) 5%, transparent);
 }
+
+@media print {
+  header,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .card {
+    border-color: #ccc;
+    break-inside: avoid;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
