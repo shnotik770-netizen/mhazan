@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  checkExistingTransactionRefs,
   submitIncomeBatch,
   type IncomeBatchRow,
   type SplitAllocation,
@@ -14,7 +15,12 @@ type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | n
 type Category = Tables<"categories"> & { departments: { name: string } | null };
 type Department = Tables<"departments">;
 
-type ParsedRow = IncomeBatchRow & { raw: string; categoryText: string; isCancelled: boolean };
+type ParsedRow = IncomeBatchRow & {
+  raw: string;
+  categoryText: string;
+  isCancelled: boolean;
+  duplicateReason: string | null;
+};
 
 // Known header aliases for the real bank/CRM export (16 columns, order
 // varies): תאריך, מקור, תורם, ת"ז, כתובת, טלפון, מייל, קטגוריה, הערות,
@@ -116,7 +122,7 @@ export function PasteIncomeForm({
   const categoryById = (id: string) => categoryList.find((c) => c.id === id);
 
   function rowIsSavable(row: ParsedRow): boolean {
-    if (row.isCancelled) return false;
+    if (row.isCancelled || row.duplicateReason) return false;
     const category = row.categoryId ? categoryById(row.categoryId) : undefined;
     if (!category) return false;
     if (category.is_split) {
@@ -184,10 +190,51 @@ export function PasteIncomeForm({
         notes,
         isCancelled: isCancelledStatus(getField(cols, "status")),
         splitAllocations: [],
+        duplicateReason: null,
       };
     });
+
+    // Flag duplicate transaction numbers: repeated within this paste, or
+    // already recorded from an earlier paste (e.g. an overlapping
+    // date-range export re-including a previous month's installment row).
+    const refCounts = new Map<string, number>();
+    for (const r of initialRows) {
+      if (!r.transactionRef) continue;
+      refCounts.set(r.transactionRef, (refCounts.get(r.transactionRef) ?? 0) + 1);
+    }
+    const seenInBatch = new Set<string>();
+    for (const r of initialRows) {
+      if (!r.transactionRef) continue;
+      if ((refCounts.get(r.transactionRef) ?? 0) > 1) {
+        if (seenInBatch.has(r.transactionRef)) {
+          r.duplicateReason = "כפול בתוך ההדבקה הזו";
+        }
+        seenInBatch.add(r.transactionRef);
+      }
+    }
+
     setRows(initialRows);
     setMessage(null);
+
+    const refsToCheck = Array.from(new Set(initialRows.map((r) => r.transactionRef).filter(Boolean)));
+    if (refsToCheck.length > 0) {
+      checkExistingTransactionRefs(refsToCheck)
+        .then((existingRefs) => {
+          if (existingRefs.length === 0) return;
+          const existingSet = new Set(existingRefs);
+          setRows((prev) =>
+            prev.map((r) =>
+              r.transactionRef && existingSet.has(r.transactionRef)
+                ? { ...r, duplicateReason: "כבר קיים במערכת (מספר עסקה)" }
+                : r,
+            ),
+          );
+        })
+        .catch(() => {
+          // Non-fatal — the DB's unique constraint still protects against
+          // an actual duplicate insert if this check fails silently.
+        });
+    }
 
     // Any category text that didn't match an existing category becomes a
     // new pending category (no department yet) instead of forcing manual
@@ -201,9 +248,7 @@ export function PasteIncomeForm({
 
     setIsResolvingCategories(true);
     try {
-      const created = await Promise.all(
-        unmatchedNames.map((name) => findOrCreateCategoryByName(name, "INCOME")),
-      );
+      const created = await Promise.all(unmatchedNames.map((name) => findOrCreateCategoryByName(name)));
       setCategoryList((prev) => {
         const byId = new Map(prev.map((c) => [c.id, c]));
         for (const c of created) byId.set(c.id, { ...c, departments: null });
@@ -358,6 +403,9 @@ export function PasteIncomeForm({
                       </select>
                       {isPendingCategory && (
                         <p className="text-xs text-warning">⏳ הקטגוריה ממתינה לשיוך מחלקה</p>
+                      )}
+                      {row.duplicateReason && (
+                        <p className="text-xs text-danger">⛔ {row.duplicateReason} — לא יישמר</p>
                       )}
                       {category?.is_split && (
                         <SplitAllocationEditor

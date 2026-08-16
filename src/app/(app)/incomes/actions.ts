@@ -18,6 +18,24 @@ export type IncomeBatchRow = {
   splitAllocations: SplitAllocation[];
 };
 
+// Used by the paste-income preview to flag rows whose transaction number
+// was already recorded (e.g. an installment charge re-appearing in an
+// overlapping date-range paste), so they can be excluded before saving
+// instead of relying on the DB's unique constraint to reject them.
+export async function checkExistingTransactionRefs(refs: string[]): Promise<string[]> {
+  const unique = Array.from(new Set(refs.filter(Boolean)));
+  if (unique.length === 0) return [];
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("incomes")
+    .select("transaction_ref")
+    .in("transaction_ref", unique);
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((r) => r.transaction_ref).filter((r): r is string => Boolean(r));
+}
+
 export async function submitIncomeBatch(bankAccountId: string, rows: IncomeBatchRow[]) {
   if (!bankAccountId) return { error: "יש לבחור חשבון בנק יעד" };
 
@@ -74,7 +92,12 @@ export async function submitIncomeBatch(bankAccountId: string, rows: IncomeBatch
 
   const { error, count } = await supabase.from("incomes").insert(payload, { count: "exact" });
 
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.code === "23505") {
+      return { error: "אחת השורות כבר קיימת במערכת (מספר עסקה כפול) — רענן ונסה שוב" };
+    }
+    return { error: error.message };
+  }
 
   revalidatePath("/incomes");
   revalidatePath("/");

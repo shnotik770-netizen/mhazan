@@ -118,7 +118,6 @@ export type Database = {
           id: string
           is_split: boolean
           name: string
-          type: string
         }
         Insert: {
           created_at?: string
@@ -126,7 +125,6 @@ export type Database = {
           id?: string
           is_split?: boolean
           name: string
-          type: string
         }
         Update: {
           created_at?: string
@@ -134,7 +132,6 @@ export type Database = {
           id?: string
           is_split?: boolean
           name?: string
-          type?: string
         }
         Relationships: [
           {
@@ -571,7 +568,6 @@ export type Database = {
           id: string | null
           is_split: boolean | null
           name: string | null
-          type: string | null
         }
         Relationships: []
       }

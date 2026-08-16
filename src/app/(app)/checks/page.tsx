@@ -14,7 +14,7 @@ export default async function ChecksPage() {
         .order("due_date", { ascending: false })
         .limit(200),
       supabase.from("departments").select("*").order("name"),
-      supabase.from("categories").select("*").eq("type", "EXPENSE").order("name"),
+      supabase.from("categories").select("*").order("name"),
       supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
     ]);
 

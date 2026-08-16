@@ -21,7 +21,6 @@ export function PendingCategoryRow({
 }) {
   const router = useRouter();
   const [departmentId, setDepartmentId] = useState("");
-  const [type, setType] = useState(category.type);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -32,7 +31,6 @@ export function PendingCategoryRow({
         const fd = new FormData();
         fd.set("id", category.id);
         fd.set("name", category.name);
-        fd.set("type", type);
         fd.set("department_id", departmentId);
         await updateCategory(fd);
         router.refresh();
@@ -45,12 +43,6 @@ export function PendingCategoryRow({
   return (
     <tr>
       <td>{category.name}</td>
-      <td>
-        <select value={type} onChange={(e) => setType(e.target.value)} className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-          <option value="INCOME">הכנסה</option>
-          <option value="EXPENSE">הוצאה</option>
-        </select>
-      </td>
       <td>
         <select
           value={departmentId}
@@ -89,7 +81,6 @@ export function CategoryRow({
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(category.name);
-  const [type, setType] = useState(category.type);
   const [departmentId, setDepartmentId] = useState(category.department_id ?? "");
   const [isSplit, setIsSplit] = useState(category.is_split);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +95,6 @@ export function CategoryRow({
         const fd = new FormData();
         fd.set("id", category.id);
         fd.set("name", name);
-        fd.set("type", type);
         fd.set("department_id", departmentId);
         if (isSplit) fd.set("is_split", "on");
         await updateCategory(fd);
@@ -138,18 +128,6 @@ export function CategoryRow({
           <input value={name} onChange={(e) => setName(e.target.value)} className="rounded border border-border bg-transparent px-2 py-1 text-sm w-40" />
         ) : (
           category.name
-        )}
-      </td>
-      <td>
-        {editing ? (
-          <select value={type} onChange={(e) => setType(e.target.value)} className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-            <option value="INCOME">הכנסה</option>
-            <option value="EXPENSE">הוצאה</option>
-          </select>
-        ) : type === "INCOME" ? (
-          "הכנסה"
-        ) : (
-          "הוצאה"
         )}
       </td>
       <td>
@@ -192,7 +170,6 @@ export function CategoryRow({
                 onClick={() => {
                   setEditing(false);
                   setName(category.name);
-                  setType(category.type);
                   setDepartmentId(category.department_id ?? "");
                   setIsSplit(category.is_split);
                   setError(null);
@@ -222,7 +199,6 @@ export function CategoryRow({
 export function NewCategoryForm({ departments }: { departments: Department[] }) {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [type, setType] = useState("INCOME");
   const [departmentId, setDepartmentId] = useState("");
   const [isSplit, setIsSplit] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -234,7 +210,6 @@ export function NewCategoryForm({ departments }: { departments: Department[] }) 
       try {
         const fd = new FormData();
         fd.set("name", name);
-        fd.set("type", type);
         fd.set("department_id", departmentId);
         if (isSplit) fd.set("is_split", "on");
         await createCategory(fd);
@@ -257,10 +232,6 @@ export function NewCategoryForm({ departments }: { departments: Department[] }) 
           placeholder="שם קטגוריה"
           className="rounded border border-border bg-transparent px-2 py-1 text-sm flex-1"
         />
-        <select value={type} onChange={(e) => setType(e.target.value)} className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-          <option value="INCOME">הכנסה</option>
-          <option value="EXPENSE">הוצאה</option>
-        </select>
         {!isSplit && (
           <select
             value={departmentId}

@@ -8,7 +8,7 @@ export default async function NewIncomePage() {
   const supabase = await createClient();
   const [{ data: bankAccounts }, { data: categories }, { data: departments }] = await Promise.all([
     supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
-    supabase.from("categories").select("*, departments(name)").eq("type", "INCOME").order("name"),
+    supabase.from("categories").select("*, departments(name)").order("name"),
     supabase.from("departments").select("*").order("name"),
   ]);
 

@@ -31,7 +31,6 @@ export default async function CategoriesPage() {
             <thead>
               <tr>
                 <th>שם קטגוריה</th>
-                <th>סוג</th>
                 <th>מחלקה</th>
                 <th></th>
               </tr>
@@ -51,7 +50,6 @@ export default async function CategoriesPage() {
           <thead>
             <tr>
               <th>שם</th>
-              <th>סוג</th>
               <th>מחלקה</th>
               <th>פעולות</th>
             </tr>
@@ -62,7 +60,7 @@ export default async function CategoriesPage() {
             ))}
             {(categories ?? []).length === 0 && (
               <tr>
-                <td colSpan={4} className="text-center text-muted py-6">
+                <td colSpan={3} className="text-center text-muted py-6">
                   אין קטגוריות מוגדרות עדיין — הוסיפו את הקטגוריה הראשונה למטה
                 </td>
               </tr>
