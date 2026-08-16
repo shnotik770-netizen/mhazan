@@ -6,6 +6,7 @@ const links = [
   { href: "/", label: "דשבורד" },
   { href: "/incomes", label: "הכנסות" },
   { href: "/checks", label: "צ׳קים" },
+  { href: "/suppliers", label: "ספקים", adminOnly: true },
   { href: "/ledger", label: "התחשבנות פנימית" },
   { href: "/forecast", label: "תחזית תזרים" },
   { href: "/departments", label: "ניהול מחלקות", adminOnly: true },

@@ -12,6 +12,20 @@ function revalidateCheckPaths() {
   revalidatePath("/forecast");
 }
 
+// Grows the suppliers list automatically as new payees are used, so admins
+// don't have to separately remember to register them.
+async function ensureSupplier(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  payee: string,
+  userId: string | null,
+) {
+  const trimmed = payee.trim();
+  if (!trimmed) return;
+  await supabase
+    .from("suppliers")
+    .upsert({ name: trimmed, created_by: userId }, { onConflict: "name", ignoreDuplicates: true });
+}
+
 async function insertAllocations(
   supabase: Awaited<ReturnType<typeof createClient>>,
   checkId: string,
@@ -76,6 +90,7 @@ export async function createCheck(input: {
     if (allocError) return { error: allocError };
   }
 
+  await ensureSupplier(supabase, input.payee, user?.id ?? null);
   revalidateCheckPaths();
   return {};
 }
@@ -111,6 +126,7 @@ export async function createDeptExpenseRequest(input: {
   });
 
   if (error) return { error: error.message };
+  await ensureSupplier(supabase, input.payee, user?.id ?? null);
   revalidateCheckPaths();
   return {};
 }
@@ -204,6 +220,7 @@ export async function createPaymentSpread(input: {
     }
   }
 
+  await ensureSupplier(supabase, input.payee, user?.id ?? null);
   revalidateCheckPaths();
   return { error: undefined };
 }
@@ -298,6 +315,34 @@ export async function deleteCheck(checkId: string): Promise<{ error?: string }> 
   await requireFinanceAdmin();
   const supabase = await createClient();
   const { error } = await supabase.from("checks").delete().eq("id", checkId);
+  revalidateCheckPaths();
+  return { error: error?.message };
+}
+
+export async function updateCheck(
+  checkId: string,
+  input: {
+    payee: string;
+    amount: number;
+    dueDate: string | null;
+    checkNumber: string | null;
+    departmentId: string | null;
+    notes: string | null;
+  },
+): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("checks")
+    .update({
+      payee: input.payee,
+      amount: input.amount,
+      due_date: input.dueDate || null,
+      check_number: input.checkNumber || null,
+      department_id: input.departmentId || null,
+      notes: input.notes,
+    })
+    .eq("id", checkId);
   revalidateCheckPaths();
   return { error: error?.message };
 }

@@ -6,7 +6,9 @@ import {
   classifyCheck,
   createCheck,
   createDeptExpenseRequest,
+  deleteCheck,
   issueCheck,
+  updateCheck,
   updateCheckStatus,
   type CheckAllocationInput,
 } from "@/app/(app)/checks/actions";
@@ -245,6 +247,7 @@ export function NewCheckForm({
           value={payee}
           onChange={(e) => setPayee(e.target.value)}
           placeholder="מוטב"
+          list="supplier-names"
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         />
         <input
@@ -453,6 +456,7 @@ export function DeptExpenseRequestForm({
           value={payee}
           onChange={(e) => setPayee(e.target.value)}
           placeholder="מוטב"
+          list="supplier-names"
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         />
         <input
@@ -563,6 +567,143 @@ export function IssueCheckRow({
           onChange={setAllocations}
         />
       )}
+      {error && <p className="text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
+// Admin-only edit/delete for an existing check or transfer, inline in the
+// full checks table row.
+export function EditDeleteCheckRow({
+  checkId,
+  payee,
+  amount,
+  dueDate,
+  checkNumber,
+  departmentId,
+  notes,
+  departments,
+}: {
+  checkId: string;
+  payee: string;
+  amount: number;
+  dueDate: string | null;
+  checkNumber: string | null;
+  departmentId: string | null;
+  notes: string | null;
+  departments: Department[];
+}) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [editPayee, setEditPayee] = useState(payee);
+  const [editAmount, setEditAmount] = useState(amount);
+  const [editDueDate, setEditDueDate] = useState(dueDate ?? "");
+  const [editCheckNumber, setEditCheckNumber] = useState(checkNumber ?? "");
+  const [editDepartmentId, setEditDepartmentId] = useState(departmentId ?? "");
+  const [editNotes, setEditNotes] = useState(notes ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateCheck(checkId, {
+        payee: editPayee,
+        amount: editAmount,
+        dueDate: editDueDate || null,
+        checkNumber: editCheckNumber || null,
+        departmentId: editDepartmentId || null,
+        notes: editNotes || null,
+      });
+      if (result.error) setError(result.error);
+      else {
+        setEditing(false);
+        router.refresh();
+      }
+    });
+  }
+
+  function remove() {
+    if (!confirm(`למחוק את הצ׳ק/העברה למוטב "${payee}"?`)) return;
+    startTransition(async () => {
+      const result = await deleteCheck(checkId);
+      if (result.error) setError(result.error);
+      else router.refresh();
+    });
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <button onClick={() => setEditing(true)} className="text-xs text-primary underline">
+          עריכה
+        </button>
+        <button disabled={isPending} onClick={remove} className="text-xs text-danger underline">
+          מחיקה
+        </button>
+        {error && <p className="text-xs text-danger">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1 min-w-[220px]">
+      <input
+        value={editPayee}
+        onChange={(e) => setEditPayee(e.target.value)}
+        placeholder="מוטב"
+        list="supplier-names"
+        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+      />
+      <input
+        type="number"
+        value={editAmount || ""}
+        onChange={(e) => setEditAmount(Number(e.target.value) || 0)}
+        placeholder="סכום"
+        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+      />
+      <input
+        type="date"
+        value={editDueDate}
+        onChange={(e) => setEditDueDate(e.target.value)}
+        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+      />
+      <input
+        value={editCheckNumber}
+        onChange={(e) => setEditCheckNumber(e.target.value)}
+        placeholder="מספר צ׳ק"
+        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+      />
+      <select
+        value={editDepartmentId}
+        onChange={(e) => setEditDepartmentId(e.target.value)}
+        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+      >
+        <option value="">מחלקה (ריק = ימתין לסיווג)</option>
+        {departments.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.name}
+          </option>
+        ))}
+      </select>
+      <input
+        value={editNotes}
+        onChange={(e) => setEditNotes(e.target.value)}
+        placeholder="הערות"
+        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+      />
+      <div className="flex items-center gap-2">
+        <button
+          disabled={isPending}
+          onClick={save}
+          className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
+        >
+          שמור
+        </button>
+        <button onClick={() => setEditing(false)} className="text-xs text-muted">
+          ביטול
+        </button>
+      </div>
       {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );

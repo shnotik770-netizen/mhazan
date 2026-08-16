@@ -95,6 +95,7 @@ export function PaymentSpreadForm({
           value={payee}
           onChange={(e) => setPayee(e.target.value)}
           placeholder="שם הספק"
+          list="supplier-names"
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         />
         <select

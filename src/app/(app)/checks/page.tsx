@@ -5,6 +5,7 @@ import {
   ClassifyCheckRow,
   CheckStatusControls,
   DeptExpenseRequestForm,
+  EditDeleteCheckRow,
   IssueCheckRow,
   NewCheckForm,
   VerifyTransferButton,
@@ -27,6 +28,7 @@ export default async function ChecksPage() {
     { data: categories },
     { data: bankAccounts },
     { data: grants },
+    { data: suppliers },
   ] = await Promise.all([
     supabase.from("v_pending_checks").select("*").order("due_date"),
     supabase.from("v_checks_pending_approval").select("*").order("created_at"),
@@ -41,13 +43,21 @@ export default async function ChecksPage() {
     supabase.from("categories").select("*").order("name"),
     supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
     supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
+    supabase.from("suppliers").select("name").order("name"),
   ]);
+  const supplierNames = (suppliers ?? []).map((s) => s.name);
 
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
 
   return (
     <div className="space-y-6">
+      <datalist id="supplier-names">
+        {supplierNames.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
+
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-xl font-bold">ניהול צ׳קים והעברות</h1>
         {isAdmin && (
@@ -140,6 +150,11 @@ export default async function ChecksPage() {
       {(pendingApproval ?? []).length > 0 && (
         <div className="card p-4">
           <h2 className="font-semibold mb-1">הוצאות ממתינות לאישור (ללא תאריך — לא משפיעות על התחזית)</h2>
+          {isAdmin && (
+            <p className="text-xs text-muted mb-2">
+              קביעת תאריך כאן מאשרת את הבקשה ומעבירה אותה מיד למסך &quot;צ׳קים להנפקה&quot; למטה.
+            </p>
+          )}
           <table className="data-table">
             <thead>
               <tr>
@@ -147,6 +162,7 @@ export default async function ChecksPage() {
                 <th>סכום</th>
                 <th>מחלקה</th>
                 <th>הערות</th>
+                {isAdmin && <th>אישור</th>}
               </tr>
             </thead>
             <tbody>
@@ -156,6 +172,17 @@ export default async function ChecksPage() {
                   <td>{formatCurrency(Number(c.amount))}</td>
                   <td>{c.department_name ?? "בהמתנה"}</td>
                   <td>{c.notes ?? "—"}</td>
+                  {isAdmin && (
+                    <td>
+                      <IssueCheckRow
+                        checkId={c.id!}
+                        currentCheckNumber={c.check_number}
+                        currentDueDate={c.due_date}
+                        amount={Number(c.amount)}
+                        departments={departments ?? []}
+                      />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -215,6 +242,7 @@ export default async function ChecksPage() {
               <th>חשבון</th>
               <th>מחלקה</th>
               <th>סטטוס</th>
+              {isAdmin && <th></th>}
             </tr>
           </thead>
           <tbody>
@@ -227,6 +255,8 @@ export default async function ChecksPage() {
                 due_date: string | null;
                 status: string;
                 payment_method: string;
+                department_id: string | null;
+                notes: string | null;
                 skip_department_ledger: boolean;
                 spread_id: string | null;
                 bank_accounts: { bank_name: string; account_number: string } | null;
@@ -254,12 +284,26 @@ export default async function ChecksPage() {
                   <td>
                     <CheckStatusControls checkId={row.id} status={row.status} />
                   </td>
+                  {isAdmin && (
+                    <td>
+                      <EditDeleteCheckRow
+                        checkId={row.id}
+                        payee={row.payee}
+                        amount={Number(row.amount)}
+                        dueDate={row.due_date}
+                        checkNumber={row.check_number}
+                        departmentId={row.department_id}
+                        notes={row.notes}
+                        departments={departments ?? []}
+                      />
+                    </td>
+                  )}
                 </tr>
               );
             })}
             {(checks ?? []).length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center text-muted py-6">
+                <td colSpan={isAdmin ? 9 : 8} className="text-center text-muted py-6">
                   אין צ׳קים רשומים עדיין
                 </td>
               </tr>
