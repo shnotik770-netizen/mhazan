@@ -95,6 +95,7 @@ export function IssuanceQueueTable({
           {error && <span className="text-xs text-danger">{error}</span>}
         </div>
       )}
+      <div className="overflow-x-auto">
       <table className="data-table">
         <thead>
           <tr>
@@ -144,6 +145,7 @@ export function IssuanceQueueTable({
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

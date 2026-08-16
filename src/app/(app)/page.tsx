@@ -91,7 +91,7 @@ export default async function DashboardPage() {
       )}
 
       {isAdmin && (pendingManualEntries ?? []).length > 0 && (
-        <div className="card p-4 border-warning/40">
+        <div className="card p-4 border-warning/40 overflow-x-auto">
           <h2 className="font-semibold mb-1">
             ⚠ {pendingManualEntries!.length} רישומים ידניים ממתינים לאישור
           </h2>
@@ -154,7 +154,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card p-4">
+        <div className="card p-4 overflow-x-auto">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold">מאזן בנקים</h2>
             <Link href="/forecast" className="text-sm text-primary">
@@ -195,7 +195,7 @@ export default async function DashboardPage() {
           </table>
         </div>
 
-        <div className="card p-4">
+        <div className="card p-4 overflow-x-auto">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold">התחשבנות פנימית בין מחלקות</h2>
             <Link href="/ledger" className="text-sm text-primary">

@@ -23,7 +23,7 @@ export default async function CategoriesPage() {
       </div>
 
       {(pendingCategories ?? []).length > 0 && (
-        <div className="card p-4 border-warning/40">
+        <div className="card p-4 border-warning/40 overflow-x-auto">
           <h2 className="font-semibold mb-1">
             ⚠ ישנן {pendingCategories!.length} קטגוריות הדורשות שיוך למחלקה
           </h2>
@@ -44,7 +44,7 @@ export default async function CategoriesPage() {
         </div>
       )}
 
-      <div className="card p-4">
+      <div className="card p-4 overflow-x-auto">
         <h2 className="font-semibold mb-3">כל הקטגוריות</h2>
         <p className="text-xs text-muted mb-2">
           קטגוריות הממתינות לשיוך מחלקה מוצגות רק בטבלה שלמעלה, ולא כאן, עד שהן משויכות.

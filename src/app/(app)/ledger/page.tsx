@@ -27,7 +27,7 @@ export default async function LedgerPage() {
         </p>
       </div>
 
-      <div className="card p-4">
+      <div className="card p-4 overflow-x-auto">
         <h2 className="font-semibold mb-3">מטריצת יתרות נטו</h2>
         <table className="data-table">
           <thead>

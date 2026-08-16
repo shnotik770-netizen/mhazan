@@ -141,6 +141,7 @@ export function ExpectedIncomeManager({
       {error && <p className="text-xs text-danger">{error}</p>}
 
       {expectedIncomes.length > 0 && (
+        <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
@@ -157,6 +158,7 @@ export function ExpectedIncomeManager({
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

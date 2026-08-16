@@ -49,6 +49,7 @@ export default async function SettingsPage() {
 
       <section className="card p-4 space-y-3">
         <h2 className="font-semibold">חשבונות בנק</h2>
+        <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
@@ -69,6 +70,7 @@ export default async function SettingsPage() {
             ))}
           </tbody>
         </table>
+        </div>
         <form action={createBankAccount} className="flex flex-wrap gap-2 pt-2">
           <select name="department_id" required className="rounded border border-border bg-transparent px-2 py-1 text-sm">
             <option value="">מחלקה...</option>
@@ -118,6 +120,7 @@ export default async function SettingsPage() {
 
       <section id="recurring-schedules" className="card p-4 space-y-3">
         <h2 className="font-semibold">הוראות קבע (מנוע תחזית)</h2>
+        <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
@@ -142,6 +145,7 @@ export default async function SettingsPage() {
             ))}
           </tbody>
         </table>
+        </div>
         <form action={createRecurringSchedule} className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2">
           <input name="name" placeholder="שם ההוראה" required className="rounded border border-border bg-transparent px-2 py-1 text-sm" />
           <select name="department_id" required className="rounded border border-border bg-transparent px-2 py-1 text-sm">
@@ -202,6 +206,7 @@ export default async function SettingsPage() {
           משתמש חדש (שנוצר כאן או שנרשם בעצמו) מקבל כברירת מחדל הרשאת צפייה בלבד וללא גישה לאף מחלקה. יש לאשר לו כאן
           את המחלקות הספציפיות שהוא רשאי לצפות בהן.
         </p>
+        <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
@@ -233,6 +238,7 @@ export default async function SettingsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </section>
     </div>
   );

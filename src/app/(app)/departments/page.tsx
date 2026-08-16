@@ -29,6 +29,7 @@ export default async function DepartmentsPage() {
       </div>
 
       <div className="card p-4">
+        <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
@@ -51,6 +52,7 @@ export default async function DepartmentsPage() {
             )}
           </tbody>
         </table>
+        </div>
         <NewDepartmentForm />
       </div>
 

@@ -255,7 +255,7 @@ export default async function ChecksPage({
           </form>
 
           {overdueTransfers.length > 0 && (
-            <div className="mb-4">
+            <div className="mb-4 overflow-x-auto">
               <h2 className="font-semibold mb-1">⚠ {overdueTransfers.length} העברות שטרם אושרו כבוצעו</h2>
               <table className="data-table">
                 <thead>
@@ -288,7 +288,7 @@ export default async function ChecksPage({
           )}
 
           {overdueChecks.length > 0 && (
-            <div>
+            <div className="overflow-x-auto">
               <h2 className="font-semibold mb-1">⚠ {overdueChecks.length} צ׳קים שטרם אושרו כנפרעו</h2>
               <table className="data-table">
                 <thead>
@@ -360,6 +360,7 @@ export default async function ChecksPage({
               העברה, או צ׳ק עם מספר, היא תמתין לביצוע בתאריך שנקבע.
             </p>
           )}
+          <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
               <tr>
@@ -393,6 +394,7 @@ export default async function ChecksPage({
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -404,6 +406,7 @@ export default async function ChecksPage({
           <p className="text-sm text-muted mb-3">
             עד לסיווג, צ׳קים אלו מחושבים במאזן הכללי תחת &quot;הוצאות כלליות / לא מסווגות&quot;.
           </p>
+          <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
               <tr>
@@ -432,6 +435,7 @@ export default async function ChecksPage({
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
