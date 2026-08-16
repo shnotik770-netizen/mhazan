@@ -4,6 +4,7 @@ import type { CurrentUser } from "@/lib/auth";
 
 const links = [
   { href: "/", label: "דשבורד" },
+  { href: "/transactions", label: "כל התנועות" },
   { href: "/incomes", label: "הכנסות" },
   { href: "/checks", label: "צ׳קים" },
   { href: "/suppliers", label: "ספקים", adminOnly: true },
