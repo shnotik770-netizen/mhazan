@@ -2,16 +2,16 @@ import Link from "next/link";
 import { signOut } from "@/app/login/actions";
 import type { CurrentUser } from "@/lib/auth";
 
+// Department/category/supplier management live only behind "הגדרות" —
+// keeping them out of the main nav means a non-admin never even sees
+// links to admin-only management screens.
 const links = [
   { href: "/", label: "דשבורד" },
   { href: "/transactions", label: "כל התנועות" },
   { href: "/incomes", label: "הכנסות" },
   { href: "/checks", label: "צ׳קים" },
-  { href: "/suppliers", label: "ספקים", adminOnly: true },
   { href: "/ledger", label: "התחשבנות פנימית" },
   { href: "/forecast", label: "תחזית תזרים" },
-  { href: "/departments", label: "ניהול מחלקות", adminOnly: true },
-  { href: "/categories", label: "ניהול קטגוריות", adminOnly: true },
   { href: "/settings", label: "הגדרות", adminOnly: true },
 ];
 

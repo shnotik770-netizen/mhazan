@@ -103,6 +103,19 @@ export default async function SettingsPage() {
         </Link>
       </section>
 
+      <section className="card p-4 flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold">ספקים</h2>
+          <p className="text-sm text-muted">רשימת מוטבים שיצא עליהם צ׳ק/העברה בעבר, לצורך השלמה אוטומטית.</p>
+        </div>
+        <Link
+          href="/suppliers"
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold whitespace-nowrap"
+        >
+          ניהול ספקים
+        </Link>
+      </section>
+
       <section id="recurring-schedules" className="card p-4 space-y-3">
         <h2 className="font-semibold">הוראות קבע (מנוע תחזית)</h2>
         <table className="data-table">

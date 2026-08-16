@@ -53,18 +53,6 @@ export default async function DashboardPage() {
         {user.profile.role === "FINANCE_ADMIN" && (
           <div className="flex items-center gap-2">
             <Link
-              href="/departments"
-              className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
-            >
-              ניהול מחלקות
-            </Link>
-            <Link
-              href="/categories"
-              className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
-            >
-              ניהול קטגוריות
-            </Link>
-            <Link
               href="/settings#recurring-schedules"
               className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
             >
@@ -72,7 +60,7 @@ export default async function DashboardPage() {
             </Link>
             <Link
               href="/settings"
-              className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
+              className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
             >
               הגדרות מערכת
             </Link>
