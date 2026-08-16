@@ -618,6 +618,7 @@ export function EditDeleteCheckRow({
   departmentId,
   notes,
   paymentMethod,
+  existingAllocations,
   departments,
 }: {
   checkId: string;
@@ -628,6 +629,7 @@ export function EditDeleteCheckRow({
   departmentId: string | null;
   notes: string | null;
   paymentMethod?: string;
+  existingAllocations?: CheckAllocationInput[];
   departments: Department[];
 }) {
   const router = useRouter();
@@ -641,6 +643,8 @@ export function EditDeleteCheckRow({
   const [editPaymentMethod, setEditPaymentMethod] = useState<"CHECK" | "TRANSFER">(
     paymentMethod === "TRANSFER" ? "TRANSFER" : "CHECK",
   );
+  const [isSplitting, setIsSplitting] = useState((existingAllocations ?? []).length > 0);
+  const [allocations, setAllocations] = useState<CheckAllocationInput[]>(existingAllocations ?? []);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -655,6 +659,7 @@ export function EditDeleteCheckRow({
         departmentId: editDepartmentId || null,
         notes: editNotes || null,
         paymentMethod: editPaymentMethod,
+        allocations: isSplitting ? allocations : [],
       });
       if (result.error) setError(result.error);
       else {
@@ -726,18 +731,31 @@ export function EditDeleteCheckRow({
           className="rounded border border-border bg-transparent px-2 py-1 text-xs"
         />
       )}
-      <select
-        value={editDepartmentId}
-        onChange={(e) => setEditDepartmentId(e.target.value)}
-        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
-      >
-        <option value="">מחלקה (ריק = ימתין לסיווג)</option>
-        {departments.map((d) => (
-          <option key={d.id} value={d.id}>
-            {d.name}
-          </option>
-        ))}
-      </select>
+      <label className="flex items-center gap-1 text-xs">
+        <input type="checkbox" checked={isSplitting} onChange={(e) => setIsSplitting(e.target.checked)} />
+        פצל בין מחלקות
+      </label>
+      {!isSplitting ? (
+        <select
+          value={editDepartmentId}
+          onChange={(e) => setEditDepartmentId(e.target.value)}
+          className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+        >
+          <option value="">מחלקה (ריק = ימתין לסיווג)</option>
+          {departments.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <SplitAllocationEditor
+          departments={departments}
+          totalAmount={editAmount}
+          allocations={allocations}
+          onChange={setAllocations}
+        />
+      )}
       <input
         value={editNotes}
         onChange={(e) => setEditNotes(e.target.value)}

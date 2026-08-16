@@ -19,12 +19,22 @@ type QueueRow = {
   due_date: string | null;
 };
 
+type AllocationInfo = { departmentName: string | null; amount: number };
+
 // Selecting several pending-issuance rows lets an admin either merge them
 // into a single check/transfer (summed amount, per-department amounts
 // preserved as a split) or group them into a spread to the same payee —
 // covers the "several requests to one supplier, handle together" case
 // without retyping anything.
-export function IssuanceQueueTable({ rows, departments }: { rows: QueueRow[]; departments: Department[] }) {
+export function IssuanceQueueTable({
+  rows,
+  departments,
+  allocationsByCheck,
+}: {
+  rows: QueueRow[];
+  departments: Department[];
+  allocationsByCheck: Map<string, AllocationInfo[]>;
+}) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +114,21 @@ export function IssuanceQueueTable({ rows, departments }: { rows: QueueRow[]; de
               </td>
               <td>{c.payee}</td>
               <td>{formatCurrency(Number(c.amount))}</td>
-              <td>{c.department_name ?? "בהמתנה"}</td>
+              <td>
+                {c.department_name ? (
+                  c.department_name
+                ) : allocationsByCheck.has(c.id!) ? (
+                  <span className="text-xs">
+                    מפוצל:{" "}
+                    {allocationsByCheck
+                      .get(c.id!)!
+                      .map((a) => `${a.departmentName ?? "?"} (${formatCurrency(a.amount)})`)
+                      .join(", ")}
+                  </span>
+                ) : (
+                  <span className="text-warning">בהמתנה</span>
+                )}
+              </td>
               <td>{c.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"}</td>
               <td>
                 <IssueCheckRow

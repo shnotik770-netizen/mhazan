@@ -560,6 +560,13 @@ export async function mergeChecks(checkIds: string[]): Promise<{ error?: string 
   }
   const singleDepartment = departmentTotals.size === 1 ? [...departmentTotals.keys()][0] : null;
 
+  // Carry the earliest due date forward — dropping it would silently bump
+  // an already-scheduled check back into the no-date "ממתינות לאישור"
+  // queue, which looks like the merge lost information (it also loses the
+  // split's visibility there, since that queue doesn't render allocations).
+  const dueDates = checks.map((c) => c.due_date).filter((d): d is string => !!d);
+  const earliestDueDate = dueDates.length > 0 ? dueDates.sort()[0] : null;
+
   const { data: merged, error: insertError } = await supabase
     .from("checks")
     .insert({
@@ -567,6 +574,7 @@ export async function mergeChecks(checkIds: string[]): Promise<{ error?: string 
       bank_account_id: checks[0].bank_account_id,
       payee: checks[0].payee,
       amount: totalAmount,
+      due_date: earliestDueDate,
       department_id: singleDepartment,
       notes: `מיזוג ${checks.length} צ׳קים/העברות`,
       created_by: user?.id ?? null,
@@ -641,10 +649,13 @@ export async function updateCheck(
     departmentId: string | null;
     notes: string | null;
     paymentMethod?: "CHECK" | "TRANSFER";
+    allocations?: CheckAllocationInput[];
   },
 ): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const supabase = await createClient();
+  const isSplit = (input.allocations ?? []).some((a) => a.departmentId && a.amount > 0);
+
   const { error } = await supabase
     .from("checks")
     .update({
@@ -652,11 +663,27 @@ export async function updateCheck(
       amount: input.amount,
       due_date: input.dueDate || null,
       check_number: input.checkNumber || null,
-      department_id: input.departmentId || null,
+      department_id: isSplit ? null : input.departmentId || null,
       notes: input.notes,
       ...(input.paymentMethod ? { payment_method: input.paymentMethod } : {}),
     })
     .eq("id", checkId);
+  if (error) {
+    revalidateCheckPaths();
+    return { error: error.message };
+  }
+
+  if (input.allocations !== undefined) {
+    await supabase.from("check_allocations").delete().eq("check_id", checkId);
+    if (isSplit) {
+      const allocError = await insertAllocations(supabase, checkId, input.allocations!);
+      if (allocError) {
+        revalidateCheckPaths();
+        return { error: allocError };
+      }
+    }
+  }
+
   revalidateCheckPaths();
-  return { error: error?.message };
+  return {};
 }

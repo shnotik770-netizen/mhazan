@@ -77,20 +77,24 @@ export default async function ChecksPage({
     supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
     supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
     supabase.from("suppliers").select("name").order("name"),
-    supabase.from("check_allocations").select("check_id, amount, departments(name)"),
+    supabase.from("check_allocations").select("check_id, department_id, amount, departments(name)"),
   ]);
   const supplierNames = (suppliers ?? []).map((s) => s.name);
   const overdueTransfers = (overdueByAsOf ?? []).filter((c) => c.payment_method === "TRANSFER");
   const overdueChecks = (overdueByAsOf ?? []).filter((c) => c.payment_method !== "TRANSFER");
 
-  const allocationsByCheck = new Map<string, { departmentName: string | null; amount: number }[]>();
+  const allocationsByCheck = new Map<
+    string,
+    { departmentId: string; departmentName: string | null; amount: number }[]
+  >();
   for (const a of (checkAllocations ?? []) as unknown as {
     check_id: string;
+    department_id: string;
     amount: number;
     departments: { name: string } | null;
   }[]) {
     const list = allocationsByCheck.get(a.check_id) ?? [];
-    list.push({ departmentName: a.departments?.name ?? null, amount: Number(a.amount) });
+    list.push({ departmentId: a.department_id, departmentName: a.departments?.name ?? null, amount: Number(a.amount) });
     allocationsByCheck.set(a.check_id, list);
   }
 
@@ -115,6 +119,21 @@ export default async function ChecksPage({
 
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
+
+  // Shared so every list on this page shows a split check's real
+  // department breakdown instead of a bare "בהמתנה" that looks unclassified.
+  function departmentCell(checkId: string, departmentName: string | null) {
+    if (departmentName) return departmentName;
+    const allocations = allocationsByCheck.get(checkId);
+    if (allocations) {
+      return (
+        <span className="text-xs">
+          מפוצל: {allocations.map((a) => `${a.departmentName ?? "?"} (${formatCurrency(a.amount)})`).join(", ")}
+        </span>
+      );
+    }
+    return <span className="text-warning">בהמתנה</span>;
+  }
 
   return (
     <div className="space-y-6">
@@ -283,7 +302,11 @@ export default async function ChecksPage({
           <p className="text-xs text-muted mb-2">
             ממוין לפי תאריך הזנה, עם קיבוץ של אותו ספק יחד. ניתן לסמן כמה שורות ולמזג לתשלום אחד או לקבץ לפריסה.
           </p>
-          <IssuanceQueueTable rows={sortedNeedingIssuance} departments={departments ?? []} />
+          <IssuanceQueueTable
+            rows={sortedNeedingIssuance}
+            departments={departments ?? []}
+            allocationsByCheck={allocationsByCheck}
+          />
         </div>
       )}
 
@@ -311,7 +334,7 @@ export default async function ChecksPage({
                 <tr key={c.id!}>
                   <td>{c.payee}</td>
                   <td>{formatCurrency(Number(c.amount))}</td>
-                  <td>{c.department_name ?? "בהמתנה"}</td>
+                  <td>{departmentCell(c.id!, c.department_name)}</td>
                   <td>{c.notes ?? "—"}</td>
                   {isAdmin && (
                     <td>
@@ -442,19 +465,7 @@ export default async function ChecksPage({
                     {row.bank_accounts?.bank_name} ({row.bank_accounts?.account_number})
                   </td>
                   <td>
-                    {row.departments?.name ? (
-                      row.departments.name
-                    ) : allocationsByCheck.has(row.id) ? (
-                      <span className="text-xs">
-                        מפוצל:{" "}
-                        {allocationsByCheck
-                          .get(row.id)!
-                          .map((a) => `${a.departmentName ?? "?"} (${formatCurrency(a.amount)})`)
-                          .join(", ")}
-                      </span>
-                    ) : (
-                      <span className="text-warning">בהמתנה</span>
-                    )}
+                    {departmentCell(row.id, row.departments?.name ?? null)}
                     {row.skip_department_ledger && (
                       <span className="badge bg-background text-muted mr-1">חוץ מהמאזן הפנימי</span>
                     )}
@@ -473,6 +484,10 @@ export default async function ChecksPage({
                         departmentId={row.department_id}
                         notes={row.notes}
                         paymentMethod={row.payment_method}
+                        existingAllocations={(allocationsByCheck.get(row.id) ?? []).map((a) => ({
+                          departmentId: a.departmentId,
+                          amount: a.amount,
+                        }))}
                         departments={departments ?? []}
                       />
                     </td>
