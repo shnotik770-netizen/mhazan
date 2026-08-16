@@ -8,7 +8,7 @@ import {
   type IncomeBatchRow,
   type SplitAllocation,
 } from "@/app/(app)/incomes/actions";
-import { findOrCreateCategoryByName } from "@/app/(app)/categories/actions";
+import { findOrCreateCategoryByName, updateCategory } from "@/app/(app)/categories/actions";
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -21,12 +21,14 @@ type ParsedRow = IncomeBatchRow & {
   categoryText: string;
   isCancelled: boolean;
   duplicateReason: string | null;
+  saveError: string | null;
 };
 
 // Known header aliases for the real bank/CRM export (16 columns, order
 // varies): תאריך, מקור, תורם, ת"ז, כתובת, טלפון, מייל, קטגוריה, הערות,
 // סוג, סכום, מטבע, סטטוס, מספר קבלה, מספר הוראה, מספר עסקה. Only the
-// columns we actually use are mapped; the rest are ignored.
+// columns we actually use are mapped into structured fields; ALL columns
+// (mapped or not) are kept verbatim in rawPasteData for the record's history.
 const HEADER_FIELD_MAP: Record<string, string> = {
   תאריך: "date",
   קטגוריה: "category",
@@ -60,9 +62,10 @@ function normalizeDate(text: string): string {
   if (!trimmed) return "";
   const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const dmy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  const dmy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
   if (dmy) {
-    const [, d, m, y] = dmy;
+    const [, d, m, yRaw] = dmy;
+    const y = yRaw.length === 2 ? `20${yRaw}` : yRaw;
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
   return trimmed;
@@ -172,12 +175,21 @@ export function PasteIncomeForm({
       return "";
     }
 
+    const headerCols = hasHeaderRow ? allLines[0] : null;
+
     const initialRows: ParsedRow[] = dataLines.map((cols) => {
       const categoryText = getField(cols, "category");
       const amountText = getField(cols, "amount");
-      const orderRef = getField(cols, "orderRef");
-      const notesRaw = getField(cols, "notes");
-      const notes = orderRef ? `${notesRaw} [הוראה: ${orderRef}]`.trim() : notesRaw;
+
+      // Keep every pasted column verbatim (by its header name when known,
+      // otherwise by position) so nothing from the bank export is lost —
+      // only the fields we actually use get parsed into structured columns.
+      const rawPasteData: Record<string, string> = {};
+      cols.forEach((val, idx) => {
+        const key = headerCols?.[idx]?.trim() || `עמודה ${idx + 1}`;
+        if (val) rawPasteData[key] = val;
+      });
+
       return {
         raw: cols.join(" | "),
         categoryText,
@@ -188,10 +200,13 @@ export function PasteIncomeForm({
         amount: Number(amountText.replace(/[^\d.-]/g, "")) || 0,
         receiptNumber: getField(cols, "receiptNumber"),
         transactionRef: getField(cols, "transactionRef"),
-        notes,
+        orderRef: getField(cols, "orderRef"),
+        notes: getField(cols, "notes"),
         isCancelled: isCancelledStatus(getField(cols, "status")),
         splitAllocations: [],
         duplicateReason: null,
+        saveError: null,
+        rawPasteData,
       };
     });
 
@@ -277,24 +292,60 @@ export function PasteIncomeForm({
     updateRow(index, { splitAllocations: allocations });
   }
 
+  // Assign a department to a pending category right here in the paste
+  // preview, without navigating away (and losing everything pasted so far).
+  async function assignCategoryDepartment(categoryId: string, departmentId: string) {
+    const fd = new FormData();
+    fd.set("id", categoryId);
+    const category = categoryById(categoryId);
+    fd.set("name", category?.name ?? "");
+    fd.set("department_id", departmentId);
+    await updateCategory(fd);
+    setCategoryList((prev) =>
+      prev.map((c) => (c.id === categoryId ? { ...c, department_id: departmentId } : c)),
+    );
+  }
+
   function handleSubmit() {
     setMessage(null);
     startTransition(async () => {
-      const savableRows = rows.filter(rowIsSavable);
+      const savableIndexes = rows.map((r, i) => (rowIsSavable(r) ? i : -1)).filter((i) => i >= 0);
+      const savableRows = savableIndexes.map((i) => rows[i]);
       const result = await submitIncomeBatch(bankAccountId, savableRows);
       if (result.error) {
         setMessage({ type: "error", text: result.error });
-      } else {
-        const skipped = rows.length - savableRows.length;
-        setMessage({
-          type: "success",
-          text:
-            `נשמרו ${result.count} שורות הכנסה בהצלחה` +
-            (skipped > 0 ? ` (${skipped} שורות נותרו — ממתינות לשיוך קטגוריה או בוטלו)` : ""),
-        });
-        setRows((prev) => prev.filter((r) => !rowIsSavable(r)));
-        router.refresh();
+        return;
       }
+
+      const failedOriginalIndexes = new Set<number>();
+      result.outcomes.forEach((outcome, j) => {
+        const originalIndex = savableIndexes[j];
+        if (!outcome.success) {
+          failedOriginalIndexes.add(originalIndex);
+        }
+      });
+
+      const failedCount = result.outcomes.filter((o) => !o.success).length;
+      setMessage({
+        type: failedCount > 0 ? "error" : "success",
+        text:
+          `נשמרו ${result.savedCount} שורות הכנסה בהצלחה` +
+          (failedCount > 0 ? ` — ${failedCount} שורות נכשלו ונשארו למטה לטיפול (הסיבה מוצגת ליד כל שורה)` : ""),
+      });
+      setRows((prev) =>
+        prev
+          .map((r, i) => {
+            if (!savableIndexes.includes(i)) return r;
+            if (failedOriginalIndexes.has(i)) {
+              const outcome = result.outcomes[savableIndexes.indexOf(i)];
+              return { ...r, saveError: outcome.reason ?? "שגיאה בשמירה" };
+            }
+            return null;
+          })
+          .filter((r): r is ParsedRow => r !== null)
+          .concat(prev.filter((r, i) => !savableIndexes.includes(i) && !rowIsSavable(r))),
+      );
+      router.refresh();
     });
   }
 
@@ -345,8 +396,8 @@ export function PasteIncomeForm({
           onChange={(e) => handlePaste(e.target.value)}
         />
         <p className="text-xs text-muted mt-1">
-          שם קטגוריה שלא קיים במערכת ייווצר אוטומטית כקטגוריה חדשה הממתינה לשיוך מחלקה (ניתן לשייך
-          במסך &quot;ניהול קטגוריות&quot;).
+          שם קטגוריה שלא קיים במערכת ייווצר אוטומטית כקטגוריה חדשה הממתינה לשיוך מחלקה — ניתן לשייך אותה
+          ישירות כאן למטה, בלי לעזוב את המסך. כל הנתונים המקוריים מההדבקה נשמרים בהיסטוריית ההכנסה.
         </p>
         {headerWarning && <p className="text-xs text-warning mt-1">⚠ {headerWarning}</p>}
       </div>
@@ -368,6 +419,7 @@ export function PasteIncomeForm({
                 <th>שם תורם</th>
                 <th>סכום</th>
                 <th>מס׳ קבלה</th>
+                <th>מס׳ הוראה</th>
                 <th>הערות</th>
               </tr>
             </thead>
@@ -402,12 +454,28 @@ export function PasteIncomeForm({
                           </option>
                         ))}
                       </select>
-                      {isPendingCategory && (
-                        <p className="text-xs text-warning">⏳ הקטגוריה ממתינה לשיוך מחלקה</p>
+                      {isPendingCategory && category && (
+                        <div className="mt-1 flex items-center gap-1">
+                          <select
+                            className="bg-transparent border-b border-border text-xs"
+                            defaultValue=""
+                            onChange={(e) => {
+                              if (e.target.value) assignCategoryDepartment(category.id, e.target.value);
+                            }}
+                          >
+                            <option value="">⏳ שייך מחלקה...</option>
+                            {departments.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       )}
                       {row.duplicateReason && (
                         <p className="text-xs text-danger">⛔ {row.duplicateReason} — לא יישמר</p>
                       )}
+                      {row.saveError && <p className="text-xs text-danger">⛔ נכשל: {row.saveError}</p>}
                       {category?.is_split && (
                         <SplitAllocationEditor
                           departments={departments}
@@ -441,6 +509,13 @@ export function PasteIncomeForm({
                     </td>
                     <td>
                       <input
+                        className="w-20 bg-transparent border-b border-border text-sm"
+                        value={row.orderRef}
+                        onChange={(e) => updateRow(i, { orderRef: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <input
                         className="w-32 bg-transparent border-b border-border text-sm"
                         value={row.notes}
                         onChange={(e) => updateRow(i, { notes: e.target.value })}
@@ -454,7 +529,7 @@ export function PasteIncomeForm({
           {pendingCategoryCount > 0 && (
             <p className="text-sm text-warning mt-2">
               ⚠ {pendingCategoryCount} שורות לא יישמרו כרגע כי הקטגוריה שלהן ממתינה לשיוך מחלקה — שייכו
-              אותה ב<a href="/categories" className="underline">ניהול קטגוריות</a> ואז חזרו ולחצו שמור.
+              אותה ישירות בטבלה למעלה.
             </p>
           )}
         </div>

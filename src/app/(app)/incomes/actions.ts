@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { requireFinanceAdmin } from "@/lib/auth";
 import type { TablesInsert } from "@/lib/supabase/database.types";
 
 export type SplitAllocation = { departmentId: string; amount: number };
@@ -14,8 +15,18 @@ export type IncomeBatchRow = {
   amount: number;
   receiptNumber: string;
   transactionRef: string;
+  orderRef: string;
   notes: string;
   splitAllocations: SplitAllocation[];
+  rawPasteData?: Record<string, string>;
+};
+
+export type SubmitIncomeBatchResult = {
+  savedCount: number;
+  // Same order/length as the rows passed in, so the client can zip them
+  // back together and know exactly which original rows to keep visible.
+  outcomes: { success: boolean; reason?: string }[];
+  error?: string;
 };
 
 // Used by the paste-income preview to flag rows whose transaction number
@@ -36,8 +47,17 @@ export async function checkExistingTransactionRefs(refs: string[]): Promise<stri
   return (data ?? []).map((r) => r.transaction_ref).filter((r): r is string => Boolean(r));
 }
 
-export async function submitIncomeBatch(bankAccountId: string, rows: IncomeBatchRow[]) {
-  if (!bankAccountId) return { error: "יש לבחור חשבון בנק יעד" };
+// Inserts rows ONE AT A TIME rather than as a single multi-row statement:
+// a single row that fails (a race-condition duplicate, a category that got
+// unassigned in the meantime, etc.) must never block the rest of the
+// batch from saving. Each split row's allocations are still inserted
+// together so a given source row lands atomically (all its department
+// slices or none), but different source rows are fully independent.
+export async function submitIncomeBatch(
+  bankAccountId: string,
+  rows: IncomeBatchRow[],
+): Promise<SubmitIncomeBatchResult> {
+  if (!bankAccountId) return { savedCount: 0, outcomes: [], error: "יש לבחור חשבון בנק יעד" };
 
   const supabase = await createClient();
   const {
@@ -45,18 +65,16 @@ export async function submitIncomeBatch(bankAccountId: string, rows: IncomeBatch
   } = await supabase.auth.getUser();
 
   const today = new Date().toISOString().slice(0, 10);
-
-  // owner_department_id/issuing_department_id are sent as real NULL, not a
-  // placeholder — fn_income_before_write derives issuing_department_id
-  // "if null" and unconditionally derives owner_department_id for
-  // non-split categories. A non-null placeholder would never get replaced
-  // and would fail the foreign key check. Split-category rows are the one
-  // case that must supply a real owner_department_id (the department the
-  // admin allocated that slice to) since there's no single category
-  // department to derive it from.
-  const payload: TablesInsert<"incomes">[] = [];
+  let savedCount = 0;
+  const outcomes: { success: boolean; reason?: string }[] = [];
 
   for (const r of rows) {
+    // owner_department_id/issuing_department_id are sent as real NULL, not
+    // a placeholder — fn_income_before_write derives issuing_department_id
+    // "if null" and unconditionally derives owner_department_id for
+    // non-split categories. Split rows must supply a real
+    // owner_department_id per allocation since there's no single category
+    // department to derive it from.
     const base = {
       bank_account_id: bankAccountId,
       category_id: r.categoryId,
@@ -65,42 +83,54 @@ export async function submitIncomeBatch(bankAccountId: string, rows: IncomeBatch
       donor_id_number: r.donorIdNumber || null,
       receipt_number: r.receiptNumber || null,
       transaction_ref: r.transactionRef || null,
+      order_ref: r.orderRef || null,
+      raw_paste_data: r.rawPasteData ?? null,
       notes: r.notes || null,
       created_by: user?.id ?? null,
       issuing_department_id: null,
     };
 
+    let rowPayload: TablesInsert<"incomes">[] = [];
     if (r.splitAllocations.length > 0) {
-      for (const alloc of r.splitAllocations) {
-        if (!alloc.departmentId || alloc.amount <= 0) continue;
-        payload.push({
-          ...base,
-          amount: alloc.amount,
-          owner_department_id: alloc.departmentId,
-        } as unknown as TablesInsert<"incomes">);
-      }
+      rowPayload = r.splitAllocations
+        .filter((a) => a.departmentId && a.amount > 0)
+        .map(
+          (alloc) =>
+            ({ ...base, amount: alloc.amount, owner_department_id: alloc.departmentId }) as unknown as TablesInsert<"incomes">,
+        );
     } else if (r.categoryId && r.amount > 0) {
-      payload.push({
-        ...base,
-        amount: r.amount,
-        owner_department_id: null,
-      } as unknown as TablesInsert<"incomes">);
+      rowPayload = [
+        { ...base, amount: r.amount, owner_department_id: null } as unknown as TablesInsert<"incomes">,
+      ];
     }
-  }
 
-  if (payload.length === 0) return { error: "אין שורות תקינות לשמירה" };
-
-  const { error, count } = await supabase.from("incomes").insert(payload, { count: "exact" });
-
-  if (error) {
-    if (error.code === "23505") {
-      return { error: "אחת השורות כבר קיימת במערכת (מספר עסקה כפול) — רענן ונסה שוב" };
+    if (rowPayload.length === 0) {
+      outcomes.push({ success: false, reason: "חסר קטגוריה או סכום" });
+      continue;
     }
-    return { error: error.message };
+
+    const { error } = await supabase.from("incomes").insert(rowPayload);
+    if (error) {
+      const reason = error.code === "23505" ? "מספר עסקה כפול — כבר קיים במערכת" : error.message;
+      outcomes.push({ success: false, reason });
+    } else {
+      savedCount += 1;
+      outcomes.push({ success: true });
+    }
   }
 
   revalidatePath("/incomes");
   revalidatePath("/");
   revalidatePath("/ledger");
-  return { success: true, count: count ?? payload.length };
+  return { savedCount, outcomes };
+}
+
+export async function deleteIncome(incomeId: string): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("incomes").delete().eq("id", incomeId);
+  revalidatePath("/incomes");
+  revalidatePath("/");
+  revalidatePath("/ledger");
+  return { error: error?.message };
 }

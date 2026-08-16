@@ -7,6 +7,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -103,6 +105,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bank_transactions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bank_transactions_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
@@ -171,6 +180,34 @@ export type Database = {
             columns: ["check_id"]
             isOneToOne: false
             referencedRelation: "checks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_allocations_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_checks_needing_issuance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_allocations_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_checks_pending_approval"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_allocations_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_checks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_allocations_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_transfers_needing_verification"
             referencedColumns: ["id"]
           },
           {
@@ -256,6 +293,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "checks_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
@@ -292,6 +336,47 @@ export type Database = {
         }
         Relationships: []
       }
+      expected_incomes: {
+        Row: {
+          amount: number
+          bank_account_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expected_date: string
+          id: string
+          status: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expected_date: string
+          id?: string
+          status?: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expected_date?: string
+          id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expected_incomes_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       incomes: {
         Row: {
           amount: number
@@ -306,7 +391,9 @@ export type Database = {
           id: string
           issuing_department_id: string
           notes: string | null
+          order_ref: string | null
           owner_department_id: string
+          raw_paste_data: Json | null
           receipt_number: string | null
           requires_inter_settlement: boolean
           status: string
@@ -325,7 +412,9 @@ export type Database = {
           id?: string
           issuing_department_id: string
           notes?: string | null
+          order_ref?: string | null
           owner_department_id: string
+          raw_paste_data?: Json | null
           receipt_number?: string | null
           requires_inter_settlement?: boolean
           status?: string
@@ -344,7 +433,9 @@ export type Database = {
           id?: string
           issuing_department_id?: string
           notes?: string | null
+          order_ref?: string | null
           owner_department_id?: string
+          raw_paste_data?: Json | null
           receipt_number?: string | null
           requires_inter_settlement?: boolean
           status?: string
@@ -363,6 +454,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incomes_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
             referencedColumns: ["id"]
           },
           {
@@ -451,6 +549,7 @@ export type Database = {
           created_by: string | null
           department_id: string
           direction: string
+          entry_date: string | null
           id: string
           notes: string | null
           status: string
@@ -463,6 +562,7 @@ export type Database = {
           created_by?: string | null
           department_id: string
           direction: string
+          entry_date?: string | null
           id?: string
           notes?: string | null
           status?: string
@@ -475,6 +575,7 @@ export type Database = {
           created_by?: string | null
           department_id?: string
           direction?: string
+          entry_date?: string | null
           id?: string
           notes?: string | null
           status?: string
@@ -608,6 +709,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "recurring_schedules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "recurring_schedules_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
@@ -615,6 +723,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      suppliers: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          notes: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+        }
+        Relationships: []
       }
       user_department_access: {
         Row: {
@@ -728,7 +860,43 @@ export type Database = {
           spread_id: string | null
           status: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "checks_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_spread_id_fkey"
+            columns: ["spread_id"]
+            isOneToOne: false
+            referencedRelation: "payment_spreads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_checks_pending_approval: {
         Row: {
@@ -753,7 +921,43 @@ export type Database = {
           spread_id: string | null
           status: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "checks_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_spread_id_fkey"
+            columns: ["spread_id"]
+            isOneToOne: false
+            referencedRelation: "payment_spreads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_inter_department_balances: {
         Row: {
@@ -773,7 +977,29 @@ export type Database = {
           is_split: boolean | null
           name: string | null
         }
-        Relationships: []
+        Insert: {
+          created_at?: string | null
+          department_id?: string | null
+          id?: string | null
+          is_split?: boolean | null
+          name?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          department_id?: string | null
+          id?: string | null
+          is_split?: boolean | null
+          name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_pending_checks: {
         Row: {
@@ -793,7 +1019,36 @@ export type Database = {
           payee: string | null
           status: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "checks_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_pending_queue_summary: {
         Row: {
@@ -826,7 +1081,43 @@ export type Database = {
           spread_id: string | null
           status: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "checks_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_spread_id_fkey"
+            columns: ["spread_id"]
+            isOneToOne: false
+            referencedRelation: "payment_spreads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_unclassified_bank_transactions: {
         Row: {
@@ -844,7 +1135,36 @@ export type Database = {
           imported_at: string | null
           is_classified: boolean | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "bank_transactions_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {

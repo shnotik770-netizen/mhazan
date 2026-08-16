@@ -12,8 +12,10 @@ export async function createManualEntry(input: {
   departmentId: string;
   direction: "INCOME" | "EXPENSE";
   amount: number;
+  entryDate: string;
   notes: string | null;
 }): Promise<{ error?: string }> {
+  if (!input.entryDate) return { error: "יש להזין תאריך" };
   const user = await requireUser();
   const supabase = await createClient();
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
@@ -22,6 +24,7 @@ export async function createManualEntry(input: {
     department_id: input.departmentId,
     direction: input.direction,
     amount: input.amount,
+    entry_date: input.entryDate,
     notes: input.notes,
     created_by: user.id,
     status: isAdmin ? "APPROVED" : "PENDING",

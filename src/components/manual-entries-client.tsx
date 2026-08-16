@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createManualEntry, reviewManualEntry } from "@/app/(app)/manual-entries/actions";
+import { DateInput } from "@/components/date-input";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -12,6 +13,7 @@ export function NewManualEntryForm({ departments }: { departments: Department[] 
   const [departmentId, setDepartmentId] = useState(departments[0]?.id ?? "");
   const [direction, setDirection] = useState<"INCOME" | "EXPENSE">("EXPENSE");
   const [amount, setAmount] = useState(0);
+  const [entryDate, setEntryDate] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -21,12 +23,13 @@ export function NewManualEntryForm({ departments }: { departments: Department[] 
     setError(null);
     setMessage(null);
     startTransition(async () => {
-      const result = await createManualEntry({ departmentId, direction, amount, notes: notes || null });
+      const result = await createManualEntry({ departmentId, direction, amount, entryDate, notes: notes || null });
       if (result.error) {
         setError(result.error);
       } else {
         setMessage("נשלח לאישור");
         setAmount(0);
+        setEntryDate("");
         setNotes("");
         router.refresh();
       }
@@ -66,6 +69,7 @@ export function NewManualEntryForm({ departments }: { departments: Department[] 
           placeholder="סכום"
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         />
+        <DateInput value={entryDate} onChange={setEntryDate} required />
         <input
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
@@ -75,7 +79,7 @@ export function NewManualEntryForm({ departments }: { departments: Department[] 
       </div>
       <div className="flex items-center gap-2">
         <button
-          disabled={isPending || !departmentId || amount <= 0}
+          disabled={isPending || !departmentId || amount <= 0 || !entryDate}
           onClick={submit}
           className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
         >
@@ -93,12 +97,14 @@ export function ManualEntryApprovalRow({
   departmentName,
   direction,
   amount,
+  entryDate,
   notes,
 }: {
   entryId: string;
   departmentName: string;
   direction: string;
   amount: number;
+  entryDate: string | null;
   notes: string | null;
 }) {
   const router = useRouter();
@@ -113,6 +119,7 @@ export function ManualEntryApprovalRow({
 
   return (
     <tr>
+      <td>{entryDate ?? "—"}</td>
       <td>{departmentName}</td>
       <td>{direction === "INCOME" ? "הכנסה" : "הוצאה"}</td>
       <td>{amount}</td>

@@ -293,3 +293,11 @@ export async function updateCheckStatus(checkId: string, status: "UNPAID" | "CLE
   revalidateCheckPaths();
   return { error: error?.message };
 }
+
+export async function deleteCheck(checkId: string): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("checks").delete().eq("id", checkId);
+  revalidateCheckPaths();
+  return { error: error?.message };
+}

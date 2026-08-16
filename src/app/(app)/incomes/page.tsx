@@ -2,9 +2,11 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { DeleteIncomeButton } from "@/components/delete-income-button";
 
 export default async function IncomesPage() {
   const user = await requireUser();
+  const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const supabase = await createClient();
   const { data: incomes } = await supabase
     .from("incomes")
@@ -42,6 +44,8 @@ export default async function IncomesPage() {
               <th>מחלקה מנפיקה</th>
               <th>התחשבנות</th>
               <th>מס׳ קבלה</th>
+              <th>מס׳ הוראה</th>
+              {isAdmin && <th></th>}
             </tr>
           </thead>
           <tbody>
@@ -52,6 +56,7 @@ export default async function IncomesPage() {
                 amount: number;
                 donor_name: string | null;
                 receipt_number: string | null;
+                order_ref: string | null;
                 requires_inter_settlement: boolean;
                 categories: { name: string } | null;
                 bank_accounts: { bank_name: string; account_number: string } | null;
@@ -77,12 +82,18 @@ export default async function IncomesPage() {
                     )}
                   </td>
                   <td>{row.receipt_number ?? "—"}</td>
+                  <td>{row.order_ref ?? "—"}</td>
+                  {isAdmin && (
+                    <td>
+                      <DeleteIncomeButton incomeId={row.id} label={row.donor_name ?? row.categories?.name ?? ""} />
+                    </td>
+                  )}
                 </tr>
               );
             })}
             {(incomes ?? []).length === 0 && (
               <tr>
-                <td colSpan={9} className="text-center text-muted py-6">
+                <td colSpan={isAdmin ? 11 : 10} className="text-center text-muted py-6">
                   אין הכנסות רשומות עדיין
                 </td>
               </tr>

@@ -104,6 +104,7 @@ export default async function DashboardPage() {
           <table className="data-table">
             <thead>
               <tr>
+                <th>תאריך</th>
                 <th>מחלקה</th>
                 <th>סוג</th>
                 <th>סכום</th>
@@ -119,6 +120,7 @@ export default async function DashboardPage() {
                   departmentName={(e as { departments: { name: string } | null }).departments?.name ?? "—"}
                   direction={e.direction}
                   amount={Number(e.amount)}
+                  entryDate={e.entry_date}
                   notes={e.notes}
                 />
               ))}
