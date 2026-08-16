@@ -2,10 +2,104 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateUserAccess } from "@/app/(app)/settings/actions";
+import { createUser, updateUserAccess } from "@/app/(app)/settings/actions";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
+
+function randomPassword(): string {
+  return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6).toUpperCase();
+}
+
+export function NewUserForm() {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState(randomPassword());
+  const [error, setError] = useState<string | null>(null);
+  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function submit() {
+    setError(null);
+    startTransition(async () => {
+      const result = await createUser({ email, password, fullName });
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setCreated({ email, password });
+        setFullName("");
+        setEmail("");
+        setPassword(randomPassword());
+        router.refresh();
+      }
+    });
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold">
+        + הוספת משתמש
+      </button>
+    );
+  }
+
+  return (
+    <div className="card p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">הוספת משתמש חדש</h3>
+        <button onClick={() => setOpen(false)} className="text-sm text-muted">
+          סגור
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <input
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          placeholder="שם מלא"
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+        />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="דוא&quot;ל להתחברות"
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+        />
+        <div className="flex items-center gap-1">
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="סיסמה זמנית"
+            className="rounded border border-border bg-transparent px-2 py-1 text-sm flex-1"
+          />
+          <button type="button" onClick={() => setPassword(randomPassword())} className="text-xs text-primary underline whitespace-nowrap">
+            סיסמה חדשה
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-muted">
+        לאחר היצירה יש להעביר למשתמש את הדוא&quot;ל והסיסמה בדרך מאובטחת, ולקבוע לו למטה הרשאות ומחלקות.
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          disabled={isPending || !email || !password}
+          onClick={submit}
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+        >
+          צור משתמש
+        </button>
+        {error && <span className="text-sm text-danger">{error}</span>}
+      </div>
+      {created && (
+        <div className="card bg-success-bg p-3 text-sm">
+          המשתמש נוצר בהצלחה. פרטי התחברות: <strong>{created.email}</strong> / <strong>{created.password}</strong>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function UserAccessRow({
   userId,

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireFinanceAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/format";
-import { UserAccessRow } from "@/components/user-access-client";
+import { NewUserForm, UserAccessRow } from "@/components/user-access-client";
 import { createBankAccount, createRecurringSchedule } from "./actions";
 
 export default async function SettingsPage() {
@@ -181,9 +181,12 @@ export default async function SettingsPage() {
       </section>
 
       <section className="card p-4 space-y-3">
-        <h2 className="font-semibold">משתמשים והרשאות</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="font-semibold">משתמשים והרשאות</h2>
+          <NewUserForm />
+        </div>
         <p className="text-sm text-muted">
-          משתמש חדש (שנרשם/נוצר) מקבל כברירת מחדל הרשאת צפייה בלבד וללא גישה לאף מחלקה. יש לאשר לו כאן
+          משתמש חדש (שנוצר כאן או שנרשם בעצמו) מקבל כברירת מחדל הרשאת צפייה בלבד וללא גישה לאף מחלקה. יש לאשר לו כאן
           את המחלקות הספציפיות שהוא רשאי לצפות בהן.
         </p>
         <table className="data-table">

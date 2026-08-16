@@ -85,6 +85,40 @@ export async function createRecurringSchedule(formData: FormData): Promise<void>
   revalidatePath("/forecast");
 }
 
+// Creates a new login for a user directly (rather than requiring them to
+// self-register). Delegates the actual account creation to the
+// admin-create-user Edge Function, which is the only place the service-role
+// key is ever used — it re-verifies finance-admin status server-side using
+// the caller's own session before doing anything.
+export async function createUser(input: {
+  email: string;
+  password: string;
+  fullName: string;
+}): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.functions.invoke("admin-create-user", {
+    body: { email: input.email, password: input.password, fullName: input.fullName || null },
+  });
+
+  if (error) {
+    let message = error.message;
+    try {
+      const context = (error as { context?: Response }).context;
+      const body = await context?.json();
+      if (body?.error) message = body.error;
+    } catch {
+      // Fall back to the generic error message.
+    }
+    return { error: message };
+  }
+  if (data?.error) return { error: data.error };
+
+  revalidatePath("/settings");
+  return {};
+}
+
 export async function updateUserAccess(
   userId: string,
   role: "DEPT_MANAGER" | "FINANCE_ADMIN",
