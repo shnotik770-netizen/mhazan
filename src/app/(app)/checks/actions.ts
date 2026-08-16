@@ -310,9 +310,20 @@ export async function classifyCheck(checkId: string, departmentId: string, categ
   return { error: error?.message };
 }
 
-export async function updateCheckStatus(checkId: string, status: "UNPAID" | "CLEARED" | "CANCELLED") {
+export async function updateCheckStatus(
+  checkId: string,
+  status: "UNPAID" | "CLEARED" | "CANCELLED",
+  internalBeneficiary?: string | null,
+) {
   const supabase = await createClient();
-  const { error } = await supabase.from("checks").update({ status }).eq("id", checkId);
+  const { error } = await supabase
+    .from("checks")
+    .update(
+      internalBeneficiary !== undefined
+        ? { status, internal_beneficiary: internalBeneficiary || null }
+        : { status },
+    )
+    .eq("id", checkId);
 
   revalidateCheckPaths();
   return { error: error?.message };

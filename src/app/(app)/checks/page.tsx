@@ -165,7 +165,7 @@ export default async function ChecksPage({
                         <td>{formatDate(row.due_date)}</td>
                         <td>{row.departments?.name ?? "בהמתנה"}</td>
                         <td>
-                          <VerifyTransferButton checkId={row.id} label="אשר שההעברה בוצעה" />
+                          <VerifyTransferButton checkId={row.id} label="אשר שההעברה בוצעה" captureInternalBeneficiary />
                         </td>
                       </tr>
                     );
@@ -374,6 +374,7 @@ export default async function ChecksPage({
                 notes: string | null;
                 skip_department_ledger: boolean;
                 spread_id: string | null;
+                internal_beneficiary: string | null;
                 bank_accounts: { bank_name: string; account_number: string } | null;
                 departments: { name: string } | null;
               };
@@ -384,6 +385,9 @@ export default async function ChecksPage({
                   <td>
                     {row.payee}
                     {row.spread_id && <span className="badge bg-background text-muted mr-1">פריסה</span>}
+                    {row.internal_beneficiary && (
+                      <div className="text-xs text-muted">מוטב פנימי: {row.internal_beneficiary}</div>
+                    )}
                   </td>
                   <td>{formatCurrency(Number(row.amount))}</td>
                   <td>{row.due_date ? formatDate(row.due_date) : <span className="text-muted">ללא תאריך</span>}</td>
@@ -397,7 +401,7 @@ export default async function ChecksPage({
                     )}
                   </td>
                   <td>
-                    <CheckStatusControls checkId={row.id} status={row.status} />
+                    <CheckStatusControls checkId={row.id} status={row.status} paymentMethod={row.payment_method} />
                   </td>
                   {isAdmin && (
                     <td>

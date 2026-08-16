@@ -79,13 +79,24 @@ export function ClassifyCheckRow({
   );
 }
 
-export function CheckStatusControls({ checkId, status }: { checkId: string; status: string }) {
+export function CheckStatusControls({
+  checkId,
+  status,
+  paymentMethod,
+}: {
+  checkId: string;
+  status: string;
+  paymentMethod?: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [confirming, setConfirming] = useState(false);
+  const [internalBeneficiary, setInternalBeneficiary] = useState("");
 
-  function setStatus(next: "UNPAID" | "CLEARED" | "CANCELLED") {
+  function setStatus(next: "UNPAID" | "CLEARED" | "CANCELLED", withBeneficiary?: string) {
     startTransition(async () => {
-      await updateCheckStatus(checkId, next);
+      await updateCheckStatus(checkId, next, withBeneficiary !== undefined ? withBeneficiary || null : undefined);
+      setConfirming(false);
       router.refresh();
     });
   }
@@ -103,9 +114,13 @@ export function CheckStatusControls({ checkId, status }: { checkId: string; stat
       >
         {status === "CLEARED" ? "נפרע" : status === "CANCELLED" ? "בוטל" : "לא נפרע"}
       </span>
-      {status === "UNPAID" && (
+      {status === "UNPAID" && !confirming && (
         <>
-          <button disabled={isPending} onClick={() => setStatus("CLEARED")} className="text-xs text-primary underline">
+          <button
+            disabled={isPending}
+            onClick={() => (paymentMethod === "TRANSFER" ? setConfirming(true) : setStatus("CLEARED"))}
+            className="text-xs text-primary underline"
+          >
             סמן כנפרע
           </button>
           <button disabled={isPending} onClick={() => setStatus("CANCELLED")} className="text-xs text-danger underline">
@@ -113,29 +128,73 @@ export function CheckStatusControls({ checkId, status }: { checkId: string; stat
           </button>
         </>
       )}
+      {status === "UNPAID" && confirming && (
+        <div className="flex items-center gap-1">
+          <input
+            value={internalBeneficiary}
+            onChange={(e) => setInternalBeneficiary(e.target.value)}
+            placeholder="מוטב פנימי בתוך הספק (אופציונלי)"
+            className="w-40 rounded border border-border bg-transparent px-1 py-0.5 text-xs"
+            autoFocus
+          />
+          <button
+            disabled={isPending}
+            onClick={() => setStatus("CLEARED", internalBeneficiary)}
+            className="text-xs text-primary underline"
+          >
+            אשר
+          </button>
+          <button onClick={() => setConfirming(false)} className="text-xs text-muted">
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 // "Confirm executed" is exactly marking a transfer CLEARED — the same
 // status transition, framed for the overdue-transfer verification queue.
-export function VerifyTransferButton({ checkId, label }: { checkId: string; label?: string }) {
+// For transfers, this is also where the internal beneficiary within the
+// supplier gets recorded (moved here from check/transfer creation).
+export function VerifyTransferButton({
+  checkId,
+  label,
+  captureInternalBeneficiary,
+}: {
+  checkId: string;
+  label?: string;
+  captureInternalBeneficiary?: boolean;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [internalBeneficiary, setInternalBeneficiary] = useState("");
+
+  function confirm() {
+    startTransition(async () => {
+      await updateCheckStatus(checkId, "CLEARED", captureInternalBeneficiary ? internalBeneficiary || null : undefined);
+      router.refresh();
+    });
+  }
 
   return (
-    <button
-      disabled={isPending}
-      onClick={() =>
-        startTransition(async () => {
-          await updateCheckStatus(checkId, "CLEARED");
-          router.refresh();
-        })
-      }
-      className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
-    >
-      {label ?? "אשר שההעברה בוצעה"}
-    </button>
+    <div className="flex items-center gap-1">
+      {captureInternalBeneficiary && (
+        <input
+          value={internalBeneficiary}
+          onChange={(e) => setInternalBeneficiary(e.target.value)}
+          placeholder="מוטב פנימי בתוך הספק (אופציונלי)"
+          className="w-40 rounded border border-border bg-transparent px-1 py-0.5 text-xs"
+        />
+      )}
+      <button
+        disabled={isPending}
+        onClick={confirm}
+        className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
+      >
+        {label ?? "אשר שההעברה בוצעה"}
+      </button>
+    </div>
   );
 }
 
@@ -158,7 +217,6 @@ export function NewCheckForm({
   const [checkNumber, setCheckNumber] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [categoryId, setCategoryId] = useState("");
-  const [internalBeneficiary, setInternalBeneficiary] = useState("");
   const [notes, setNotes] = useState("");
   const [skipDepartmentLedger, setSkipDepartmentLedger] = useState(false);
   const [isSplitting, setIsSplitting] = useState(false);
@@ -175,7 +233,6 @@ export function NewCheckForm({
     setCheckNumber("");
     setDepartmentId("");
     setCategoryId("");
-    setInternalBeneficiary("");
     setNotes("");
     setSkipDepartmentLedger(false);
     setIsSplitting(false);
@@ -195,7 +252,7 @@ export function NewCheckForm({
         checkNumber: checkNumber || null,
         departmentId: departmentId || null,
         categoryId: categoryId || null,
-        internalBeneficiary: internalBeneficiary || null,
+        internalBeneficiary: null,
         notes: notes || null,
         skipDepartmentLedger,
         allocations: isSplitting ? allocations : [],
@@ -273,14 +330,6 @@ export function NewCheckForm({
             value={checkNumber}
             onChange={(e) => setCheckNumber(e.target.value)}
             placeholder="מספר צ׳ק (ניתן להשאיר ריק)"
-            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          />
-        )}
-        {paymentMethod === "TRANSFER" && (
-          <input
-            value={internalBeneficiary}
-            onChange={(e) => setInternalBeneficiary(e.target.value)}
-            placeholder="מוטב פנימי בתוך הספק (אופציונלי)"
             className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           />
         )}

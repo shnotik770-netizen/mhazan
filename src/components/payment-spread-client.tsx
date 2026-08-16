@@ -39,7 +39,6 @@ export function PaymentSpreadForm({
   const [open, setOpen] = useState(false);
   const [payee, setPayee] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"CHECK" | "TRANSFER">("CHECK");
-  const [internalBeneficiary, setInternalBeneficiary] = useState("");
   const [notes, setNotes] = useState("");
   const [bankAccountId, setBankAccountId] = useState("");
   const [involvesMultipleDepartments, setInvolvesMultipleDepartments] = useState(false);
@@ -102,7 +101,7 @@ export function PaymentSpreadForm({
       const result = await createPaymentSpread({
         payee,
         paymentMethod,
-        internalBeneficiary: internalBeneficiary || null,
+        internalBeneficiary: null,
         notes: notes || null,
         bankAccountId,
         rows: rows.map((r) => ({
@@ -169,14 +168,6 @@ export function PaymentSpreadForm({
             </option>
           ))}
         </select>
-        {paymentMethod === "TRANSFER" && (
-          <input
-            value={internalBeneficiary}
-            onChange={(e) => setInternalBeneficiary(e.target.value)}
-            placeholder="מוטב פנימי בתוך הספק (אופציונלי)"
-            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          />
-        )}
         <input
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
