@@ -481,6 +481,42 @@ export type Database = {
           },
         ]
       }
+      user_department_access: {
+        Row: {
+          department_id: string
+          granted_at: string
+          granted_by: string | null
+          user_id: string
+        }
+        Insert: {
+          department_id: string
+          granted_at?: string
+          granted_by?: string | null
+          user_id: string
+        }
+        Update: {
+          department_id?: string
+          granted_at?: string
+          granted_by?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_department_access_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_department_access_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_profiles: {
         Row: {
           created_at: string
@@ -617,7 +653,6 @@ export type Database = {
       }
     }
     Functions: {
-      current_user_department: { Args: never; Returns: string }
       get_cash_flow_forecast: {
         Args: { p_bank_account_id: string; p_horizon_days?: number }
         Returns: {
@@ -631,6 +666,10 @@ export type Database = {
       settle_ledger_between: {
         Args: { p_dept_a: string; p_dept_b: string }
         Returns: number
+      }
+      user_has_department: {
+        Args: { p_department_id: string }
+        Returns: boolean
       }
     }
     Enums: {

@@ -2,12 +2,8 @@ import Link from "next/link";
 import { requireFinanceAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/format";
-import {
-  createBankAccount,
-  createCategory,
-  createRecurringSchedule,
-  updateUserProfile,
-} from "./actions";
+import { UserAccessRow } from "@/components/user-access-client";
+import { createBankAccount, createCategory, createRecurringSchedule } from "./actions";
 
 export default async function SettingsPage() {
   await requireFinanceAdmin();
@@ -19,13 +15,18 @@ export default async function SettingsPage() {
     { data: categories },
     { data: schedules },
     { data: profiles },
+    { data: accessGrants },
   ] = await Promise.all([
     supabase.from("departments").select("*").order("name"),
     supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
     supabase.from("categories").select("*, departments(name)").order("name"),
     supabase.from("recurring_schedules").select("*, departments(name)").order("name"),
-    supabase.from("user_profiles").select("*, departments(name)").order("full_name"),
+    supabase.from("user_profiles").select("*").order("full_name"),
+    supabase.from("user_department_access").select("user_id, department_id"),
   ]);
+
+  const grantsFor = (userId: string) =>
+    (accessGrants ?? []).filter((g) => g.user_id === userId).map((g) => g.department_id);
 
   return (
     <div className="space-y-8">
@@ -205,40 +206,29 @@ export default async function SettingsPage() {
 
       <section className="card p-4 space-y-3">
         <h2 className="font-semibold">משתמשים והרשאות</h2>
+        <p className="text-sm text-muted">
+          משתמש חדש (שנרשם/נוצר) מקבל כברירת מחדל הרשאת צפייה בלבד וללא גישה לאף מחלקה. יש לאשר לו כאן
+          את המחלקות הספציפיות שהוא רשאי לצפות בהן.
+        </p>
         <table className="data-table">
           <thead>
             <tr>
               <th>שם</th>
-              <th>תפקיד</th>
-              <th>מחלקה</th>
-              <th>עדכון</th>
+              <th>הרשאה</th>
+              <th>מחלקות מאושרות</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {(profiles ?? []).map((p) => (
-              <tr key={p.id}>
-                <td>{p.full_name ?? p.id.slice(0, 8)}</td>
-                <td colSpan={3}>
-                  <form action={updateUserProfile} className="flex items-center gap-2">
-                    <input type="hidden" name="user_id" value={p.id} />
-                    <select name="role" defaultValue={p.role} className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-                      <option value="DEPT_MANAGER">מנהל מחלקה</option>
-                      <option value="FINANCE_ADMIN">מנהל כספים</option>
-                    </select>
-                    <select name="department_id" defaultValue={p.department_id ?? ""} className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-                      <option value="">ללא מחלקה</option>
-                      {(departments ?? []).map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button type="submit" className="rounded bg-primary text-primary-foreground text-xs px-3 py-1">
-                      עדכן
-                    </button>
-                  </form>
-                </td>
-              </tr>
+              <UserAccessRow
+                key={p.id}
+                userId={p.id}
+                fullName={p.full_name ?? p.id.slice(0, 8)}
+                role={p.role}
+                grantedDepartmentIds={grantsFor(p.id)}
+                departments={departments ?? []}
+              />
             ))}
             {(profiles ?? []).length === 0 && (
               <tr>

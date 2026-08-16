@@ -97,16 +97,33 @@ export async function createRecurringSchedule(formData: FormData): Promise<void>
   revalidatePath("/forecast");
 }
 
-export async function updateUserProfile(formData: FormData): Promise<void> {
-  await requireFinanceAdmin();
+export async function updateUserAccess(
+  userId: string,
+  role: "DEPT_MANAGER" | "FINANCE_ADMIN",
+  departmentIds: string[],
+): Promise<void> {
+  const admin = await requireFinanceAdmin();
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("user_profiles")
-    .update({
-      role: String(formData.get("role") ?? "DEPT_MANAGER"),
-      department_id: String(formData.get("department_id") ?? "") || null,
-    })
-    .eq("id", String(formData.get("user_id") ?? ""));
-  if (error) throw new Error(error.message);
+
+  const { error: roleError } = await supabase.from("user_profiles").update({ role }).eq("id", userId);
+  if (roleError) throw new Error(roleError.message);
+
+  const { error: deleteError } = await supabase
+    .from("user_department_access")
+    .delete()
+    .eq("user_id", userId);
+  if (deleteError) throw new Error(deleteError.message);
+
+  if (departmentIds.length > 0) {
+    const { error: insertError } = await supabase.from("user_department_access").insert(
+      departmentIds.map((departmentId) => ({
+        user_id: userId,
+        department_id: departmentId,
+        granted_by: admin.id,
+      })),
+    );
+    if (insertError) throw new Error(insertError.message);
+  }
+
   revalidatePath("/settings");
 }
