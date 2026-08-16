@@ -1,10 +1,10 @@
+import Link from "next/link";
 import { requireFinanceAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/format";
 import {
   createBankAccount,
   createCategory,
-  createDepartment,
   createRecurringSchedule,
   updateUserProfile,
 } from "./actions";
@@ -31,31 +31,19 @@ export default async function SettingsPage() {
     <div className="space-y-8">
       <h1 className="text-xl font-bold">הגדרות מערכת</h1>
 
-      <section className="card p-4 space-y-3">
-        <h2 className="font-semibold">מחלקות</h2>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>שם</th>
-              <th>קוד</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(departments ?? []).map((d) => (
-              <tr key={d.id}>
-                <td>{d.name}</td>
-                <td>{d.code}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <form action={createDepartment} className="flex gap-2 pt-2">
-          <input name="name" placeholder="שם מחלקה" required className="rounded border border-border bg-transparent px-2 py-1 text-sm flex-1" />
-          <input name="code" placeholder="קוד (למשל TLM)" required className="rounded border border-border bg-transparent px-2 py-1 text-sm w-32" />
-          <button type="submit" className="rounded bg-primary text-primary-foreground text-sm px-3 py-1">
-            הוסף מחלקה
-          </button>
-        </form>
+      <section className="card p-4 flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold">מחלקות</h2>
+          <p className="text-sm text-muted">
+            {(departments ?? []).length} מחלקות מוגדרות. הוספה, עריכה ומחיקה מתבצעות במסך ניהול המחלקות.
+          </p>
+        </div>
+        <Link
+          href="/departments"
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold whitespace-nowrap"
+        >
+          ניהול מחלקות
+        </Link>
       </section>
 
       <section className="card p-4 space-y-3">

@@ -8,6 +8,7 @@ const links = [
   { href: "/checks", label: "צ׳קים" },
   { href: "/ledger", label: "התחשבנות פנימית" },
   { href: "/forecast", label: "תחזית תזרים" },
+  { href: "/departments", label: "ניהול מחלקות", adminOnly: true },
   { href: "/settings", label: "הגדרות", adminOnly: true },
 ];
 

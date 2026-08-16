@@ -22,11 +22,29 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold">דשבורד מוסדי מרכזי</h1>
-        <p className="text-sm text-muted">
-          שלום {user.profile.full_name ?? user.email} — סקירה כללית של המצב הפיננסי
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold">דשבורד מוסדי מרכזי</h1>
+          <p className="text-sm text-muted">
+            שלום {user.profile.full_name ?? user.email} — סקירה כללית של המצב הפיננסי
+          </p>
+        </div>
+        {user.profile.role === "FINANCE_ADMIN" && (
+          <div className="flex items-center gap-2">
+            <Link
+              href="/departments"
+              className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+            >
+              ניהול מחלקות
+            </Link>
+            <Link
+              href="/settings"
+              className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
+            >
+              הגדרות מערכת
+            </Link>
+          </div>
+        )}
       </div>
 
       {totalPending > 0 && (

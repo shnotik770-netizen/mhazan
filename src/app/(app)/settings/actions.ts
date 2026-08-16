@@ -15,6 +15,39 @@ export async function createDepartment(formData: FormData): Promise<void> {
   revalidatePath("/settings");
 }
 
+export async function updateDepartment(formData: FormData): Promise<void> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("departments")
+    .update({
+      name: String(formData.get("name") ?? ""),
+      code: String(formData.get("code") ?? "").toUpperCase(),
+    })
+    .eq("id", String(formData.get("id") ?? ""));
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+  revalidatePath("/departments");
+  revalidatePath("/");
+}
+
+export async function deleteDepartment(formData: FormData): Promise<void> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("departments")
+    .delete()
+    .eq("id", String(formData.get("id") ?? ""));
+  if (error) {
+    throw new Error(
+      "לא ניתן למחוק מחלקה שיש לה חשבונות בנק, קטגוריות, הכנסות או צ׳קים משויכים: " + error.message,
+    );
+  }
+  revalidatePath("/settings");
+  revalidatePath("/departments");
+  revalidatePath("/");
+}
+
 export async function createBankAccount(formData: FormData): Promise<void> {
   await requireFinanceAdmin();
   const supabase = await createClient();
