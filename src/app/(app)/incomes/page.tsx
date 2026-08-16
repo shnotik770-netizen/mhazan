@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { DeleteIncomeButton } from "@/components/delete-income-button";
+import { IncomeDepartmentEditor } from "@/components/income-department-editor";
 
 export default async function IncomesPage({
   searchParams,
@@ -24,7 +25,10 @@ export default async function IncomesPage({
     .order("created_at", { ascending: false })
     .limit(200);
   if (q) incomesQuery = incomesQuery.or(`donor_name.ilike.%${q}%,notes.ilike.%${q}%,order_ref.ilike.%${q}%`);
-  const { data: incomes } = await incomesQuery;
+  const [{ data: incomes }, { data: departments }] = await Promise.all([
+    incomesQuery,
+    isAdmin ? supabase.from("departments").select("*").order("name") : Promise.resolve({ data: [] }),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -84,6 +88,7 @@ export default async function IncomesPage({
                 receipt_number: string | null;
                 order_ref: string | null;
                 requires_inter_settlement: boolean;
+                owner_department_id: string | null;
                 categories: { name: string } | null;
                 bank_accounts: { bank_name: string; account_number: string } | null;
                 owner: { name: string } | null;
@@ -98,7 +103,19 @@ export default async function IncomesPage({
                   <td>
                     {row.bank_accounts?.bank_name} ({row.bank_accounts?.account_number})
                   </td>
-                  <td>{row.owner?.name}</td>
+                  <td>
+                    {row.owner?.name}
+                    {isAdmin && (
+                      <div>
+                        <IncomeDepartmentEditor
+                          incomeId={row.id}
+                          amount={Number(row.amount)}
+                          currentDepartmentId={row.owner_department_id}
+                          departments={departments ?? []}
+                        />
+                      </div>
+                    )}
+                  </td>
                   <td>{row.issuer?.name}</td>
                   <td>
                     {row.requires_inter_settlement ? (
