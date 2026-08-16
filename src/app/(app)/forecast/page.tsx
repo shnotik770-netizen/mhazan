@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { BankBalancePanel, ExpectedIncomeManager } from "@/components/forecast-client";
 
 export default async function ForecastPage({
   searchParams,
@@ -11,6 +13,8 @@ export default async function ForecastPage({
   const mode = modeParam === "department" ? "department" : "bank";
   const horizonDays = Number(horizon ?? 30);
 
+  const user = await requireUser();
+  const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const supabase = await createClient();
   const [{ data: bankAccounts }, { data: departments }] = await Promise.all([
     supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
@@ -21,6 +25,16 @@ export default async function ForecastPage({
   const selectedAccount = bankAccounts?.find((b) => b.id === selectedAccountId);
   const selectedDepartmentId = department ?? departments?.[0]?.id ?? "";
   const selectedDepartment = departments?.find((d) => d.id === selectedDepartmentId);
+
+  const expectedIncomesResult =
+    mode === "bank" && selectedAccountId
+      ? await supabase
+          .from("expected_incomes")
+          .select("*")
+          .eq("bank_account_id", selectedAccountId)
+          .order("expected_date")
+      : null;
+  const expectedIncomes = expectedIncomesResult?.data ?? [];
 
   const { data: forecast, error } =
     mode === "bank"
@@ -117,11 +131,18 @@ export default async function ForecastPage({
         </button>
       </form>
 
-      {mode === "bank" && selectedAccount && (
+      {mode === "bank" && selectedAccount && isAdmin && (
+        <BankBalancePanel bankAccountId={selectedAccount.id} currentBalance={Number(selectedAccount.current_balance)} />
+      )}
+      {mode === "bank" && selectedAccount && !isAdmin && (
         <div className="card p-4">
           <p className="text-sm text-muted mb-1">יתרת פתיחה נוכחית</p>
           <p className="text-2xl font-bold">{formatCurrency(Number(selectedAccount.current_balance))}</p>
         </div>
+      )}
+
+      {mode === "bank" && selectedAccount && isAdmin && (
+        <ExpectedIncomeManager bankAccountId={selectedAccount.id} expectedIncomes={expectedIncomes} />
       )}
 
       {mode === "department" && selectedDepartment && (
