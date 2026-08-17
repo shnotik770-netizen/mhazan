@@ -10,6 +10,7 @@ function revalidateCheckPaths() {
   revalidatePath("/checks");
   revalidatePath("/");
   revalidatePath("/forecast");
+  revalidatePath("/expenses");
 }
 
 // Grows the suppliers list automatically as new payees are used, so admins
@@ -389,6 +390,20 @@ export async function classifyCheck(checkId: string, departmentId: string, categ
   return { error: error?.message };
 }
 
+// Bulk-assigns one department to several checks/transfers at once — e.g.
+// clearing a backlog of unclassified expenses from the /expenses screen.
+// Clears any existing per-department split first since a bulk single-
+// department assignment supersedes it.
+export async function bulkAssignCheckDepartment(checkIds: string[], departmentId: string): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  if (checkIds.length === 0 || !departmentId) return {};
+  const supabase = await createClient();
+  await supabase.from("check_allocations").delete().in("check_id", checkIds);
+  const { error } = await supabase.from("checks").update({ department_id: departmentId }).in("id", checkIds);
+  revalidateCheckPaths();
+  return { error: error?.message };
+}
+
 export async function updateCheckStatus(
   checkId: string,
   status: "UNPAID" | "CLEARED" | "CANCELLED",
@@ -713,6 +728,7 @@ export async function updateCheck(
     dueDate: string | null;
     checkNumber: string | null;
     departmentId: string | null;
+    categoryId?: string | null;
     notes: string | null;
     paymentMethod?: "CHECK" | "TRANSFER";
     allocations?: CheckAllocationInput[];
@@ -731,6 +747,7 @@ export async function updateCheck(
       check_number: input.checkNumber || null,
       department_id: isSplit ? null : input.departmentId || null,
       notes: input.notes,
+      ...(input.categoryId !== undefined ? { category_id: input.categoryId || null } : {}),
       ...(input.paymentMethod ? { payment_method: input.paymentMethod } : {}),
     })
     .eq("id", checkId);

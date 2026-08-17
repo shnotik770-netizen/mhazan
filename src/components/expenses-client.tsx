@@ -1,61 +1,205 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { SearchableSelect } from "@/components/searchable-select";
+import { DateInput } from "@/components/date-input";
+import { Modal } from "@/components/modal";
+import { bulkAssignCheckDepartment, updateCheck } from "@/app/(app)/checks/actions";
+import { updateManualEntry } from "@/app/(app)/manual-entries/actions";
 
 type ExpenseRow = {
   id: string;
+  isCheck: boolean;
   date: string | null;
   source: string;
   description: string;
+  payeeName: string;
+  notes: string | null;
   amount: number;
+  departmentId: string | null;
   departmentName: string | null;
+  categoryId: string | null;
   categoryName: string | null;
+  bankAccountName: string | null;
   status: string | null;
+  checkNumber: string | null;
+  paymentMethod: string | null;
 };
 
-export function ExpensesTable({ rows }: { rows: ExpenseRow[] }) {
+type Option = { id: string; name: string };
+
+type SortKey = "date" | "payee" | "department" | "bankAccount";
+
+export function ExpensesTable({
+  rows,
+  departments,
+  categories,
+  isAdmin,
+}: {
+  rows: ExpenseRow[];
+  departments: Option[];
+  categories: Option[];
+  isAdmin: boolean;
+}) {
   const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDepartmentId, setBulkDepartmentId] = useState("");
+  const [bulkPending, startBulk] = useTransition();
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [editRow, setEditRow] = useState<ExpenseRow | null>(null);
+  const router = useRouter();
+
   const filtered = rows.filter((r) => {
     if (!query.trim()) return true;
     const q = query.trim().toLowerCase();
     return (
       r.description.toLowerCase().includes(q) ||
       (r.departmentName ?? "").toLowerCase().includes(q) ||
-      (r.categoryName ?? "").toLowerCase().includes(q)
+      (r.categoryName ?? "").toLowerCase().includes(q) ||
+      (r.bankAccountName ?? "").toLowerCase().includes(q)
     );
   });
 
+  const sorted = useMemo(() => {
+    const list = [...filtered];
+    list.sort((a, b) => {
+      switch (sortKey) {
+        case "payee":
+          return a.payeeName.localeCompare(b.payeeName, "he");
+        case "department":
+          return (a.departmentName ?? "").localeCompare(b.departmentName ?? "", "he");
+        case "bankAccount":
+          return (a.bankAccountName ?? "").localeCompare(b.bankAccountName ?? "", "he");
+        case "date":
+        default:
+          return (b.date ?? "").localeCompare(a.date ?? "");
+      }
+    });
+    return list;
+  }, [filtered, sortKey]);
+
+  const selectableIds = new Set(sorted.filter((r) => r.isCheck).map((r) => r.id));
+  const allSelectableSelected = selectableIds.size > 0 && [...selectableIds].every((id) => selected.has(id));
+
+  function toggleRow(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected(allSelectableSelected ? new Set() : new Set(selectableIds));
+  }
+
+  function applyBulkDepartment() {
+    if (!bulkDepartmentId || selected.size === 0) return;
+    setBulkError(null);
+    startBulk(async () => {
+      const result = await bulkAssignCheckDepartment([...selected], bulkDepartmentId);
+      if (result.error) {
+        setBulkError(result.error);
+        return;
+      }
+      setSelected(new Set());
+      setBulkDepartmentId("");
+      router.refresh();
+    });
+  }
+
   return (
     <div>
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="חיפוש לפי תיאור / מחלקה / קטגוריה"
-        className="w-full max-w-sm rounded-lg border border-border bg-transparent px-3 py-2 text-sm mb-3"
-      />
+      <div className="flex flex-wrap items-center gap-3 mb-3">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="חיפוש לפי תיאור / ספק / מחלקה / קטגוריה / בנק"
+          className="w-full max-w-sm rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+        />
+        <label className="flex items-center gap-2 text-sm text-muted">
+          מיון לפי
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            className="rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm"
+          >
+            <option value="date">תאריך</option>
+            <option value="payee">ספק</option>
+            <option value="department">מחלקה</option>
+            <option value="bankAccount">חשבון בנק</option>
+          </select>
+        </label>
+      </div>
+
+      {isAdmin && selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-3 rounded-lg border border-border bg-background p-3">
+          <span className="text-sm">
+            נבחרו <strong>{selected.size}</strong> צ׳קים/העברות — שיוך למחלקה אחת בבת אחת:
+          </span>
+          <SearchableSelect
+            value={bulkDepartmentId}
+            onChange={setBulkDepartmentId}
+            options={departments.map((d) => ({ id: d.id, label: d.name }))}
+            placeholder="בחר מחלקה"
+            className="rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm w-48"
+          />
+          <button
+            type="button"
+            disabled={!bulkDepartmentId || bulkPending}
+            onClick={applyBulkDepartment}
+            className="rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+          >
+            {bulkPending ? "מעדכן…" : "עדכן מחלקה לנבחרים"}
+          </button>
+          <button type="button" onClick={() => setSelected(new Set())} className="text-sm text-muted underline">
+            בטל בחירה
+          </button>
+          {bulkError && <span className="text-sm text-danger">{bulkError}</span>}
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
+              {isAdmin && (
+                <th>
+                  <input type="checkbox" checked={allSelectableSelected} onChange={toggleAll} disabled={selectableIds.size === 0} />
+                </th>
+              )}
               <th>סוג</th>
               <th>תיאור</th>
               <th>סכום</th>
               <th>תאריך</th>
               <th>מחלקה</th>
               <th>קטגוריה</th>
+              <th>חשבון בנק</th>
               <th>סטטוס</th>
+              {isAdmin && <th></th>}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => (
+            {sorted.map((r) => (
               <tr key={`${r.source}-${r.id}`}>
+                {isAdmin && (
+                  <td>
+                    {r.isCheck && (
+                      <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleRow(r.id)} />
+                    )}
+                  </td>
+                )}
                 <td>{r.source}</td>
                 <td>{r.description}</td>
                 <td>{formatCurrency(r.amount)}</td>
                 <td>{r.date ? formatDate(r.date) : "—"}</td>
                 <td>{r.departmentName ?? <span className="text-warning">בהמתנה</span>}</td>
                 <td>{r.categoryName ?? "—"}</td>
+                <td>{r.bankAccountName ?? "—"}</td>
                 <td>
                   {r.status === "CLEARED" ? (
                     <span className="badge bg-success-bg text-success">נפרע</span>
@@ -65,17 +209,189 @@ export function ExpensesTable({ rows }: { rows: ExpenseRow[] }) {
                     <span className="badge bg-warning-bg text-warning">לא נפרע</span>
                   )}
                 </td>
+                {isAdmin && (
+                  <td>
+                    <button type="button" onClick={() => setEditRow(r)} className="text-xs text-primary underline">
+                      עריכה
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
-            {filtered.length === 0 && (
+            {sorted.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center text-muted py-6">
+                <td colSpan={isAdmin ? 9 : 7} className="text-center text-muted py-6">
                   אין הוצאות מאושרות עדיין
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+      </div>
+
+      {editRow && (
+        <Modal onClose={() => setEditRow(null)}>
+          <EditExpenseForm
+            row={editRow}
+            departments={departments}
+            categories={categories}
+            onClose={() => setEditRow(null)}
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function EditExpenseForm({
+  row,
+  departments,
+  categories,
+  onClose,
+}: {
+  row: ExpenseRow;
+  departments: Option[];
+  categories: Option[];
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [payee, setPayee] = useState(row.payeeName);
+  const [amount, setAmount] = useState(String(row.amount));
+  const [date, setDate] = useState(row.date ?? "");
+  const [checkNumber, setCheckNumber] = useState(row.checkNumber ?? "");
+  const [departmentId, setDepartmentId] = useState(row.departmentId ?? "");
+  const [categoryId, setCategoryId] = useState(row.categoryId ?? "");
+  const [notes, setNotes] = useState(row.notes ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function save() {
+    const amountNum = Number(amount);
+    if (!amountNum || amountNum <= 0) {
+      setError("סכום לא תקין");
+      return;
+    }
+    if (!departmentId) {
+      setError("יש לבחור מחלקה");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = row.isCheck
+        ? await updateCheck(row.id, {
+            payee,
+            amount: amountNum,
+            dueDate: date || null,
+            checkNumber: checkNumber || null,
+            departmentId,
+            categoryId: categoryId || null,
+            notes: notes || null,
+          })
+        : await updateManualEntry(row.id, {
+            amount: amountNum,
+            entryDate: date,
+            departmentId,
+            notes: notes || null,
+          });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+      onClose();
+    });
+  }
+
+  return (
+    <div className="card p-4 space-y-3">
+      <h2 className="font-bold">עריכת {row.isCheck ? "צ׳ק / העברה" : "הוצאה ידנית"}</h2>
+
+      {row.isCheck && (
+        <div>
+          <label className="block text-sm text-muted mb-1">ספק</label>
+          <input
+            value={payee}
+            onChange={(e) => setPayee(e.target.value)}
+            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+          />
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm text-muted mb-1">סכום</label>
+          <input
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-sm text-muted mb-1">תאריך</label>
+          <DateInput value={date} onChange={setDate} className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm" />
+        </div>
+      </div>
+
+      {row.isCheck && row.paymentMethod === "CHECK" && (
+        <div>
+          <label className="block text-sm text-muted mb-1">מס׳ צ׳ק</label>
+          <input
+            value={checkNumber}
+            onChange={(e) => setCheckNumber(e.target.value)}
+            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+          />
+        </div>
+      )}
+
+      <div className={row.isCheck ? "grid grid-cols-2 gap-3" : ""}>
+        <div>
+          <label className="block text-sm text-muted mb-1">מחלקה</label>
+          <SearchableSelect
+            value={departmentId}
+            onChange={setDepartmentId}
+            options={departments.map((d) => ({ id: d.id, label: d.name }))}
+            required
+            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+          />
+        </div>
+        {row.isCheck && (
+          <div>
+            <label className="block text-sm text-muted mb-1">קטגוריה</label>
+            <SearchableSelect
+              value={categoryId}
+              onChange={setCategoryId}
+              options={categories.map((c) => ({ id: c.id, label: c.name }))}
+              placeholder="ללא קטגוריה"
+              className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+            />
+          </div>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm text-muted mb-1">הערות</label>
+        <input
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+        />
+      </div>
+
+      {error && <p className="text-sm text-danger">{error}</p>}
+
+      <div className="flex items-center gap-2 justify-end">
+        <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm">
+          ביטול
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={isPending}
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+        >
+          {isPending ? "שומר…" : "שמירה"}
+        </button>
       </div>
     </div>
   );
