@@ -33,9 +33,11 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
   const [bankAccountId, setBankAccountId] = useState(bankAccounts[0]?.id ?? "");
   const [rawText, setRawText] = useState("");
   const [matches, setMatches] = useState<MatchRow[]>([]);
-  const [overdueCandidates, setOverdueCandidates] = useState<Candidate[]>([]);
+  const [allCandidates, setAllCandidates] = useState<Candidate[]>([]);
   const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [quickCheckNumber, setQuickCheckNumber] = useState("");
+  const [quickAddError, setQuickAddError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -46,12 +48,11 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
     async function loadSuggestions() {
       setLoadingSuggestions(true);
       setSelectedSuggestions(new Set());
-      const today = new Date().toISOString().slice(0, 10);
       try {
         const list = await getUnpaidChecksForReconciliation(bankAccountId);
-        if (!cancelled) setOverdueCandidates(list.filter((c) => c.due_date && c.due_date <= today));
+        if (!cancelled) setAllCandidates(list);
       } catch {
-        if (!cancelled) setOverdueCandidates([]);
+        if (!cancelled) setAllCandidates([]);
       } finally {
         if (!cancelled) setLoadingSuggestions(false);
       }
@@ -62,6 +63,10 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
     };
   }, [open, bankAccountId]);
 
+  const today = new Date().toISOString().slice(0, 10);
+  const overdueCandidates = allCandidates.filter((c) => c.due_date && c.due_date <= today);
+  const selectedCandidates = allCandidates.filter((c) => selectedSuggestions.has(c.id));
+
   function toggleSuggestion(id: string) {
     setSelectedSuggestions((prev) => {
       const next = new Set(prev);
@@ -69,6 +74,22 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
       else next.add(id);
       return next;
     });
+  }
+
+  // Typing a check number is faster than scanning the suggestions table
+  // for it — this looks it up among every open check on the account (not
+  // only the overdue ones) and adds it straight to the selection.
+  function addByCheckNumber() {
+    setQuickAddError(null);
+    const trimmed = quickCheckNumber.trim();
+    if (!trimmed) return;
+    const found = allCandidates.find((c) => c.check_number.trim() === trimmed);
+    if (!found) {
+      setQuickAddError(`לא נמצא צ׳ק פתוח עם מספר ${trimmed} בחשבון שנבחר`);
+      return;
+    }
+    setSelectedSuggestions((prev) => new Set(prev).add(found.id));
+    setQuickCheckNumber("");
   }
 
   function checkMatches() {
@@ -115,7 +136,7 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
         setMatches([]);
         setRawText("");
         setSelectedSuggestions(new Set());
-        setOverdueCandidates((prev) => prev.filter((c) => !matchedIds.has(c.id)));
+        setAllCandidates((prev) => prev.filter((c) => !matchedIds.has(c.id)));
         router.refresh();
       }
     });
@@ -153,6 +174,78 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
           </option>
         ))}
       </select>
+
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold">הקלידו מספר צ׳ק</h3>
+        <div className="flex items-center gap-2">
+          <input
+            value={quickCheckNumber}
+            onChange={(e) => {
+              setQuickCheckNumber(e.target.value);
+              setQuickAddError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addByCheckNumber();
+              }
+            }}
+            list="reconciliation-check-numbers"
+            placeholder="מספר צ׳ק..."
+            className="w-40 rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+          />
+          <datalist id="reconciliation-check-numbers">
+            {allCandidates
+              .filter((c) => !selectedSuggestions.has(c.id))
+              .map((c) => (
+                <option key={c.id} value={c.check_number} />
+              ))}
+          </datalist>
+          <button
+            type="button"
+            onClick={addByCheckNumber}
+            disabled={!quickCheckNumber.trim()}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+          >
+            הוסף
+          </button>
+        </div>
+        {quickAddError && <p className="text-xs text-danger">{quickAddError}</p>}
+      </div>
+
+      {selectedCandidates.length > 0 && (
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">נבחרו לאישור ({selectedCandidates.length})</h3>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>מספר צ׳ק</th>
+                  <th>מוטב</th>
+                  <th>סכום</th>
+                  <th>תאריך פירעון</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedCandidates.map((c) => (
+                  <tr key={c.id}>
+                    <td>{c.check_number}</td>
+                    <td>{c.payee}</td>
+                    <td>{formatCurrency(c.amount)}</td>
+                    <td>{c.due_date ? formatDate(c.due_date) : "—"}</td>
+                    <td>
+                      <button type="button" onClick={() => toggleSuggestion(c.id)} className="text-xs text-danger">
+                        הסר
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-2">
         <h3 className="text-sm font-semibold">הצעות — צ׳קים שעבר תאריך הפירעון שלהם ועדיין לא נפרעו</h3>
