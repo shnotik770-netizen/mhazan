@@ -21,7 +21,7 @@ export default async function ExpensesPage() {
   let checksQuery = supabase
     .from("checks")
     .select(
-      "id, due_date, amount, payee, notes, status, payment_method, check_number, department_id, category_id, bank_account_id, departments(name), categories(name), bank_accounts(bank_name, account_number)",
+      "id, due_date, amount, payee, notes, status, payment_method, check_number, department_id, category_id, bank_account_id, spread_id, departments(name), categories(name), bank_accounts(bank_name, account_number)",
     )
     .not("due_date", "is", null)
     .neq("status", "CANCELLED")
@@ -59,6 +59,7 @@ export default async function ExpensesPage() {
     status: string | null;
     checkNumber: string | null;
     paymentMethod: string | null;
+    spreadId: string | null;
   };
 
   const rows: Row[] = [
@@ -74,6 +75,7 @@ export default async function ExpensesPage() {
         check_number: string | null;
         department_id: string | null;
         category_id: string | null;
+        spread_id: string | null;
         departments: { name: string } | null;
         categories: { name: string } | null;
         bank_accounts: { bank_name: string; account_number: string } | null;
@@ -95,6 +97,7 @@ export default async function ExpensesPage() {
         status: row.status,
         checkNumber: row.check_number,
         paymentMethod: row.payment_method,
+        spreadId: row.spread_id,
       };
     }),
     ...(manualEntries ?? []).map((m) => {
@@ -123,6 +126,7 @@ export default async function ExpensesPage() {
         status: "APPROVED",
         checkNumber: null,
         paymentMethod: null,
+        spreadId: null,
       };
     }),
   ].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));

@@ -33,6 +33,7 @@ type ExpenseRow = {
   status: string | null;
   checkNumber: string | null;
   paymentMethod: string | null;
+  spreadId: string | null;
 };
 
 type Option = { id: string; name: string };
@@ -288,6 +289,7 @@ export function ExpensesTable({
                   {r.isCheck ? (
                     <>
                       <PayeeLink payee={r.payeeName} />
+                      {r.spreadId && <span className="badge bg-background text-muted mr-1">פריסה</span>}
                       {r.notes ? ` — ${r.notes}` : ""}
                     </>
                   ) : (

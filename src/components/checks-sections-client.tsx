@@ -158,6 +158,7 @@ type IssuedCheckRow = {
   account_number: string | null;
   status: string | null;
   notes: string | null;
+  spread_id: string | null;
 };
 
 // "צ׳קים שהונפקו עם מספר לתאריך" — a check that has both a check number
@@ -204,6 +205,7 @@ export function IssuedChecksTable({
                     <td>{c.check_number}</td>
                     <td>
                       <PayeeLink payee={c.payee ?? ""} />
+                      {c.spread_id && <span className="badge bg-background text-muted mr-1">פריסה</span>}
                     </td>
                     <td>{formatCurrency(Number(c.amount))}</td>
                     <td>{c.due_date ? formatDate(c.due_date) : "—"}</td>
@@ -255,6 +257,7 @@ type TransferPendingRow = {
   bank_name: string | null;
   account_number: string | null;
   notes: string | null;
+  spread_id: string | null;
 };
 
 // "העברות שאושרו עם תאריך ועוד לא שולמו" — reads from
@@ -299,6 +302,7 @@ export function TransfersPendingExecutionTable({
                   <tr key={c.id!}>
                     <td>
                       <PayeeLink payee={c.payee ?? ""} />
+                      {c.spread_id && <span className="badge bg-background text-muted mr-1">פריסה</span>}
                     </td>
                     <td>{formatCurrency(Number(c.amount))}</td>
                     <td>{c.due_date ? formatDate(c.due_date) : "—"}</td>
