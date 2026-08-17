@@ -181,7 +181,7 @@ export function UnifiedCheckForm({
         onClick={() => setOpen(true)}
         className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
       >
-        + צ׳ק / העברה חדשה
+        + דרישת תשלום חדשה
       </button>
     );
   }
@@ -189,7 +189,7 @@ export function UnifiedCheckForm({
   return (
     <div className="card p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold">{isSpread ? "פריסת צ׳קים / העברות לספק" : "צ׳ק / העברה חדשה"}</h2>
+        <h2 className="font-semibold">{isSpread ? "פריסת צ׳קים / העברות לספק" : "דרישת תשלום חדשה"}</h2>
         <button
           type="button"
           onClick={() => {

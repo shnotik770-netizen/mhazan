@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { bulkMarkChecksCleared, getUnpaidChecksForReconciliation } from "@/app/(app)/checks/actions";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
+import { Modal } from "@/components/modal";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | null };
-type Candidate = { id: string; check_number: string; amount: number; payee: string };
+type Candidate = { id: string; check_number: string; amount: number; payee: string; due_date: string | null };
 
 type MatchRow = {
   checkNumber: string;
@@ -22,16 +23,53 @@ function normalizeAmount(text: string): number {
 // Dedicated panel for reconciling a bank statement: paste a list of check
 // number + amount pairs that show as cleared in the bank, match them
 // against unpaid checks on that account, and mark the matches cleared in
-// one confirmation instead of one row at a time.
+// one confirmation instead of one row at a time. It also proactively
+// suggests checks whose due date has already passed — the likeliest
+// candidates to already be cleared in the bank — so most of the time
+// there's nothing to type at all.
 export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAccount[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [bankAccountId, setBankAccountId] = useState(bankAccounts[0]?.id ?? "");
   const [rawText, setRawText] = useState("");
   const [matches, setMatches] = useState<MatchRow[]>([]);
+  const [overdueCandidates, setOverdueCandidates] = useState<Candidate[]>([]);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!open || !bankAccountId) return;
+    let cancelled = false;
+    async function loadSuggestions() {
+      setLoadingSuggestions(true);
+      setSelectedSuggestions(new Set());
+      const today = new Date().toISOString().slice(0, 10);
+      try {
+        const list = await getUnpaidChecksForReconciliation(bankAccountId);
+        if (!cancelled) setOverdueCandidates(list.filter((c) => c.due_date && c.due_date <= today));
+      } catch {
+        if (!cancelled) setOverdueCandidates([]);
+      } finally {
+        if (!cancelled) setLoadingSuggestions(false);
+      }
+    }
+    loadSuggestions();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, bankAccountId]);
+
+  function toggleSuggestion(id: string) {
+    setSelectedSuggestions((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function checkMatches() {
     setError(null);
@@ -65,15 +103,19 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
   function confirm() {
     setError(null);
     setMessage(null);
-    const matchedIds = matches.filter((m) => m.matched).map((m) => m.matched!.id);
+    const matchedIds = new Set(matches.filter((m) => m.matched).map((m) => m.matched!.id));
+    for (const id of selectedSuggestions) matchedIds.add(id);
+    const idsToMark = [...matchedIds];
     startTransition(async () => {
-      const result = await bulkMarkChecksCleared(matchedIds);
+      const result = await bulkMarkChecksCleared(idsToMark);
       if (result.error) {
         setError(result.error);
       } else {
         setMessage(`${result.count} צ׳קים סומנו כנפרעו`);
         setMatches([]);
         setRawText("");
+        setSelectedSuggestions(new Set());
+        setOverdueCandidates((prev) => prev.filter((c) => !matchedIds.has(c.id)));
         router.refresh();
       }
     });
@@ -81,6 +123,7 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
 
   const matchedCount = matches.filter((m) => m.matched).length;
   const unmatchedCount = matches.length - matchedCount;
+  const totalToConfirm = matchedCount + selectedSuggestions.size;
 
   if (!open) {
     return (
@@ -91,6 +134,7 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
   }
 
   return (
+    <Modal onClose={() => setOpen(false)}>
     <div className="card p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">התאמת צ׳קים שנפרעו בבנק (לפי מספר צ׳ק + סכום)</h2>
@@ -98,10 +142,6 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
           סגור
         </button>
       </div>
-      <p className="text-xs text-muted">
-        הדביקו מתוך דו״ח הבנק רשימת מספרי צ׳קים שירדו + הסכום שלהם (עמודה אחת מספר צ׳ק, עמודה שנייה סכום). המערכת
-        תשווה למאגר הצ׳קים הפתוחים לפי מספר צ׳ק וסכום זהה, ותציע לסמן את מה שנמצא כנפרע.
-      </p>
       <select
         value={bankAccountId}
         onChange={(e) => setBankAccountId(e.target.value)}
@@ -113,6 +153,50 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
           </option>
         ))}
       </select>
+
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold">הצעות — צ׳קים שעבר תאריך הפירעון שלהם ועדיין לא נפרעו</h3>
+        {loadingSuggestions && <p className="text-xs text-muted">טוען הצעות...</p>}
+        {!loadingSuggestions && overdueCandidates.length === 0 && (
+          <p className="text-xs text-muted">אין צ׳קים באיחור עבור החשבון הזה</p>
+        )}
+        {overdueCandidates.length > 0 && (
+          <div className="overflow-x-auto max-h-56 overflow-y-auto border border-border rounded-lg">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>מספר צ׳ק</th>
+                  <th>מוטב</th>
+                  <th>סכום</th>
+                  <th>תאריך פירעון</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overdueCandidates.map((c) => (
+                  <tr key={c.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedSuggestions.has(c.id)}
+                        onChange={() => toggleSuggestion(c.id)}
+                      />
+                    </td>
+                    <td>{c.check_number}</td>
+                    <td>{c.payee}</td>
+                    <td>{formatCurrency(c.amount)}</td>
+                    <td className="text-warning">{c.due_date ? formatDate(c.due_date) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="text-xs text-muted">
+          סמנו את מה שבאמת ירד בבנק — או שלא בטוחים? הדביקו דוח בנק למטה ותתבצע התאמה אוטומטית לפי מספר וסכום.
+        </p>
+      </div>
+
       <textarea
         value={rawText}
         onChange={(e) => setRawText(e.target.value)}
@@ -122,9 +206,9 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
       <button
         disabled={isPending || !bankAccountId || !rawText.trim()}
         onClick={checkMatches}
-        className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+        className="rounded-lg border border-border px-4 py-2 text-sm font-semibold disabled:opacity-50"
       >
-        בדוק התאמות
+        בדוק התאמות מהדוח שהודבק
       </button>
 
       {matches.length > 0 && (
@@ -166,18 +250,22 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
               </tbody>
             </table>
           </div>
-          <button
-            disabled={isPending || matchedCount === 0}
-            onClick={confirm}
-            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
-          >
-            אשר וסמן {matchedCount} כנפרעו
-          </button>
         </div>
+      )}
+
+      {totalToConfirm > 0 && (
+        <button
+          disabled={isPending}
+          onClick={confirm}
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+        >
+          אשר וסמן {totalToConfirm} כנפרעו
+        </button>
       )}
 
       {error && <p className="text-sm text-danger">{error}</p>}
       {message && <p className="text-sm text-success">{message}</p>}
     </div>
+    </Modal>
   );
 }

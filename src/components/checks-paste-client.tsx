@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { lookupDepartmentsByPayee, pasteExistingChecks } from "@/app/(app)/checks/actions";
+import { Modal } from "@/components/modal";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -128,6 +129,7 @@ export function PasteExistingChecksForm({
   }
 
   return (
+    <Modal onClose={() => setOpen(false)}>
     <div className="card p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">ייבוא צ׳קים / העברות קיימים (לתחזית בנק)</h2>
@@ -253,5 +255,6 @@ export function PasteExistingChecksForm({
         {isPending ? "מייבא..." : `ייבא ${validCount} שורות`}
       </button>
     </div>
+    </Modal>
   );
 }

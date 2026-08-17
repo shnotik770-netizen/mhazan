@@ -419,16 +419,17 @@ export async function deleteCheck(checkId: string): Promise<{ error?: string }> 
 // statement by check number + amount.
 export async function getUnpaidChecksForReconciliation(
   bankAccountId: string,
-): Promise<{ id: string; check_number: string; amount: number; payee: string }[]> {
+): Promise<{ id: string; check_number: string; amount: number; payee: string; due_date: string | null }[]> {
   await requireFinanceAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("checks")
-    .select("id, check_number, amount, payee")
+    .select("id, check_number, amount, payee, due_date")
     .eq("bank_account_id", bankAccountId)
     .eq("payment_method", "CHECK")
     .eq("status", "UNPAID")
-    .not("check_number", "is", null);
+    .not("check_number", "is", null)
+    .order("due_date");
   if (error) throw new Error(error.message);
   return (data ?? []).map((c) => ({ ...c, check_number: c.check_number as string, amount: Number(c.amount) }));
 }

@@ -183,17 +183,22 @@ export default async function ChecksPage({
         bankAccounts={bankAccounts ?? []}
       />
 
-      {myDepartments.length > 0 && (
+      {/* Admins use "+ דרישת תשלום חדשה" above (UnifiedCheckForm) — its
+          direct entry auto-approves and covers the full feature set
+          (category, split, spread, skip-ledger), so this simpler,
+          RLS-restricted request form is only shown to department managers,
+          for whom it's the one and only way to submit a request. */}
+      {!isAdmin && myDepartments.length > 0 && (
         <div className="space-y-2">
           <DeptExpenseRequestForm
             departments={myDepartments}
             bankAccounts={bankAccounts ?? []}
-            canSetDates={isAdmin || user.profile.can_set_check_dates}
+            canSetDates={user.profile.can_set_check_dates}
           />
           <BulkExpenseRequestFormMulti
             departments={myDepartments}
             bankAccounts={bankAccounts ?? []}
-            canSetDates={isAdmin || user.profile.can_set_check_dates}
+            canSetDates={user.profile.can_set_check_dates}
           />
         </div>
       )}
