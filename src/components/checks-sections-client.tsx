@@ -21,6 +21,22 @@ function matches(query: string, ...fields: (string | null | undefined)[]) {
   return fields.some((f) => (f ?? "").toLowerCase().includes(q));
 }
 
+// Automatically splits a section's rows into one group per bank account
+// instead of one flat list, so it's obvious at a glance which bank each
+// batch of checks/transfers is coming out of.
+function groupByBank<T extends { bank_name: string | null; account_number: string | null }>(
+  rows: T[],
+): [string, T[]][] {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = `${row.bank_name ?? "?"} (${row.account_number ?? "?"})`;
+    const list = groups.get(key) ?? [];
+    list.push(row);
+    groups.set(key, list);
+  }
+  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
 function DepartmentCell({
   checkId,
   departmentName,
@@ -60,6 +76,8 @@ type PaymentRequestRow = {
   department_name: string | null;
   notes: string | null;
   payment_method: string | null;
+  due_date: string | null;
+  check_number: string | null;
 };
 
 // "דרישות תשלום ממתינות לאישור" — includes both transfers and checks, with
@@ -101,7 +119,12 @@ export function PendingApprovalTable({
                 <td>{c.notes ?? "—"}</td>
                 {isAdmin && (
                   <td>
-                    <ApprovePaymentRequestRow checkId={c.id!} paymentMethod={c.payment_method ?? undefined} />
+                    <ApprovePaymentRequestRow
+                      checkId={c.id!}
+                      paymentMethod={c.payment_method ?? undefined}
+                      currentDueDate={c.due_date}
+                      currentCheckNumber={c.check_number}
+                    />
                   </td>
                 )}
               </tr>
@@ -126,62 +149,92 @@ type IssuedCheckRow = {
   payee: string | null;
   amount: number | null;
   due_date: string | null;
+  department_id: string | null;
   department_name: string | null;
   bank_name: string | null;
   account_number: string | null;
   status: string | null;
+  notes: string | null;
 };
 
 // "צ׳קים שהונפקו עם מספר לתאריך" — a check that has both a check number
-// and a due date, still unpaid: reads from v_checks_issued.
-export function IssuedChecksTable({ rows, allocationsByCheck }: { rows: IssuedCheckRow[]; allocationsByCheck: Map<string, AllocationInfo[]> }) {
+// and a due date, still unpaid: reads from v_checks_issued. Grouped by
+// bank account automatically, since that's how these get prepared/handed
+// over in practice.
+export function IssuedChecksTable({
+  rows,
+  departments,
+  allocationsByCheck,
+}: {
+  rows: IssuedCheckRow[];
+  departments: Department[];
+  allocationsByCheck: Map<string, AllocationInfo[]>;
+}) {
   const [query, setQuery] = useState("");
   const filtered = rows.filter((r) => matches(query, r.payee, r.check_number));
+  const grouped = groupByBank(filtered);
 
   return (
     <div>
       <SearchBox value={query} onChange={setQuery} placeholder="חיפוש לפי מוטב / מספר צ׳ק" />
-      <div className="overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>מס׳ צ׳ק</th>
-              <th>מוטב</th>
-              <th>סכום</th>
-              <th>תאריך</th>
-              <th>חשבון</th>
-              <th>מחלקה</th>
-              <th>סטטוס</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((c) => (
-              <tr key={c.id!}>
-                <td>{c.check_number}</td>
-                <td>{c.payee}</td>
-                <td>{formatCurrency(Number(c.amount))}</td>
-                <td>{c.due_date ? formatDate(c.due_date) : "—"}</td>
-                <td>
-                  {c.bank_name} ({c.account_number})
-                </td>
-                <td>
-                  <DepartmentCell checkId={c.id!} departmentName={c.department_name} allocationsByCheck={allocationsByCheck} />
-                </td>
-                <td>
-                  <CheckStatusControls checkId={c.id!} status={c.status ?? "UNPAID"} paymentMethod="CHECK" />
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={7} className="text-center text-muted py-4">
-                  אין תוצאות
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {grouped.map(([bankLabel, bankRows]) => (
+        <div key={bankLabel} className="mb-4">
+          <h3 className="text-sm font-semibold text-muted mb-1">
+            {bankLabel} — {bankRows.length} צ׳קים
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>מס׳ צ׳ק</th>
+                  <th>מוטב</th>
+                  <th>סכום</th>
+                  <th>תאריך</th>
+                  <th>מחלקה</th>
+                  <th>סטטוס</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {bankRows.map((c) => (
+                  <tr key={c.id!}>
+                    <td>{c.check_number}</td>
+                    <td>{c.payee}</td>
+                    <td>{formatCurrency(Number(c.amount))}</td>
+                    <td>{c.due_date ? formatDate(c.due_date) : "—"}</td>
+                    <td>
+                      <DepartmentCell checkId={c.id!} departmentName={c.department_name} allocationsByCheck={allocationsByCheck} />
+                    </td>
+                    <td>
+                      <CheckStatusControls checkId={c.id!} status={c.status ?? "UNPAID"} paymentMethod="CHECK" />
+                    </td>
+                    <td>
+                      <EditDeleteCheckRow
+                        checkId={c.id!}
+                        payee={c.payee ?? ""}
+                        amount={Number(c.amount)}
+                        dueDate={c.due_date}
+                        checkNumber={c.check_number}
+                        departmentId={c.department_id}
+                        notes={c.notes}
+                        paymentMethod="CHECK"
+                        existingAllocations={
+                          (allocationsByCheck.get(c.id!) ?? []).map((a) => ({
+                            departmentId: a.departmentId,
+                            amount: a.amount,
+                          })) as CheckAllocationInput[]
+                        }
+                        departments={departments}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+      {filtered.length === 0 && <p className="text-center text-muted py-4">אין תוצאות</p>}
     </div>
   );
 }
@@ -191,66 +244,89 @@ type TransferPendingRow = {
   payee: string | null;
   amount: number | null;
   due_date: string | null;
+  department_id: string | null;
   department_name: string | null;
   bank_name: string | null;
   account_number: string | null;
+  notes: string | null;
 };
 
 // "העברות שאושרו עם תאריך ועוד לא שולמו" — reads from
 // v_transfers_pending_execution; confirming execution captures the
 // internal beneficiary, same as the overdue-transfer verification flow.
+// Grouped by bank account automatically.
 export function TransfersPendingExecutionTable({
   rows,
+  departments,
   allocationsByCheck,
 }: {
   rows: TransferPendingRow[];
+  departments: Department[];
   allocationsByCheck: Map<string, AllocationInfo[]>;
 }) {
   const [query, setQuery] = useState("");
   const filtered = rows.filter((r) => matches(query, r.payee));
+  const grouped = groupByBank(filtered);
 
   return (
     <div>
       <SearchBox value={query} onChange={setQuery} placeholder="חיפוש לפי מוטב" />
-      <div className="overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>מוטב</th>
-              <th>סכום</th>
-              <th>תאריך</th>
-              <th>חשבון</th>
-              <th>מחלקה</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((c) => (
-              <tr key={c.id!}>
-                <td>{c.payee}</td>
-                <td>{formatCurrency(Number(c.amount))}</td>
-                <td>{c.due_date ? formatDate(c.due_date) : "—"}</td>
-                <td>
-                  {c.bank_name} ({c.account_number})
-                </td>
-                <td>
-                  <DepartmentCell checkId={c.id!} departmentName={c.department_name} allocationsByCheck={allocationsByCheck} />
-                </td>
-                <td>
-                  <VerifyTransferButton checkId={c.id!} label="אשר שההעברה בוצעה" captureInternalBeneficiary />
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={6} className="text-center text-muted py-4">
-                  אין תוצאות
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {grouped.map(([bankLabel, bankRows]) => (
+        <div key={bankLabel} className="mb-4">
+          <h3 className="text-sm font-semibold text-muted mb-1">
+            {bankLabel} — {bankRows.length} העברות
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>מוטב</th>
+                  <th>סכום</th>
+                  <th>תאריך</th>
+                  <th>מחלקה</th>
+                  <th></th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {bankRows.map((c) => (
+                  <tr key={c.id!}>
+                    <td>{c.payee}</td>
+                    <td>{formatCurrency(Number(c.amount))}</td>
+                    <td>{c.due_date ? formatDate(c.due_date) : "—"}</td>
+                    <td>
+                      <DepartmentCell checkId={c.id!} departmentName={c.department_name} allocationsByCheck={allocationsByCheck} />
+                    </td>
+                    <td>
+                      <VerifyTransferButton checkId={c.id!} label="אשר שההעברה בוצעה" captureInternalBeneficiary />
+                    </td>
+                    <td>
+                      <EditDeleteCheckRow
+                        checkId={c.id!}
+                        payee={c.payee ?? ""}
+                        amount={Number(c.amount)}
+                        dueDate={c.due_date}
+                        checkNumber={null}
+                        departmentId={c.department_id}
+                        notes={c.notes}
+                        paymentMethod="TRANSFER"
+                        existingAllocations={
+                          (allocationsByCheck.get(c.id!) ?? []).map((a) => ({
+                            departmentId: a.departmentId,
+                            amount: a.amount,
+                          })) as CheckAllocationInput[]
+                        }
+                        departments={departments}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+      {filtered.length === 0 && <p className="text-center text-muted py-4">אין תוצאות</p>}
     </div>
   );
 }

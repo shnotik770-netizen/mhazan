@@ -236,6 +236,8 @@ export type Database = {
       checks: {
         Row: {
           amount: number
+          approved_at: string | null
+          approved_by: string | null
           bank_account_id: string
           category_id: string | null
           check_number: string | null
@@ -255,6 +257,8 @@ export type Database = {
         }
         Insert: {
           amount: number
+          approved_at?: string | null
+          approved_by?: string | null
           bank_account_id: string
           category_id?: string | null
           check_number?: string | null
@@ -274,6 +278,8 @@ export type Database = {
         }
         Update: {
           amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
           bank_account_id?: string
           category_id?: string | null
           check_number?: string | null
@@ -292,6 +298,13 @@ export type Database = {
           status?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "checks_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "checks_bank_account_id_fkey"
             columns: ["bank_account_id"]
@@ -838,6 +851,7 @@ export type Database = {
       v_check_department_amounts: {
         Row: {
           amount: number | null
+          approved_at: string | null
           bank_account_id: string | null
           check_id: string | null
           check_number: string | null

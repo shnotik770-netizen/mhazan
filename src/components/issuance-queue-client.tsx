@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { groupChecksIntoSpread, mergeChecks } from "@/app/(app)/checks/actions";
-import { IssueCheckRow } from "@/components/checks-client";
+import { groupChecksIntoSpread, mergeChecks, type CheckAllocationInput } from "@/app/(app)/checks/actions";
+import { EditDeleteCheckRow, IssueCheckRow } from "@/components/checks-client";
 import { formatCurrency } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -13,13 +13,15 @@ type QueueRow = {
   id: string | null;
   payee: string | null;
   amount: number | null;
+  department_id: string | null;
   department_name: string | null;
   payment_method: string | null;
   check_number: string | null;
   due_date: string | null;
+  notes: string | null;
 };
 
-type AllocationInfo = { departmentName: string | null; amount: number };
+type AllocationInfo = { departmentId: string; departmentName: string | null; amount: number };
 
 // Selecting several pending-issuance rows lets an admin either merge them
 // into a single check/transfer (summed amount, per-department amounts
@@ -117,6 +119,7 @@ export function IssuanceQueueTable({
             <th>מחלקה</th>
             <th>אמצעי</th>
             <th>הנפקה</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -150,6 +153,26 @@ export function IssuanceQueueTable({
                   currentDueDate={c.due_date}
                   currentPaymentMethod={c.payment_method ?? undefined}
                   amount={Number(c.amount)}
+                  departments={departments}
+                  hasExistingDepartmentSplit={allocationsByCheck.has(c.id!)}
+                />
+              </td>
+              <td>
+                <EditDeleteCheckRow
+                  checkId={c.id!}
+                  payee={c.payee ?? ""}
+                  amount={Number(c.amount)}
+                  dueDate={c.due_date}
+                  checkNumber={c.check_number}
+                  departmentId={c.department_id}
+                  notes={c.notes}
+                  paymentMethod={c.payment_method ?? undefined}
+                  existingAllocations={
+                    (allocationsByCheck.get(c.id!) ?? []).map((a) => ({
+                      departmentId: a.departmentId,
+                      amount: a.amount,
+                    })) as CheckAllocationInput[]
+                  }
                   departments={departments}
                 />
               </td>

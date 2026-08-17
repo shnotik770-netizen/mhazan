@@ -278,14 +278,18 @@ export default async function ChecksPage({
       {filteredIssued.length > 0 && isAdmin && (
         <div className="card p-4">
           <h2 className="font-semibold mb-1">צ׳קים שהונפקו — עם מספר לתאריך</h2>
-          <IssuedChecksTable rows={filteredIssued} allocationsByCheck={allocationsByCheck} />
+          <IssuedChecksTable rows={filteredIssued} departments={departments ?? []} allocationsByCheck={allocationsByCheck} />
         </div>
       )}
 
       {filteredTransfersPendingExecution.length > 0 && isAdmin && (
         <div className="card p-4">
           <h2 className="font-semibold mb-1">העברות שאושרו עם תאריך — ועוד לא שולמו</h2>
-          <TransfersPendingExecutionTable rows={filteredTransfersPendingExecution} allocationsByCheck={allocationsByCheck} />
+          <TransfersPendingExecutionTable
+            rows={filteredTransfersPendingExecution}
+            departments={departments ?? []}
+            allocationsByCheck={allocationsByCheck}
+          />
         </div>
       )}
 

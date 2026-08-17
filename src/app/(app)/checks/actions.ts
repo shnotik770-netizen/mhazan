@@ -79,6 +79,11 @@ export async function createCheck(input: {
       notes: input.notes,
       skip_department_ledger: input.skipDepartmentLedger,
       created_by: user?.id ?? null,
+      // A finance admin entering an expense directly IS the approval —
+      // it goes straight to the issuance queue, not through the
+      // dept-manager-request approval step.
+      approved_at: new Date().toISOString(),
+      approved_by: user?.id ?? null,
     })
     .select("id")
     .single();
@@ -145,6 +150,9 @@ export async function issueCheck(
 ): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const isSplit = input.allocations.some((a) => a.departmentId && a.amount > 0);
 
@@ -155,6 +163,11 @@ export async function issueCheck(
       due_date: input.dueDate || null,
       ...(input.paymentMethod ? { payment_method: input.paymentMethod } : {}),
       department_id: isSplit ? null : undefined,
+      // Reaching this action at all means a finance admin approved it —
+      // whether this is the first-time approval of a dept-manager request
+      // or just finalizing an already-approved issuance-queue item.
+      approved_at: new Date().toISOString(),
+      approved_by: user?.id ?? null,
     })
     .eq("id", checkId);
   if (error) return { error: error.message };
@@ -180,8 +193,31 @@ export async function convertPendingCheckToSpread(
   await requireFinanceAdmin();
   const supabase = await createClient();
 
-  const { data: original, error: fetchError } = await supabase.from("checks").select("*").eq("id", checkId).single();
+  const [{ data: original, error: fetchError }, { data: originalAllocations, error: allocFetchError }] =
+    await Promise.all([
+      supabase.from("checks").select("*").eq("id", checkId).single(),
+      supabase.from("check_allocations").select("department_id, amount").eq("check_id", checkId),
+    ]);
   if (fetchError || !original) return { error: fetchError?.message ?? "הצ׳ק/הבקשה לא נמצא/ה" };
+  if (allocFetchError) return { error: allocFetchError.message };
+
+  // If the original was itself split across departments (e.g. the result
+  // of an earlier merge), the per-row department picker in the spread UI
+  // has no way to represent that multi-department mix — so without this,
+  // turning it into a spread would silently drop the department split.
+  // Instead, scale the same department proportions into every new row.
+  const originalTotal = Number(original.amount);
+  const rowsWithAllocations =
+    originalAllocations && originalAllocations.length > 0 && originalTotal > 0
+      ? rows.map((r) => ({
+          ...r,
+          departmentId: null,
+          allocations: originalAllocations.map((a) => ({
+            departmentId: a.department_id,
+            amount: Math.round(((Number(a.amount) / originalTotal) * r.amount + Number.EPSILON) * 100) / 100,
+          })),
+        }))
+      : rows;
 
   const spreadResult = await createPaymentSpread({
     payee: original.payee,
@@ -189,7 +225,7 @@ export async function convertPendingCheckToSpread(
     internalBeneficiary: null,
     notes: original.notes,
     bankAccountId: original.bank_account_id,
-    rows,
+    rows: rowsWithAllocations,
   });
   if (spreadResult.error) return spreadResult;
 
@@ -254,6 +290,8 @@ export async function createPaymentSpread(input: {
         internal_beneficiary: input.internalBeneficiary || null,
         spread_id: spread.id,
         created_by: user?.id ?? null,
+        approved_at: new Date().toISOString(),
+        approved_by: user?.id ?? null,
       })
       .select("id")
       .single();
@@ -303,6 +341,8 @@ export async function pasteExistingChecks(
       department_id: r.departmentId,
       skip_department_ledger: !r.includeInDepartmentLedger,
       created_by: user?.id ?? null,
+      approved_at: new Date().toISOString(),
+      approved_by: user?.id ?? null,
     })),
     { count: "exact" },
   );
@@ -442,6 +482,8 @@ export async function createCheckBatch(rows: BulkCheckRow[]): Promise<{ outcomes
       department_id: row.departmentId || null,
       notes: row.notes,
       created_by: user?.id ?? null,
+      approved_at: new Date().toISOString(),
+      approved_by: user?.id ?? null,
     });
     if (error) {
       outcomes.push({ success: false, reason: error.message });
@@ -578,6 +620,11 @@ export async function mergeChecks(checkIds: string[]): Promise<{ error?: string 
       department_id: singleDepartment,
       notes: `מיזוג ${checks.length} צ׳קים/העברות`,
       created_by: user?.id ?? null,
+      // Merging only ever operates on already-approved items (the
+      // issuance/execution queues) — the merged result stays approved too,
+      // otherwise it would silently fall back into pending-approval.
+      approved_at: new Date().toISOString(),
+      approved_by: user?.id ?? null,
     })
     .select("id")
     .single();

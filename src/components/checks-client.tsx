@@ -15,6 +15,7 @@ import {
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { MiniCalculator } from "@/components/mini-calculator";
 import { SearchableSelect } from "@/components/searchable-select";
+import { formatCurrency } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -336,14 +337,18 @@ export function DeptExpenseRequestForm({
 export function ApprovePaymentRequestRow({
   checkId,
   paymentMethod,
+  currentDueDate,
+  currentCheckNumber,
 }: {
   checkId: string;
   paymentMethod?: string;
+  currentDueDate?: string | null;
+  currentCheckNumber?: string | null;
 }) {
   const router = useRouter();
   const isCheck = paymentMethod !== "TRANSFER";
-  const [dueDate, setDueDate] = useState("");
-  const [checkNumber, setCheckNumber] = useState("");
+  const [dueDate, setDueDate] = useState(currentDueDate ?? "");
+  const [checkNumber, setCheckNumber] = useState(currentCheckNumber ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -366,6 +371,7 @@ export function ApprovePaymentRequestRow({
         type="date"
         value={dueDate}
         onChange={(e) => setDueDate(e.target.value)}
+        title={isCheck ? "ניתן להשאיר ריק — יעבור לצ׳קים ממתינים להנפקה" : "נדרש כדי לדעת מתי לבצע את ההעברה"}
         className="rounded border border-border bg-transparent px-2 py-1 text-xs"
       />
       {isCheck && (
@@ -377,7 +383,7 @@ export function ApprovePaymentRequestRow({
         />
       )}
       <button
-        disabled={isPending || !dueDate}
+        disabled={isPending || (!isCheck && !dueDate)}
         onClick={approve}
         className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
       >
@@ -403,6 +409,20 @@ type SpreadDraftRow = {
 // fields aren't complete yet, it asks how to proceed instead of silently
 // saving a half-filled row: issue as one payment (optionally split across
 // departments), or turn it into a spread of several payments.
+// Spread amounts round down to the nearest ROUND_UNIT (checks are
+// typically written in round numbers) — every row but the last gets the
+// rounded base amount, and the last row absorbs whatever's left so the
+// total still matches exactly.
+const SPREAD_ROUND_UNIT = 5;
+
+function computeAutoSpreadAmounts(total: number, count: number): number[] {
+  const n = Math.max(1, Math.floor(count) || 1);
+  if (n === 1) return [Math.round(total * 100) / 100];
+  const base = Math.max(0, Math.floor(total / n / SPREAD_ROUND_UNIT) * SPREAD_ROUND_UNIT);
+  const lastAmount = Math.round((total - base * (n - 1) + Number.EPSILON) * 100) / 100;
+  return [...Array(n - 1).fill(base), lastAmount];
+}
+
 export function IssueCheckRow({
   checkId,
   currentCheckNumber,
@@ -410,6 +430,7 @@ export function IssueCheckRow({
   currentPaymentMethod,
   amount,
   departments,
+  hasExistingDepartmentSplit,
 }: {
   checkId: string;
   currentCheckNumber: string | null;
@@ -417,6 +438,7 @@ export function IssueCheckRow({
   currentPaymentMethod?: string;
   amount: number;
   departments: Department[];
+  hasExistingDepartmentSplit?: boolean;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"collapsed" | "choose" | "single" | "spread">("collapsed");
@@ -430,8 +452,21 @@ export function IssueCheckRow({
   const [spreadRows, setSpreadRows] = useState<SpreadDraftRow[]>([
     { date: "", amount, checkNumber: "", departmentId: "" },
   ]);
+  const [spreadCount, setSpreadCount] = useState(2);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  function applyAutoSpread() {
+    const amounts = computeAutoSpreadAmounts(amount, spreadCount);
+    setSpreadRows((prev) =>
+      amounts.map((rowAmount, i) => ({
+        date: prev[i]?.date ?? "",
+        amount: rowAmount,
+        checkNumber: "",
+        departmentId: prev[i]?.departmentId ?? "",
+      })),
+    );
+  }
 
   const isComplete = Boolean(dueDate) && (paymentMethod !== "CHECK" || Boolean(checkNumber));
 
@@ -524,9 +559,37 @@ export function IssueCheckRow({
   }
 
   if (mode === "spread") {
+    const roundedAmounts = spreadRows.map((r) => r.amount);
+    const lastAmount = roundedAmounts[roundedAmounts.length - 1] ?? 0;
+    const baseAmount = roundedAmounts.length > 1 ? roundedAmounts[0] : 0;
+    const roundingLeftover =
+      roundedAmounts.length > 1 ? Math.round((lastAmount - baseAmount) * 100) / 100 : 0;
     return (
-      <div className="flex flex-col gap-1 min-w-[260px]">
-        <p className="text-xs text-muted">פריסה לכמה תשלומים — הסכומים המקוריים לא מחושבים אוטומטית</p>
+      <div className="flex flex-col gap-1 min-w-[280px]">
+        {hasExistingDepartmentSplit && (
+          <p className="text-xs text-warning">
+            הצ׳ק המקורי מפוצל בין כמה מחלקות — הפיצול יישמר באופן יחסי בכל תשלום בפריסה, ללא צורך לבחור מחלקה כאן.
+          </p>
+        )}
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-muted">לכמה תשלומים לפרוס:</span>
+          <input
+            type="number"
+            min={1}
+            value={spreadCount}
+            onChange={(e) => setSpreadCount(Number(e.target.value) || 1)}
+            className="w-16 rounded border border-border bg-transparent px-1 py-0.5 text-xs"
+          />
+          <button type="button" onClick={applyAutoSpread} className="rounded border border-border text-xs px-2 py-1">
+            חשב פריסה אוטומטית
+          </button>
+        </div>
+        {roundingLeftover > 0 && (
+          <p className="text-xs text-muted">
+            כל תשלום מעוגל ל-{formatCurrency(baseAmount)}; {formatCurrency(roundingLeftover)} שנותרו מהעיגול נוספו
+            לתשלום האחרון ({formatCurrency(lastAmount)}).
+          </p>
+        )}
         {spreadRows.map((row, i) => (
           <div key={i} className="flex items-center gap-1">
             <input
