@@ -2,8 +2,16 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { groupChecksIntoSpread, mergeChecks, type CheckAllocationInput } from "@/app/(app)/checks/actions";
+import {
+  groupChecksIntoSpread,
+  mergeChecks,
+  updateCheckDueDate,
+  bulkAssignCheckNumbers,
+  type CheckAllocationInput,
+} from "@/app/(app)/checks/actions";
 import { EditDeleteCheckRow, IssueCheckRow } from "@/components/checks-client";
+import { DateInput } from "@/components/date-input";
+import { Modal } from "@/components/modal";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -23,6 +31,45 @@ type QueueRow = {
 };
 
 type AllocationInfo = { departmentId: string; departmentName: string | null; amount: number };
+
+// Setting a due date is common enough on this table (a check is often
+// dated well before its number is known) that it shouldn't require
+// opening the full "הנפק" flow or the edit modal — a plain date input
+// right in the row saves directly.
+function InlineDueDateCell({ checkId, dueDate }: { checkId: string; dueDate: string | null }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  function save(next: string) {
+    startTransition(async () => {
+      await updateCheckDueDate(checkId, next || null);
+      router.refresh();
+    });
+  }
+
+  return (
+    <DateInput
+      value={dueDate ?? ""}
+      onChange={save}
+      className={`rounded border border-border bg-transparent px-2 py-1 text-xs w-32 ${isPending ? "opacity-50" : ""}`}
+    />
+  );
+}
+
+type QuickRow = { id: string; payee: string; dueDate: string; checkNumber: string; include: boolean };
+
+// Setting one row's number mid-run renumbers every row AFTER it
+// sequentially (leaving earlier rows untouched) — the same "anchor point"
+// pattern used for cascading spread dates elsewhere in the app.
+function renumberFrom(rows: QuickRow[], fromIdx: number, newValue: string): QuickRow[] {
+  const base = Number(newValue);
+  const isSequential = newValue.trim() !== "" && !Number.isNaN(base);
+  return rows.map((r, i) => {
+    if (i < fromIdx) return r;
+    if (i === fromIdx) return { ...r, checkNumber: newValue };
+    return isSequential ? { ...r, checkNumber: String(base + (i - fromIdx)) } : r;
+  });
+}
 
 // Selecting several pending-issuance rows lets an admin either merge them
 // into a single check/transfer (summed amount, per-department amounts
@@ -44,11 +91,21 @@ export function IssuanceQueueTable({
   const [isPending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [choosingMergeMethod, setChoosingMergeMethod] = useState(false);
+
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickRows, setQuickRows] = useState<QuickRow[]>([]);
+  const [quickError, setQuickError] = useState<string | null>(null);
+  const [quickPending, startQuickTransition] = useTransition();
+
   const filteredRows = rows.filter((r) => {
     if (!query.trim()) return true;
     const q = query.trim().toLowerCase();
     return (r.payee ?? "").toLowerCase().includes(q);
   });
+
+  const eligibleForQuickIssuance = filteredRows.filter(
+    (r) => r.payment_method === "CHECK" && r.due_date && !r.check_number,
+  );
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -96,6 +153,43 @@ export function IssuanceQueueTable({
         setSelected(new Set());
         router.refresh();
       }
+    });
+  }
+
+  function openQuickIssuance() {
+    const sorted = [...eligibleForQuickIssuance].sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""));
+    setQuickRows(
+      sorted.map((r) => ({ id: r.id!, payee: r.payee ?? "", dueDate: r.due_date ?? "", checkNumber: "", include: true })),
+    );
+    setQuickError(null);
+    setQuickOpen(true);
+  }
+
+  function updateQuickNumber(idx: number, value: string) {
+    setQuickRows((prev) => renumberFrom(prev, idx, value));
+  }
+
+  function toggleQuickInclude(idx: number) {
+    setQuickRows((prev) => prev.map((r, i) => (i === idx ? { ...r, include: !r.include } : r)));
+  }
+
+  function submitQuickIssuance() {
+    const assignments = quickRows.filter((r) => r.include && r.checkNumber.trim()).map((r) => ({ checkId: r.id, checkNumber: r.checkNumber.trim() }));
+    if (assignments.length === 0) {
+      setQuickError("יש להזין לפחות מספר צ׳ק אחד");
+      return;
+    }
+    setQuickError(null);
+    startQuickTransition(async () => {
+      const { outcomes } = await bulkAssignCheckNumbers(assignments);
+      const failed = outcomes.filter((o) => !o.success);
+      if (failed.length > 0) {
+        setQuickError(`${failed.length} מתוך ${assignments.length} נכשלו: ${failed.map((f) => f.reason).join("; ")}`);
+      } else {
+        setQuickOpen(false);
+        setQuickRows([]);
+      }
+      router.refresh();
     });
   }
 
@@ -150,12 +244,24 @@ export function IssuanceQueueTable({
           {error && <span className="text-xs text-danger">{error}</span>}
         </div>
       )}
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="חיפוש לפי מוטב"
-        className="w-full max-w-xs rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm"
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="חיפוש לפי מוטב"
+          className="w-full max-w-xs rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm"
+        />
+        {eligibleForQuickIssuance.length > 0 && (
+          <button
+            type="button"
+            onClick={openQuickIssuance}
+            className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold"
+            title="צ׳קים עם תאריך שכבר נקבע אך חסר מספר — מספור רציף לכולם בבת אחת"
+          >
+            הנפקה מהירה ({eligibleForQuickIssuance.length})
+          </button>
+        )}
+      </div>
       <div className="overflow-x-auto">
       <table className="data-table">
         <thead>
@@ -180,7 +286,9 @@ export function IssuanceQueueTable({
               <td>{c.payee}</td>
               <td>{formatCurrency(Number(c.amount))}</td>
               <td className="text-muted text-xs">{c.created_at ? formatDate(c.created_at) : "—"}</td>
-              <td>{c.due_date ? formatDate(c.due_date) : <span className="text-warning">ללא תאריך</span>}</td>
+              <td>
+                <InlineDueDateCell checkId={c.id!} dueDate={c.due_date} />
+              </td>
               <td>
                 {c.department_name ? (
                   c.department_name
@@ -203,6 +311,7 @@ export function IssuanceQueueTable({
                   currentCheckNumber={c.check_number}
                   currentDueDate={c.due_date}
                   currentPaymentMethod={c.payment_method ?? undefined}
+                  currentDepartmentId={c.department_id}
                   amount={Number(c.amount)}
                   departments={departments}
                   hasExistingDepartmentSplit={allocationsByCheck.has(c.id!)}
@@ -232,6 +341,72 @@ export function IssuanceQueueTable({
         </tbody>
       </table>
       </div>
+
+      {quickOpen && (
+        <Modal onClose={() => setQuickOpen(false)}>
+          <div className="card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">הנפקה מהירה — מספור רציף</h2>
+              <button type="button" onClick={() => setQuickOpen(false)} className="text-sm text-muted">
+                סגור
+              </button>
+            </div>
+            <p className="text-xs text-muted">
+              כל הצ׳קים שכבר נקבע להם תאריך אך חסר מספר. הזנת מספר לצ׳ק הראשון תמלא אוטומטית מספור רציף לשאר; תיקון
+              מספר באמצע הרשימה ימספר מחדש רק את מה שאחריו.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>מוטב</th>
+                    <th>תאריך</th>
+                    <th>מספר צ׳ק</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quickRows.map((r, i) => (
+                    <tr key={r.id}>
+                      <td>
+                        <input type="checkbox" checked={r.include} onChange={() => toggleQuickInclude(i)} />
+                      </td>
+                      <td className={r.include ? "" : "text-muted line-through"}>{r.payee}</td>
+                      <td>{r.dueDate ? formatDate(r.dueDate) : "—"}</td>
+                      <td>
+                        <input
+                          value={r.checkNumber}
+                          onChange={(e) => updateQuickNumber(i, e.target.value)}
+                          disabled={!r.include}
+                          className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm disabled:opacity-50"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                  {quickRows.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="text-center text-muted py-4">
+                        אין צ׳קים מתאימים
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={quickPending}
+                onClick={submitQuickIssuance}
+                className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              >
+                {quickPending ? "מנפיק…" : "אישור והנפקה"}
+              </button>
+              {quickError && <span className="text-sm text-danger">{quickError}</span>}
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

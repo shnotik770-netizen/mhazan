@@ -434,6 +434,7 @@ export function IssueCheckRow({
   currentCheckNumber,
   currentDueDate,
   currentPaymentMethod,
+  currentDepartmentId,
   amount,
   departments,
   hasExistingDepartmentSplit,
@@ -442,6 +443,7 @@ export function IssueCheckRow({
   currentCheckNumber: string | null;
   currentDueDate: string | null;
   currentPaymentMethod?: string;
+  currentDepartmentId?: string | null;
   amount: number;
   departments: Department[];
   hasExistingDepartmentSplit?: boolean;
@@ -455,8 +457,13 @@ export function IssueCheckRow({
   const [dueDate, setDueDate] = useState(currentDueDate ?? "");
   const [isSplitting, setIsSplitting] = useState(false);
   const [allocations, setAllocations] = useState<CheckAllocationInput[]>([]);
+  // A check that already belongs to one plain department (the common case
+  // — not a multi-department split) must keep that department when it's
+  // turned into a spread, so every generated row starts pre-filled with it
+  // instead of a blank picker that's easy to miss and silently loses the
+  // department association.
   const [spreadRows, setSpreadRows] = useState<SpreadDraftRow[]>([
-    { date: "", amount, checkNumber: "", departmentId: "" },
+    { date: "", amount, checkNumber: "", departmentId: currentDepartmentId ?? "" },
   ]);
   const [spreadCount, setSpreadCount] = useState(2);
   const [error, setError] = useState<string | null>(null);
@@ -469,7 +476,7 @@ export function IssueCheckRow({
         date: prev[i]?.date ?? "",
         amount: rowAmount,
         checkNumber: "",
-        departmentId: prev[i]?.departmentId ?? "",
+        departmentId: prev[i]?.departmentId ?? currentDepartmentId ?? "",
       })),
     );
   }
@@ -661,7 +668,12 @@ export function IssueCheckRow({
         ))}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setSpreadRows((prev) => [...prev, { date: "", amount: 0, checkNumber: "", departmentId: "" }])}
+            onClick={() =>
+              setSpreadRows((prev) => [
+                ...prev,
+                { date: "", amount: 0, checkNumber: "", departmentId: currentDepartmentId ?? "" },
+              ])
+            }
             className="text-xs text-primary underline"
           >
             + תשלום

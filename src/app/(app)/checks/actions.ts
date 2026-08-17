@@ -218,7 +218,15 @@ export async function convertPendingCheckToSpread(
             amount: Math.round(((Number(a.amount) / originalTotal) * r.amount + Number.EPSILON) * 100) / 100,
           })),
         }))
-      : rows;
+      : // The common case: the original just had one plain department, not a
+        // split. Any row the caller left without a department (the UI is
+        // supposed to pre-fill this, but a blank is a silent data-loss bug,
+        // not a valid "no department" choice) falls back to the original's
+        // department instead of ending up unclassified.
+        rows.map((r) => ({
+          ...r,
+          departmentId: r.departmentId || (r.allocations.length === 0 ? original.department_id : null),
+        }));
 
   const spreadResult = await createPaymentSpread({
     payee: original.payee,
@@ -479,6 +487,43 @@ export async function splitChecksAcrossDepartments(
 
   revalidateCheckPaths();
   return {};
+}
+
+// "הנפקה מהירה": assigns a check number to several already-dated,
+// number-less checks at once (e.g. a sequential run written by hand).
+// Saved one at a time so a single bad row (duplicate number typed twice,
+// row deleted meanwhile) doesn't block the rest of the batch.
+export async function bulkAssignCheckNumbers(
+  assignments: { checkId: string; checkNumber: string }[],
+): Promise<{ outcomes: { checkId: string; success: boolean; reason?: string }[] }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const outcomes: { checkId: string; success: boolean; reason?: string }[] = [];
+
+  for (const a of assignments) {
+    const checkNumber = a.checkNumber.trim();
+    if (!checkNumber) {
+      outcomes.push({ checkId: a.checkId, success: false, reason: "חסר מספר צ׳ק" });
+      continue;
+    }
+    const { error } = await supabase.from("checks").update({ check_number: checkNumber }).eq("id", a.checkId);
+    outcomes.push({ checkId: a.checkId, success: !error, reason: error?.message });
+  }
+
+  revalidateCheckPaths();
+  return { outcomes };
+}
+
+// Lightweight single-field update for setting a due date directly on the
+// issuance-queue table — an admin who already knows the date but not yet
+// the check number shouldn't have to open the full "הנפק"/edit flow just
+// to record it.
+export async function updateCheckDueDate(checkId: string, dueDate: string | null): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("checks").update({ due_date: dueDate || null }).eq("id", checkId);
+  revalidateCheckPaths();
+  return { error: error?.message };
 }
 
 export async function updateCheckStatus(
