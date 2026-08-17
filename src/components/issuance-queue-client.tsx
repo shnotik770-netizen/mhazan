@@ -203,6 +203,13 @@ export function IssuanceQueueTable({
     setQuickRows((prev) => prev.map((r, i) => (i === idx ? { ...r, include: !r.include } : r)));
   }
 
+  // "עד כאן הונפק": everything before this row was already issued by hand
+  // outside this run — uncheck this row and every row after it, leaving
+  // the earlier rows (already accounted for) as they were.
+  function markIssuedFromHere(idx: number) {
+    setQuickRows((prev) => prev.map((r, i) => (i >= idx ? { ...r, include: false } : r)));
+  }
+
   function submitQuickIssuance() {
     const assignments = quickRows.filter((r) => r.include && r.checkNumber.trim()).map((r) => ({ checkId: r.id, checkNumber: r.checkNumber.trim() }));
     if (assignments.length === 0) {
@@ -394,6 +401,7 @@ export function IssuanceQueueTable({
                     <th>סכום</th>
                     <th>תאריך</th>
                     <th>מספר צ׳ק</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -413,11 +421,21 @@ export function IssuanceQueueTable({
                           className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm disabled:opacity-50"
                         />
                       </td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => markIssuedFromHere(i)}
+                          className="text-xs text-muted underline whitespace-nowrap"
+                          title="מבטל את הסימון משורה זו והלאה"
+                        >
+                          עד כאן הונפק
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {quickRows.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="text-center text-muted py-4">
+                      <td colSpan={6} className="text-center text-muted py-4">
                         אין צ׳קים מתאימים
                       </td>
                     </tr>
