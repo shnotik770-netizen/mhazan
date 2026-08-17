@@ -10,7 +10,6 @@ import {
   type CheckAllocationInput,
 } from "@/app/(app)/checks/actions";
 import { EditDeleteCheckRow, IssueCheckRow } from "@/components/checks-client";
-import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -35,22 +34,44 @@ type AllocationInfo = { departmentId: string; departmentName: string | null; amo
 // Setting a due date is common enough on this table (a check is often
 // dated well before its number is known) that it shouldn't require
 // opening the full "הנפק" flow or the edit modal — a plain date input
-// right in the row saves directly.
+// right in the row saves directly. Saves only on blur (or Enter), not on
+// every keystroke — a native date input fires onChange per segment while
+// typing, so saving there mid-entry interrupts typing with a save+refresh
+// before the date is even finished.
 function InlineDueDateCell({ checkId, dueDate }: { checkId: string; dueDate: string | null }) {
   const router = useRouter();
+  const [value, setValue] = useState(dueDate ?? "");
   const [isPending, startTransition] = useTransition();
 
-  function save(next: string) {
+  // Resync if the row's date changes from outside (e.g. a refresh
+  // triggered by another action) — adjusted during render, per React's
+  // guidance, instead of an effect that would cause an extra render.
+  const [syncedDueDate, setSyncedDueDate] = useState(dueDate);
+  if (dueDate !== syncedDueDate) {
+    setSyncedDueDate(dueDate);
+    setValue(dueDate ?? "");
+  }
+
+  function commit() {
+    if (value === (dueDate ?? "")) return;
     startTransition(async () => {
-      await updateCheckDueDate(checkId, next || null);
+      await updateCheckDueDate(checkId, value || null);
       router.refresh();
     });
   }
 
   return (
-    <DateInput
-      value={dueDate ?? ""}
-      onChange={save}
+    <input
+      type="date"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
       className={`rounded border border-border bg-transparent px-2 py-1 text-xs w-32 ${isPending ? "opacity-50" : ""}`}
     />
   );

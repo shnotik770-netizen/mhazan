@@ -9,7 +9,7 @@ import {
   updateExpectedIncomeStatus,
 } from "@/app/(app)/forecast/actions";
 import { DateInput } from "@/components/date-input";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, todayIso } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type ExpectedIncome = Tables<"expected_incomes">;
@@ -167,7 +167,7 @@ export function ExpectedIncomeManager({
 function ExpectedIncomeRow({ income }: { income: ExpectedIncome }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const isPast = income.expected_date < new Date().toISOString().slice(0, 10);
+  const isPast = income.expected_date < todayIso();
 
   function setStatus(status: "PENDING" | "CONFIRMED" | "NOT_RECEIVED") {
     startTransition(async () => {

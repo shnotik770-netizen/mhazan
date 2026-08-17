@@ -1,8 +1,6 @@
 "use client";
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { todayIso } from "@/lib/format";
 
 // Ctrl+; (a common "insert today" shortcut in spreadsheets) fills today's
 // date, since native <input type="date"> pickers are otherwise several

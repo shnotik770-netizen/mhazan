@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { bulkMarkChecksCleared, getUnpaidChecksForReconciliation } from "@/app/(app)/checks/actions";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, todayIso } from "@/lib/format";
 import { Modal } from "@/components/modal";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -63,7 +63,7 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
     };
   }, [open, bankAccountId]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   const overdueCandidates = allCandidates.filter((c) => c.due_date && c.due_date <= today);
   const selectedCandidates = allCandidates.filter((c) => selectedSuggestions.has(c.id));
 

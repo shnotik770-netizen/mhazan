@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, todayIso } from "@/lib/format";
 
 type DayEntry = { runningBalance: number };
 
@@ -15,7 +15,7 @@ export function ForecastDayLookup({
   rows: [string, DayEntry][];
   startingBalance: number;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   const [date, setDate] = useState(today);
 
   let balance = startingBalance;

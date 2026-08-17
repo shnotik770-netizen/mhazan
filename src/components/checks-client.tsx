@@ -15,7 +15,7 @@ import {
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { MiniCalculator } from "@/components/mini-calculator";
 import { SearchableSelect } from "@/components/searchable-select";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, toLocalISODate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -418,7 +418,7 @@ const SPREAD_ROUND_UNIT = 5;
 function addMonths(iso: string, months: number): string {
   const d = new Date(iso + "T00:00:00");
   d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+  return toLocalISODate(d);
 }
 
 function computeAutoSpreadAmounts(total: number, count: number): number[] {
@@ -613,16 +613,17 @@ export function IssueCheckRow({
               value={row.date}
               onChange={(e) => {
                 const value = e.target.value;
-                setSpreadRows((prev) =>
-                  prev.map((r, idx) => {
-                    if (idx === i) return { ...r, date: value };
-                    // Setting the first payment's date fills in the rest of
-                    // the series a month apart each, as a starting point —
-                    // every row stays freely editable afterward.
-                    if (i === 0 && value) return { ...r, date: addMonths(value, idx) };
-                    return r;
-                  }),
-                );
+                setSpreadRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, date: value } : r)));
+              }}
+              onBlur={(e) => {
+                const value = e.target.value;
+                // Cascading into the rest of the series only happens once
+                // the first payment's date is actually finished (on blur),
+                // not on every keystroke while it's still being typed —
+                // every row stays freely editable afterward regardless.
+                if (i === 0 && value) {
+                  setSpreadRows((prev) => prev.map((r, idx) => (idx === 0 ? r : { ...r, date: addMonths(value, idx) })));
+                }
               }}
               className="rounded border border-border bg-transparent px-1 py-0.5 text-xs"
             />

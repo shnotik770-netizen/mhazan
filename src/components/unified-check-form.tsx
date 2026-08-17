@@ -7,6 +7,7 @@ import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { MiniCalculator } from "@/components/mini-calculator";
 import { SearchableSelect } from "@/components/searchable-select";
 import { Modal } from "@/components/modal";
+import { toLocalISODate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -28,7 +29,7 @@ function blankRow(): Row {
 function addMonths(iso: string, months: number): string {
   const d = new Date(iso + "T00:00:00");
   d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+  return toLocalISODate(d);
 }
 
 // A single button/flow for issuing a check or transfer that covers three
