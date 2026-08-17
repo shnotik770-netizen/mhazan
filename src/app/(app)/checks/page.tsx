@@ -200,12 +200,16 @@ export default async function ChecksPage({
 
       {isAdmin && (
         <div className="card p-4">
+          <h2 className="font-semibold mb-1">צ׳קים והעברות שהגיע תאריכם ולא נפרעו</h2>
+          <p className="text-xs text-muted mb-2">
+            כל צ׳ק/העברה עם תאריך פירעון שעבר (או שווה לתאריך שנבחר) וסטטוס עדיין &quot;לא נפרע&quot;.
+          </p>
           <form className="flex flex-wrap items-end gap-3 mb-3" method="get">
             <input type="hidden" name="dept" value={deptFilter} />
             <input type="hidden" name="bank" value={bankFilter} />
             <div>
               <label className="block text-sm font-medium mb-1">
-                צ׳קים / העברות שהיו אמורים להתבצע עד תאריך
+                בדוק לפי תאריך אחר (במקום היום)
               </label>
               <input
                 type="date"
