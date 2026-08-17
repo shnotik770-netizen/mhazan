@@ -251,16 +251,27 @@ export function IssuanceQueueTable({
     );
   }
 
-  // "דלג על מספר (צ׳ק תקול)": a real physical check blank right after this
-  // row got ruined — insert a marker that still consumes the next number
-  // (unlike an unchecked row) so the rest of the sequence lines up with
-  // the actual numbered blanks, and record it as a cancelled check on
-  // submit for the audit trail.
+  // "דלג על מספר (צ׳ק תקול)": the physical check blank meant for THIS row
+  // got ruined — insert a marker right before it that consumes this row's
+  // number instead (unlike an unchecked row, which consumes none), bumping
+  // this row and everything after it forward by one so the sequence still
+  // lines up with the actual numbered blanks. Recorded as a cancelled check
+  // on submit for the audit trail.
   function insertSkipAfter(idx: number) {
     setQuickRows((prev) => {
       const bankAccountId = prev[idx]?.bankAccountId || prev.find((r) => !r.isSkip)?.bankAccountId || "";
+      const anchorIdx = prev.findIndex((r) => r.checkNumber.trim() !== "" && !Number.isNaN(Number(r.checkNumber)));
+      const skipRow = blankSkipRow(bankAccountId);
       const next = [...prev];
-      next.splice(idx + 1, 0, blankSkipRow(bankAccountId));
+      if (idx === anchorIdx) {
+        // The row being skipped currently holds the starting number typed
+        // by the admin — hand it to the skip marker so it stays the anchor
+        // recomputeSequence cascades forward from, instead of stranding it
+        // with no number ahead of the (still-empty) real row.
+        skipRow.checkNumber = next[idx].checkNumber;
+        next[idx] = { ...next[idx], checkNumber: "" };
+      }
+      next.splice(idx, 0, skipRow);
       return recomputeSequence(next);
     });
   }

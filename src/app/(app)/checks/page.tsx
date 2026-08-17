@@ -12,6 +12,7 @@ import { BankReconciliationPanel } from "@/components/bank-reconciliation-client
 import { ChecksFilterBar } from "@/components/checks-filter-bar";
 import {
   AllChecksTable,
+  CollapsibleSection,
   IssuedChecksTable,
   OverdueChecksTable,
   OverdueTransfersTable,
@@ -201,190 +202,215 @@ export default async function ChecksPage({
 
       {isAdmin && (
         <div className="card p-4">
-          <h2 className="font-semibold mb-1">צ׳קים והעברות שהגיע תאריכם ולא נפרעו</h2>
-          <p className="text-xs text-muted mb-2">
-            כל צ׳ק/העברה עם תאריך פירעון שעבר (או שווה לתאריך שנבחר) וסטטוס עדיין &quot;לא נפרע&quot;.
-          </p>
-          <form className="flex flex-wrap items-end gap-3 mb-3" method="get">
-            <input type="hidden" name="dept" value={deptFilter} />
-            <input type="hidden" name="bank" value={bankFilter} />
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                בדוק לפי תאריך אחר (במקום היום)
-              </label>
-              <input
-                type="date"
-                name="asOf"
-                defaultValue={asOf}
-                className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+          <CollapsibleSection title={<h2 className="font-semibold">צ׳קים והעברות שהגיע תאריכם ולא נפרעו</h2>}>
+            <p className="text-xs text-muted mb-2">
+              כל צ׳ק/העברה עם תאריך פירעון שעבר (או שווה לתאריך שנבחר) וסטטוס עדיין &quot;לא נפרע&quot;.
+            </p>
+            <form className="flex flex-wrap items-end gap-3 mb-3" method="get">
+              <input type="hidden" name="dept" value={deptFilter} />
+              <input type="hidden" name="bank" value={bankFilter} />
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  בדוק לפי תאריך אחר (במקום היום)
+                </label>
+                <input
+                  type="date"
+                  name="asOf"
+                  defaultValue={asOf}
+                  className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+                />
+              </div>
+              <button type="submit" className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold">
+                סנן
+              </button>
+            </form>
+
+            {overdueTransfers.length > 0 && (
+              <OverdueTransfersTable
+                rows={
+                  overdueTransfers as unknown as {
+                    id: string;
+                    payee: string;
+                    amount: number;
+                    due_date: string;
+                    departments: { name: string } | null;
+                    bank_accounts: { bank_name: string; account_number: string } | null;
+                  }[]
+                }
               />
-            </div>
-            <button type="submit" className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold">
-              סנן
-            </button>
-          </form>
+            )}
 
-          {overdueTransfers.length > 0 && (
-            <OverdueTransfersTable
-              rows={overdueTransfers as unknown as { id: string; payee: string; amount: number; due_date: string; departments: { name: string } | null }[]}
-            />
-          )}
+            {overdueChecks.length > 0 && (
+              <OverdueChecksTable
+                rows={
+                  overdueChecks as unknown as {
+                    id: string;
+                    payee: string;
+                    check_number: string | null;
+                    amount: number;
+                    due_date: string;
+                    departments: { name: string } | null;
+                    bank_accounts: { bank_name: string; account_number: string } | null;
+                  }[]
+                }
+              />
+            )}
 
-          {overdueChecks.length > 0 && (
-            <OverdueChecksTable
-              rows={
-                overdueChecks as unknown as {
-                  id: string;
-                  payee: string;
-                  check_number: string | null;
-                  amount: number;
-                  due_date: string;
-                  departments: { name: string } | null;
-                }[]
-              }
-            />
-          )}
-
-          {overdueTransfers.length === 0 && overdueChecks.length === 0 && (
-            <p className="text-sm text-muted">אין צ׳קים/העברות שטרם אושרו עד התאריך שנבחר</p>
-          )}
+            {overdueTransfers.length === 0 && overdueChecks.length === 0 && (
+              <p className="text-sm text-muted">אין צ׳קים/העברות שטרם אושרו עד התאריך שנבחר</p>
+            )}
+          </CollapsibleSection>
         </div>
       )}
 
       {sortedNeedingIssuance.length > 0 && isAdmin && (
         <div className="card p-4 border-warning/40">
-          <h2 className="font-semibold mb-1">
-            ⚠ {sortedNeedingIssuance.length} צ׳קים להנפקה (יש להם תאריך, חסר מספר צ׳ק)
-          </h2>
-          <p className="text-xs text-muted mb-2">
-            ממוין לפי תאריך הזנה, עם קיבוץ של אותו ספק יחד. ניתן לסמן כמה שורות ולמזג לתשלום אחד או לקבץ לפריסה.
-          </p>
-          <IssuanceQueueTable
-            rows={sortedNeedingIssuance}
-            departments={departments ?? []}
-            allocationsByCheck={allocationsByCheck}
-          />
+          <CollapsibleSection
+            title={
+              <h2 className="font-semibold">
+                ⚠ {sortedNeedingIssuance.length} צ׳קים להנפקה (יש להם תאריך, חסר מספר צ׳ק)
+              </h2>
+            }
+          >
+            <p className="text-xs text-muted mb-2">
+              ממוין לפי תאריך הזנה, עם קיבוץ של אותו ספק יחד. ניתן לסמן כמה שורות ולמזג לתשלום אחד או לקבץ לפריסה.
+            </p>
+            <IssuanceQueueTable
+              rows={sortedNeedingIssuance}
+              departments={departments ?? []}
+              allocationsByCheck={allocationsByCheck}
+            />
+          </CollapsibleSection>
         </div>
       )}
 
       {filteredPendingApproval.length > 0 && (
         <div className="card p-4">
-          <h2 className="font-semibold mb-1">דרישות תשלום ממתינות לאישור (לא משפיעות על התחזית)</h2>
-          {isAdmin && (
-            <p className="text-xs text-muted mb-2">
-              קביעת תאריך כאן מאשרת את הבקשה. עבור צ׳ק ללא מספר היא תעבור למסך &quot;צ׳קים להנפקה&quot; למעלה; עבור
-              העברה, או צ׳ק עם מספר, היא תמתין לביצוע בתאריך שנקבע.
-            </p>
-          )}
-          <PendingApprovalTable rows={filteredPendingApproval} isAdmin={isAdmin} allocationsByCheck={allocationsByCheck} />
+          <CollapsibleSection title={<h2 className="font-semibold">דרישות תשלום ממתינות לאישור (לא משפיעות על התחזית)</h2>}>
+            {isAdmin && (
+              <p className="text-xs text-muted mb-2">
+                קביעת תאריך כאן מאשרת את הבקשה. עבור צ׳ק ללא מספר היא תעבור למסך &quot;צ׳קים להנפקה&quot; למעלה; עבור
+                העברה, או צ׳ק עם מספר, היא תמתין לביצוע בתאריך שנקבע.
+              </p>
+            )}
+            <PendingApprovalTable rows={filteredPendingApproval} isAdmin={isAdmin} allocationsByCheck={allocationsByCheck} />
+          </CollapsibleSection>
         </div>
       )}
 
       {filteredIssued.length > 0 && isAdmin && (
         <div className="card p-4">
-          <h2 className="font-semibold mb-1">צ׳קים שהונפקו — עם מספר לתאריך</h2>
-          <IssuedChecksTable rows={filteredIssued} departments={departments ?? []} allocationsByCheck={allocationsByCheck} />
+          <CollapsibleSection title={<h2 className="font-semibold">צ׳קים שהונפקו — עם מספר לתאריך</h2>}>
+            <IssuedChecksTable rows={filteredIssued} departments={departments ?? []} allocationsByCheck={allocationsByCheck} />
+          </CollapsibleSection>
         </div>
       )}
 
       {filteredTransfersPendingExecution.length > 0 && isAdmin && (
         <div className="card p-4">
-          <h2 className="font-semibold mb-1">העברות שאושרו עם תאריך — ועוד לא שולמו</h2>
-          <TransfersPendingExecutionTable
-            rows={filteredTransfersPendingExecution}
-            departments={departments ?? []}
-            allocationsByCheck={allocationsByCheck}
-          />
+          <CollapsibleSection title={<h2 className="font-semibold">העברות שאושרו עם תאריך — ועוד לא שולמו</h2>}>
+            <TransfersPendingExecutionTable
+              rows={filteredTransfersPendingExecution}
+              departments={departments ?? []}
+              allocationsByCheck={allocationsByCheck}
+            />
+          </CollapsibleSection>
         </div>
       )}
 
       {(pendingChecks ?? []).length > 0 && isAdmin && (
         <div className="card p-4 border-warning/40">
-          <h2 className="font-semibold mb-1">
-            ⚠ ישנם {pendingChecks!.length} צ׳קים הדורשים סיווג מחלקה
-          </h2>
-          <p className="text-sm text-muted mb-3">
-            עד לסיווג, צ׳קים אלו מחושבים במאזן הכללי תחת &quot;הוצאות כלליות / לא מסווגות&quot;.
-          </p>
-          <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>מס׳ צ׳ק</th>
-                <th>מוטב</th>
-                <th>סכום</th>
-                <th>תאריך פירעון</th>
-                <th>חשבון</th>
-                <th>סיווג</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pendingChecks!.map((c) => (
-                <tr key={c.id!}>
-                  <td>{c.check_number}</td>
-                  <td>{c.payee}</td>
-                  <td>{formatCurrency(Number(c.amount))}</td>
-                  <td>{c.due_date ? formatDate(c.due_date) : "—"}</td>
-                  <td>
-                    {c.bank_name} ({c.account_number})
-                  </td>
-                  <td>
-                    <ClassifyCheckRow checkId={c.id!} departments={departments ?? []} categories={categories ?? []} />
-                  </td>
+          <CollapsibleSection
+            title={<h2 className="font-semibold">⚠ ישנם {pendingChecks!.length} צ׳קים הדורשים סיווג מחלקה</h2>}
+          >
+            <p className="text-sm text-muted mb-3">
+              עד לסיווג, צ׳קים אלו מחושבים במאזן הכללי תחת &quot;הוצאות כלליות / לא מסווגות&quot;.
+            </p>
+            <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>מס׳ צ׳ק</th>
+                  <th>מוטב</th>
+                  <th>סכום</th>
+                  <th>תאריך פירעון</th>
+                  <th>חשבון</th>
+                  <th>סיווג</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
+              </thead>
+              <tbody>
+                {pendingChecks!.map((c) => (
+                  <tr key={c.id!}>
+                    <td>{c.check_number}</td>
+                    <td>{c.payee}</td>
+                    <td>{formatCurrency(Number(c.amount))}</td>
+                    <td>{c.due_date ? formatDate(c.due_date) : "—"}</td>
+                    <td>
+                      {c.bank_name} ({c.account_number})
+                    </td>
+                    <td>
+                      <ClassifyCheckRow checkId={c.id!} departments={departments ?? []} categories={categories ?? []} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          </CollapsibleSection>
         </div>
       )}
 
       <div className="card p-4 overflow-x-auto">
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-          <h2 className="font-semibold">כל הצ׳קים וההעברות</h2>
-          <form className="flex items-center gap-2" method="get">
-            <input type="hidden" name="asOf" value={asOf} />
-            <input type="hidden" name="dept" value={deptFilter} />
-            <input type="hidden" name="bank" value={bankFilter} />
-            <select name="pm" defaultValue={pmFilter} className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm">
-              <option value="ALL">צ׳קים והעברות</option>
-              <option value="CHECK">צ׳קים בלבד</option>
-              <option value="TRANSFER">העברות בלבד</option>
-            </select>
-            <select name="st" defaultValue={stFilter} className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm">
-              <option value="ALL">כל הסטטוסים</option>
-              <option value="UNPAID">לא נפרע</option>
-              <option value="CLEARED">נפרע</option>
-              <option value="CANCELLED">בוטל</option>
-            </select>
-            <button type="submit" className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold">
-              סנן
-            </button>
-          </form>
-        </div>
-        <AllChecksTable
-          rows={
-            filteredChecks as unknown as {
-              id: string;
-              check_number: string | null;
-              payee: string;
-              amount: number;
-              due_date: string | null;
-              status: string;
-              payment_method: string;
-              department_id: string | null;
-              notes: string | null;
-              skip_department_ledger: boolean;
-              spread_id: string | null;
-              internal_beneficiary: string | null;
-              bank_accounts: { bank_name: string; account_number: string } | null;
-              departments: { name: string } | null;
-            }[]
+        <CollapsibleSection
+          title={
+            <div className="flex items-center justify-between flex-wrap gap-2 w-full">
+              <h2 className="font-semibold">כל הצ׳קים וההעברות</h2>
+              <form className="flex items-center gap-2" method="get">
+                <input type="hidden" name="asOf" value={asOf} />
+                <input type="hidden" name="dept" value={deptFilter} />
+                <input type="hidden" name="bank" value={bankFilter} />
+                <select name="pm" defaultValue={pmFilter} className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm">
+                  <option value="ALL">צ׳קים והעברות</option>
+                  <option value="CHECK">צ׳קים בלבד</option>
+                  <option value="TRANSFER">העברות בלבד</option>
+                </select>
+                <select name="st" defaultValue={stFilter} className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm">
+                  <option value="ALL">כל הסטטוסים</option>
+                  <option value="UNPAID">לא נפרע</option>
+                  <option value="CLEARED">נפרע</option>
+                  <option value="CANCELLED">בוטל</option>
+                </select>
+                <button type="submit" className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold">
+                  סנן
+                </button>
+              </form>
+            </div>
           }
-          isAdmin={isAdmin}
-          departments={departments ?? []}
-          allocationsByCheck={allocationsByCheck}
-        />
+        >
+          <AllChecksTable
+            rows={
+              filteredChecks as unknown as {
+                id: string;
+                check_number: string | null;
+                payee: string;
+                amount: number;
+                due_date: string | null;
+                status: string;
+                payment_method: string;
+                department_id: string | null;
+                notes: string | null;
+                skip_department_ledger: boolean;
+                spread_id: string | null;
+                internal_beneficiary: string | null;
+                bank_accounts: { bank_name: string; account_number: string } | null;
+                departments: { name: string } | null;
+              }[]
+            }
+            isAdmin={isAdmin}
+            departments={departments ?? []}
+            allocationsByCheck={allocationsByCheck}
+          />
+        </CollapsibleSection>
       </div>
     </div>
   );

@@ -185,15 +185,21 @@ table.data-table th {
   text-align: right;
   font-weight: 600;
   color: var(--muted);
-  padding: 0.5rem 0.75rem;
+  padding: 0.375rem 0.5rem;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 
+/* Cell text wraps instead of forcing white-space: nowrap — a handful of
+   long values (notes, split-department breakdowns) used to push every
+   column wide just to stay on one line. Wrapping them keeps columns
+   narrow and close together; short values still render on one line
+   naturally. */
 table.data-table td {
-  padding: 0.5rem 0.75rem;
+  padding: 0.375rem 0.5rem;
   border-bottom: 1px solid var(--border);
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 table.data-table tbody tr {

@@ -16,6 +16,46 @@ type Department = Tables<"departments">;
 
 type AllocationInfo = { departmentId: string; departmentName: string | null; amount: number };
 
+// Small chevron button at the header's edge that collapses/expands a
+// section's body — every section on the checks page uses this so a long
+// page with many tables can be folded down to just the headings.
+export function CollapsibleSection({
+  title,
+  defaultOpen = true,
+  children,
+}: {
+  title: React.ReactNode;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-2 min-w-0">{title}</div>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="shrink-0 rounded p-1 text-muted hover:text-foreground hover:bg-background"
+          aria-label={open ? "כווץ" : "הרחב"}
+          title={open ? "כווץ" : "הרחב"}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            className={`transition-transform duration-150 ${open ? "" : "-rotate-90"}`}
+          >
+            <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+      {open && children}
+    </div>
+  );
+}
+
 function matches(query: string, ...fields: (string | null | undefined)[]) {
   if (!query.trim()) return true;
   const q = query.trim().toLowerCase();
@@ -36,6 +76,40 @@ function groupByBank<T extends { bank_name: string | null; account_number: strin
     groups.set(key, list);
   }
   return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+// A fixed, high-contrast palette (not just the theme's --primary/--accent,
+// which would make every bank look the same) mapped deterministically by
+// bank label so the same account always gets the same color across every
+// section on the page, without storing a color anywhere.
+const BANK_COLORS = [
+  { dot: "bg-sky-500", border: "border-sky-500" },
+  { dot: "bg-amber-500", border: "border-amber-500" },
+  { dot: "bg-emerald-500", border: "border-emerald-500" },
+  { dot: "bg-rose-500", border: "border-rose-500" },
+  { dot: "bg-violet-500", border: "border-violet-500" },
+  { dot: "bg-teal-500", border: "border-teal-500" },
+  { dot: "bg-orange-500", border: "border-orange-500" },
+  { dot: "bg-pink-500", border: "border-pink-500" },
+];
+
+function bankColorFor(label: string) {
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
+  return BANK_COLORS[hash % BANK_COLORS.length];
+}
+
+// Heading for one bank-account group, shared by every grouped checks/
+// transfers table so the same bank reads with the same color dot + border
+// stripe everywhere on the page.
+function BankGroupHeading({ label, count, unit }: { label: string; count: number; unit: string }) {
+  const color = bankColorFor(label);
+  return (
+    <h3 className="flex items-center gap-2 text-sm font-semibold text-muted mb-1">
+      <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${color.dot}`} />
+      {label} — {count} {unit}
+    </h3>
+  );
 }
 
 function DepartmentCell({
@@ -152,6 +226,7 @@ type IssuedCheckRow = {
   payee: string | null;
   amount: number | null;
   due_date: string | null;
+  issued_at: string | null;
   department_id: string | null;
   department_name: string | null;
   bank_name: string | null;
@@ -182,10 +257,8 @@ export function IssuedChecksTable({
     <div>
       <SearchBox value={query} onChange={setQuery} placeholder="חיפוש לפי מוטב / מספר צ׳ק" />
       {grouped.map(([bankLabel, bankRows]) => (
-        <div key={bankLabel} className="mb-4">
-          <h3 className="text-sm font-semibold text-muted mb-1">
-            {bankLabel} — {bankRows.length} צ׳קים
-          </h3>
+        <div key={bankLabel} className={`mb-4 border-r-4 ${bankColorFor(bankLabel).border} pr-3`}>
+          <BankGroupHeading label={bankLabel} count={bankRows.length} unit="צ׳קים" />
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
@@ -193,7 +266,8 @@ export function IssuedChecksTable({
                   <th>מס׳ צ׳ק</th>
                   <th>מוטב</th>
                   <th>סכום</th>
-                  <th>תאריך</th>
+                  <th>תאריך פירעון</th>
+                  <th>תאריך הנפקה</th>
                   <th>מחלקה</th>
                   <th>סטטוס</th>
                   <th></th>
@@ -209,6 +283,7 @@ export function IssuedChecksTable({
                     </td>
                     <td>{formatCurrency(Number(c.amount))}</td>
                     <td>{c.due_date ? formatDate(c.due_date) : "—"}</td>
+                    <td>{c.issued_at ? formatDate(c.issued_at) : "—"}</td>
                     <td>
                       <DepartmentCell checkId={c.id!} departmentName={c.department_name} allocationsByCheck={allocationsByCheck} />
                     </td>
@@ -281,10 +356,8 @@ export function TransfersPendingExecutionTable({
     <div>
       <SearchBox value={query} onChange={setQuery} placeholder="חיפוש לפי מוטב" />
       {grouped.map(([bankLabel, bankRows]) => (
-        <div key={bankLabel} className="mb-4">
-          <h3 className="text-sm font-semibold text-muted mb-1">
-            {bankLabel} — {bankRows.length} העברות
-          </h3>
+        <div key={bankLabel} className={`mb-4 border-r-4 ${bankColorFor(bankLabel).border} pr-3`}>
+          <BankGroupHeading label={bankLabel} count={bankRows.length} unit="העברות" />
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
@@ -344,42 +417,62 @@ export function TransfersPendingExecutionTable({
   );
 }
 
-type OverdueTransferRow = { id: string; payee: string; amount: number; due_date: string; departments: { name: string } | null };
+type OverdueTransferRow = {
+  id: string;
+  payee: string;
+  amount: number;
+  due_date: string;
+  departments: { name: string } | null;
+  bank_accounts: { bank_name: string; account_number: string } | null;
+};
 
+// Grouped by bank account, same as every other checks/transfers section —
+// each group gets a colored dot + border stripe (bankColorFor) so it's
+// visually obvious at a glance which bank a batch of overdue items belongs
+// to, especially important here since these are unresolved/overdue.
 export function OverdueTransfersTable({ rows }: { rows: OverdueTransferRow[] }) {
   const [query, setQuery] = useState("");
   const filtered = rows.filter((r) => matches(query, r.payee));
+  const grouped = groupByBank(filtered.map((r) => ({ ...r, bank_name: r.bank_accounts?.bank_name ?? null, account_number: r.bank_accounts?.account_number ?? null })));
 
   return (
-    <div className="mb-4 overflow-x-auto">
+    <div className="mb-4">
       <h2 className="font-semibold mb-1">⚠ {rows.length} העברות שטרם אושרו כבוצעו</h2>
       <SearchBox value={query} onChange={setQuery} placeholder="חיפוש לפי מוטב" />
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>מוטב</th>
-            <th>סכום</th>
-            <th>תאריך</th>
-            <th>מחלקה</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((row) => (
-            <tr key={row.id}>
-              <td>
-                <PayeeLink payee={row.payee} />
-              </td>
-              <td>{formatCurrency(Number(row.amount))}</td>
-              <td>{formatDate(row.due_date)}</td>
-              <td>{row.departments?.name ?? "בהמתנה"}</td>
-              <td>
-                <VerifyTransferButton checkId={row.id} label="אשר שההעברה בוצעה" captureInternalBeneficiary />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {grouped.map(([bankLabel, bankRows]) => (
+        <div key={bankLabel} className={`mb-3 border-r-4 ${bankColorFor(bankLabel).border} pr-3`}>
+          <BankGroupHeading label={bankLabel} count={bankRows.length} unit="העברות" />
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>מוטב</th>
+                  <th>סכום</th>
+                  <th>תאריך</th>
+                  <th>מחלקה</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {bankRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <PayeeLink payee={row.payee} />
+                    </td>
+                    <td>{formatCurrency(Number(row.amount))}</td>
+                    <td>{formatDate(row.due_date)}</td>
+                    <td>{row.departments?.name ?? "בהמתנה"}</td>
+                    <td>
+                      <VerifyTransferButton checkId={row.id} label="אשר שההעברה בוצעה" captureInternalBeneficiary />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+      {filtered.length === 0 && <p className="text-center text-muted py-4">אין תוצאות</p>}
     </div>
   );
 }
@@ -451,7 +544,7 @@ export function AllChecksTable({
               </td>
               <td>
                 <DepartmentCell checkId={row.id} departmentName={row.departments?.name ?? null} allocationsByCheck={allocationsByCheck} />
-                {row.skip_department_ledger && <span className="badge bg-background text-muted mr-1">חוץ מהמאזן הפנימי</span>}
+                {row.skip_department_ledger && <span className="badge bg-background text-muted mr-1">חישוב ישן</span>}
               </td>
               <td>
                 <CheckStatusControls checkId={row.id} status={row.status} paymentMethod={row.payment_method} />
@@ -500,44 +593,54 @@ type OverdueCheckRow = {
   amount: number;
   due_date: string;
   departments: { name: string } | null;
+  bank_accounts: { bank_name: string; account_number: string } | null;
 };
 
 export function OverdueChecksTable({ rows }: { rows: OverdueCheckRow[] }) {
   const [query, setQuery] = useState("");
   const filtered = rows.filter((r) => matches(query, r.payee, r.check_number));
+  const grouped = groupByBank(filtered.map((r) => ({ ...r, bank_name: r.bank_accounts?.bank_name ?? null, account_number: r.bank_accounts?.account_number ?? null })));
 
   return (
-    <div className="overflow-x-auto">
+    <div>
       <h2 className="font-semibold mb-1">⚠ {rows.length} צ׳קים שטרם אושרו כנפרעו</h2>
       <SearchBox value={query} onChange={setQuery} placeholder="חיפוש לפי מוטב / מספר צ׳ק" />
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>מוטב</th>
-            <th>מס׳ צ׳ק</th>
-            <th>סכום</th>
-            <th>תאריך</th>
-            <th>מחלקה</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((row) => (
-            <tr key={row.id}>
-              <td>
-                <PayeeLink payee={row.payee} />
-              </td>
-              <td>{row.check_number ?? "—"}</td>
-              <td>{formatCurrency(Number(row.amount))}</td>
-              <td>{formatDate(row.due_date)}</td>
-              <td>{row.departments?.name ?? "בהמתנה"}</td>
-              <td>
-                <VerifyTransferButton checkId={row.id} label="סמן כנפרע" />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {grouped.map(([bankLabel, bankRows]) => (
+        <div key={bankLabel} className={`mb-3 border-r-4 ${bankColorFor(bankLabel).border} pr-3`}>
+          <BankGroupHeading label={bankLabel} count={bankRows.length} unit="צ׳קים" />
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>מוטב</th>
+                  <th>מס׳ צ׳ק</th>
+                  <th>סכום</th>
+                  <th>תאריך</th>
+                  <th>מחלקה</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {bankRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <PayeeLink payee={row.payee} />
+                    </td>
+                    <td>{row.check_number ?? "—"}</td>
+                    <td>{formatCurrency(Number(row.amount))}</td>
+                    <td>{formatDate(row.due_date)}</td>
+                    <td>{row.departments?.name ?? "בהמתנה"}</td>
+                    <td>
+                      <VerifyTransferButton checkId={row.id} label="סמן כנפרע" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+      {filtered.length === 0 && <p className="text-center text-muted py-4">אין תוצאות</p>}
     </div>
   );
 }

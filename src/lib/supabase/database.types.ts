@@ -248,6 +248,7 @@ export type Database = {
           due_date: string | null
           id: string
           internal_beneficiary: string | null
+          issued_at: string | null
           notes: string | null
           payee: string
           payment_method: string
@@ -269,6 +270,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           internal_beneficiary?: string | null
+          issued_at?: string | null
           notes?: string | null
           payee: string
           payment_method?: string
@@ -290,6 +292,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           internal_beneficiary?: string | null
+          issued_at?: string | null
           notes?: string | null
           payee?: string
           payment_method?: string
@@ -884,6 +887,7 @@ export type Database = {
           due_date: string | null
           id: string | null
           internal_beneficiary: string | null
+          issued_at: string | null
           notes: string | null
           payee: string | null
           payment_method: string | null

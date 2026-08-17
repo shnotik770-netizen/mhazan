@@ -74,6 +74,7 @@ export async function createCheck(input: {
       amount: input.amount,
       due_date: input.dueDate || null,
       check_number: input.checkNumber || null,
+      issued_at: input.checkNumber ? new Date().toISOString() : null,
       department_id: isSplit ? null : input.departmentId,
       category_id: input.categoryId,
       internal_beneficiary: input.internalBeneficiary || null,
@@ -163,6 +164,7 @@ export async function issueCheck(
       check_number: input.checkNumber || null,
       due_date: input.dueDate || null,
       ...(input.paymentMethod ? { payment_method: input.paymentMethod } : {}),
+      ...(input.checkNumber ? { issued_at: new Date().toISOString() } : {}),
       department_id: isSplit ? null : undefined,
       // Reaching this action at all means a finance admin approved it —
       // whether this is the first-time approval of a dept-manager request
@@ -295,6 +297,7 @@ export async function createPaymentSpread(input: {
         amount: row.amount,
         due_date: row.date || null,
         check_number: row.checkNumber || null,
+        issued_at: row.checkNumber ? new Date().toISOString() : null,
         department_id: isSplit ? null : row.departmentId,
         internal_beneficiary: input.internalBeneficiary || null,
         spread_id: spread.id,
@@ -348,6 +351,7 @@ export async function pasteExistingChecks(
       payee: r.payee,
       amount: r.amount,
       due_date: r.date || null,
+      issued_at: r.checkNumber ? new Date().toISOString() : null,
       status: r.status,
       department_id: r.departmentId,
       skip_department_ledger: !r.includeInDepartmentLedger,
@@ -506,7 +510,10 @@ export async function bulkAssignCheckNumbers(
       outcomes.push({ checkId: a.checkId, success: false, reason: "חסר מספר צ׳ק" });
       continue;
     }
-    const { error } = await supabase.from("checks").update({ check_number: checkNumber }).eq("id", a.checkId);
+    const { error } = await supabase
+      .from("checks")
+      .update({ check_number: checkNumber, issued_at: new Date().toISOString() })
+      .eq("id", a.checkId);
     outcomes.push({ checkId: a.checkId, success: !error, reason: error?.message });
   }
 
@@ -540,6 +547,7 @@ export async function recordCancelledCheckNumber(
     payee: "דילוג — צ׳ק תקול",
     amount: 1,
     check_number: trimmed,
+    issued_at: new Date().toISOString(),
     status: "CANCELLED",
     department_id: null,
     notes: "מספר צ׳ק שדולג (פגום) בהנפקה מהירה",
@@ -1045,6 +1053,9 @@ export async function updateCheck(
   const supabase = await createClient();
   const isSplit = (input.allocations ?? []).some((a) => a.departmentId && a.amount > 0);
 
+  const { data: existing } = await supabase.from("checks").select("check_number").eq("id", checkId).single();
+  const justNumbered = !existing?.check_number && !!input.checkNumber;
+
   const { error } = await supabase
     .from("checks")
     .update({
@@ -1056,6 +1067,7 @@ export async function updateCheck(
       notes: input.notes,
       ...(input.categoryId !== undefined ? { category_id: input.categoryId || null } : {}),
       ...(input.paymentMethod ? { payment_method: input.paymentMethod } : {}),
+      ...(justNumbered ? { issued_at: new Date().toISOString() } : {}),
     })
     .eq("id", checkId);
   if (error) {
