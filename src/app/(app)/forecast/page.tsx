@@ -76,6 +76,37 @@ export default async function ForecastPage({
     return [...byDate.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
   })();
 
+  // One box per month covered by the horizon: that month's forecasted
+  // income/expenses, plus the balance it closes with — starting from the
+  // account's current balance for the present month, or carried forward
+  // from the previous month's closing balance for months further out.
+  const monthlyCards =
+    mode === "bank" && selectedAccount
+      ? (() => {
+          const startBalance = Number(selectedAccount.current_balance);
+          const months: string[] = [];
+          const cursor = new Date();
+          cursor.setDate(1);
+          const horizonEnd = new Date();
+          horizonEnd.setDate(horizonEnd.getDate() + horizonDays);
+          while (cursor <= horizonEnd) {
+            months.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
+            cursor.setMonth(cursor.getMonth() + 1);
+          }
+
+          let openingBalance = startBalance;
+          return months.map((month) => {
+            const monthRows = dailyBreakdown.filter(([date]) => date.startsWith(month));
+            const income = monthRows.reduce((sum, [, d]) => sum + d.income, 0);
+            const expense = monthRows.reduce((sum, [, d]) => sum + d.checks + d.transfers + d.recurring, 0);
+            const opening = openingBalance;
+            const closing = monthRows.length > 0 ? monthRows[monthRows.length - 1][1].runningBalance : opening;
+            openingBalance = closing;
+            return { month, opening, income, expense, closing };
+          });
+        })()
+      : [];
+
   // Actual recorded income per month, for the bank account's department —
   // a look back at real history alongside the forward-looking forecast.
   const monthlyIncome =
@@ -202,6 +233,32 @@ export default async function ForecastPage({
       )}
 
       {error && <div className="card p-4 bg-danger-bg text-danger text-sm">{error.message}</div>}
+
+      {mode === "bank" && monthlyCards.length > 0 && (
+        <div>
+          <h2 className="font-semibold mb-2">מצב חזוי לפי חודשים</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {monthlyCards.map((c) => (
+              <div key={c.month} className="card p-4 space-y-1">
+                <p className="font-semibold">
+                  {new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(
+                    new Date(`${c.month}-01T00:00:00`),
+                  )}
+                </p>
+                <p className="text-xs text-muted">
+                  יתרת פתיחה: <span className="font-medium text-foreground">{formatCurrency(c.opening)}</span>
+                </p>
+                <p className="text-xs text-success">הכנסות: {formatCurrency(c.income)}</p>
+                <p className="text-xs text-danger">הוצאות: {formatCurrency(Math.abs(c.expense))}</p>
+                <p className="text-sm font-semibold pt-1 border-t border-border">
+                  יתרת סגירה:{" "}
+                  <span className={c.closing < 0 ? "text-danger" : "text-success"}>{formatCurrency(c.closing)}</span>
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {mode === "bank" && monthlyIncomeRows.length > 0 && (
         <div className="card p-4 overflow-x-auto">
