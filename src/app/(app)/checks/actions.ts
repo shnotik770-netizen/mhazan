@@ -547,7 +547,15 @@ export async function createDeptExpenseRequestBatch(
 // account, same payment method) into a single check. Each original check's
 // amount becomes a department allocation on the merged check when they
 // belonged to different departments, so no department attribution is lost.
-export async function mergeChecks(checkIds: string[]): Promise<{ error?: string }> {
+//
+// When the selection mixes checks and transfers, pass forcePaymentMethod to
+// convert every selected row to that method first (after the caller has
+// warned the admin and gotten a choice) so the merge can go ahead instead
+// of just failing on the type mismatch.
+export async function mergeChecks(
+  checkIds: string[],
+  forcePaymentMethod?: "CHECK" | "TRANSFER",
+): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const supabase = await createClient();
   const {
@@ -555,6 +563,14 @@ export async function mergeChecks(checkIds: string[]): Promise<{ error?: string 
   } = await supabase.auth.getUser();
 
   if (checkIds.length < 2) return { error: "יש לבחור לפחות שני צ׳קים/העברות למיזוג" };
+
+  if (forcePaymentMethod) {
+    const { error: convertError } = await supabase
+      .from("checks")
+      .update({ payment_method: forcePaymentMethod, check_number: null })
+      .in("id", checkIds);
+    if (convertError) return { error: convertError.message };
+  }
 
   const [{ data: checks, error: fetchError }, { data: existingAllocations, error: allocFetchError }] =
     await Promise.all([

@@ -42,6 +42,7 @@ export function IssuanceQueueTable({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
+  const [choosingMergeMethod, setChoosingMergeMethod] = useState(false);
   const filteredRows = rows.filter((r) => {
     if (!query.trim()) return true;
     const q = query.trim().toLowerCase();
@@ -55,18 +56,34 @@ export function IssuanceQueueTable({
       else next.add(id);
       return next;
     });
+    setChoosingMergeMethod(false);
   }
 
-  function runMerge() {
+  function runMerge(forcePaymentMethod?: "CHECK" | "TRANSFER") {
     setError(null);
     startTransition(async () => {
-      const result = await mergeChecks([...selected]);
+      const result = await mergeChecks([...selected], forcePaymentMethod);
       if (result.error) setError(result.error);
       else {
         setSelected(new Set());
+        setChoosingMergeMethod(false);
         router.refresh();
       }
     });
+  }
+
+  // Merging requires every selected row to share the same payment method —
+  // rather than just failing on a mismatch, offer to convert the whole
+  // selection to checks or transfers first (with a clear warning) and then
+  // actually merge it.
+  function attemptMerge() {
+    const methods = new Set([...selected].map((id) => rows.find((r) => r.id === id)?.payment_method));
+    if (methods.size > 1) {
+      setError(null);
+      setChoosingMergeMethod(true);
+    } else {
+      runMerge();
+    }
   }
 
   function runGroup() {
@@ -83,12 +100,12 @@ export function IssuanceQueueTable({
 
   return (
     <div className="space-y-2">
-      {selected.size >= 2 && (
+      {selected.size >= 2 && !choosingMergeMethod && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-muted">{selected.size} נבחרו</span>
           <button
             disabled={isPending}
-            onClick={runMerge}
+            onClick={attemptMerge}
             className="rounded bg-primary text-primary-foreground text-xs px-3 py-1.5 disabled:opacity-50"
           >
             מזג לצ׳ק/העברה אחת
@@ -99,6 +116,35 @@ export function IssuanceQueueTable({
             className="rounded border border-border text-xs px-3 py-1.5 disabled:opacity-50"
           >
             קבץ לפריסה אחת
+          </button>
+          {error && <span className="text-xs text-danger">{error}</span>}
+        </div>
+      )}
+      {selected.size >= 2 && choosingMergeMethod && (
+        <div className="flex items-center gap-2 flex-wrap rounded-lg border border-warning/40 bg-warning-bg px-3 py-2">
+          <span className="text-xs text-warning font-medium">
+            הנבחרים הם מסוגים שונים (צ׳ק/העברה) — להמיר את כולם לפני המיזוג ל:
+          </span>
+          <button
+            disabled={isPending}
+            onClick={() => runMerge("CHECK")}
+            className="rounded bg-primary text-primary-foreground text-xs px-3 py-1.5 disabled:opacity-50"
+          >
+            צ׳ק ומיזוג
+          </button>
+          <button
+            disabled={isPending}
+            onClick={() => runMerge("TRANSFER")}
+            className="rounded bg-primary text-primary-foreground text-xs px-3 py-1.5 disabled:opacity-50"
+          >
+            העברה ומיזוג
+          </button>
+          <button
+            disabled={isPending}
+            onClick={() => setChoosingMergeMethod(false)}
+            className="text-xs text-muted"
+          >
+            ביטול
           </button>
           {error && <span className="text-xs text-danger">{error}</span>}
         </div>
