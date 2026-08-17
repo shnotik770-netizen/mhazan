@@ -21,7 +21,7 @@ export default async function ExpensesPage() {
   let checksQuery = supabase
     .from("checks")
     .select(
-      "id, due_date, amount, payee, notes, status, payment_method, check_number, department_id, category_id, bank_account_id, departments(name), categories(name), bank_accounts(name)",
+      "id, due_date, amount, payee, notes, status, payment_method, check_number, department_id, category_id, bank_account_id, departments(name), categories(name), bank_accounts(bank_name, account_number)",
     )
     .not("due_date", "is", null)
     .neq("status", "CANCELLED")
@@ -76,7 +76,7 @@ export default async function ExpensesPage() {
         category_id: string | null;
         departments: { name: string } | null;
         categories: { name: string } | null;
-        bank_accounts: { name: string } | null;
+        bank_accounts: { bank_name: string; account_number: string } | null;
       };
       return {
         id: row.id,
@@ -91,7 +91,7 @@ export default async function ExpensesPage() {
         departmentName: row.departments?.name ?? null,
         categoryId: row.category_id,
         categoryName: row.categories?.name ?? null,
-        bankAccountName: row.bank_accounts?.name ?? null,
+        bankAccountName: row.bank_accounts ? `${row.bank_accounts.bank_name} (${row.bank_accounts.account_number})` : null,
         status: row.status,
         checkNumber: row.check_number,
         paymentMethod: row.payment_method,

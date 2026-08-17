@@ -77,7 +77,7 @@ function InlineDueDateCell({ checkId, dueDate }: { checkId: string; dueDate: str
   );
 }
 
-type QuickRow = { id: string; payee: string; dueDate: string; checkNumber: string; include: boolean };
+type QuickRow = { id: string; payee: string; amount: number; dueDate: string; checkNumber: string; include: boolean };
 
 // Setting one row's number mid-run renumbers every row AFTER it
 // sequentially (leaving earlier rows untouched) — the same "anchor point"
@@ -178,9 +178,18 @@ export function IssuanceQueueTable({
   }
 
   function openQuickIssuance() {
-    const sorted = [...eligibleForQuickIssuance].sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""));
+    // Same order the main table is already showing (grouped by payee,
+    // entry date) — not re-sorted by due date — so the two lists line up
+    // and "row 3 here" means the same check as "row 3 there".
     setQuickRows(
-      sorted.map((r) => ({ id: r.id!, payee: r.payee ?? "", dueDate: r.due_date ?? "", checkNumber: "", include: true })),
+      eligibleForQuickIssuance.map((r) => ({
+        id: r.id!,
+        payee: r.payee ?? "",
+        amount: Number(r.amount ?? 0),
+        dueDate: r.due_date ?? "",
+        checkNumber: "",
+        include: true,
+      })),
     );
     setQuickError(null);
     setQuickOpen(true);
@@ -382,6 +391,7 @@ export function IssuanceQueueTable({
                   <tr>
                     <th></th>
                     <th>מוטב</th>
+                    <th>סכום</th>
                     <th>תאריך</th>
                     <th>מספר צ׳ק</th>
                   </tr>
@@ -393,6 +403,7 @@ export function IssuanceQueueTable({
                         <input type="checkbox" checked={r.include} onChange={() => toggleQuickInclude(i)} />
                       </td>
                       <td className={r.include ? "" : "text-muted line-through"}>{r.payee}</td>
+                      <td className={r.include ? "" : "text-muted line-through"}>{formatCurrency(r.amount)}</td>
                       <td>{r.dueDate ? formatDate(r.dueDate) : "—"}</td>
                       <td>
                         <input
@@ -406,7 +417,7 @@ export function IssuanceQueueTable({
                   ))}
                   {quickRows.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="text-center text-muted py-4">
+                      <td colSpan={5} className="text-center text-muted py-4">
                         אין צ׳קים מתאימים
                       </td>
                     </tr>
