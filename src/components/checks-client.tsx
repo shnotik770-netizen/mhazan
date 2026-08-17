@@ -415,6 +415,12 @@ type SpreadDraftRow = {
 // total still matches exactly.
 const SPREAD_ROUND_UNIT = 5;
 
+function addMonths(iso: string, months: number): string {
+  const d = new Date(iso + "T00:00:00");
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
 function computeAutoSpreadAmounts(total: number, count: number): number[] {
   const n = Math.max(1, Math.floor(count) || 1);
   if (n === 1) return [Math.round(total * 100) / 100];
@@ -590,14 +596,27 @@ export function IssueCheckRow({
             לתשלום האחרון ({formatCurrency(lastAmount)}).
           </p>
         )}
+        <p className="text-xs text-muted">
+          קביעת תאריך לתשלום הראשון תמלא אוטומטית את שאר התשלומים בהמשך הסדרה (חודש אחרי חודש) — אפשר לשנות כל שורה בנפרד.
+        </p>
         {spreadRows.map((row, i) => (
           <div key={i} className="flex items-center gap-1">
             <input
               type="date"
               value={row.date}
-              onChange={(e) =>
-                setSpreadRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, date: e.target.value } : r)))
-              }
+              onChange={(e) => {
+                const value = e.target.value;
+                setSpreadRows((prev) =>
+                  prev.map((r, idx) => {
+                    if (idx === i) return { ...r, date: value };
+                    // Setting the first payment's date fills in the rest of
+                    // the series a month apart each, as a starting point —
+                    // every row stays freely editable afterward.
+                    if (i === 0 && value) return { ...r, date: addMonths(value, idx) };
+                    return r;
+                  }),
+                );
+              }}
               className="rounded border border-border bg-transparent px-1 py-0.5 text-xs"
             />
             <input
