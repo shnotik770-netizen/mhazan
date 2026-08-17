@@ -6,7 +6,13 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { SearchableSelect } from "@/components/searchable-select";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
-import { bulkAssignCheckDepartment, updateCheck } from "@/app/(app)/checks/actions";
+import {
+  bulkAssignCheckDepartment,
+  updateCheck,
+  groupChecksIntoSpread,
+  splitChecksAcrossDepartments,
+  type CheckAllocationInput,
+} from "@/app/(app)/checks/actions";
 import { updateManualEntry } from "@/app/(app)/manual-entries/actions";
 
 type ExpenseRow = {
@@ -49,6 +55,9 @@ export function ExpensesTable({
   const [bulkDepartmentId, setBulkDepartmentId] = useState("");
   const [bulkPending, startBulk] = useTransition();
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [groupPending, startGroup] = useTransition();
+  const [groupError, setGroupError] = useState<string | null>(null);
+  const [splitOpen, setSplitOpen] = useState(false);
   const [editRow, setEditRow] = useState<ExpenseRow | null>(null);
   const router = useRouter();
 
@@ -112,6 +121,23 @@ export function ExpensesTable({
     });
   }
 
+  const selectedRows = rows.filter((r) => selected.has(r.id));
+  const selectedTotal = selectedRows.reduce((sum, r) => sum + r.amount, 0);
+
+  function applyGroup() {
+    if (selected.size < 2) return;
+    setGroupError(null);
+    startGroup(async () => {
+      const result = await groupChecksIntoSpread([...selected]);
+      if (result.error) {
+        setGroupError(result.error);
+        return;
+      }
+      setSelected(new Set());
+      router.refresh();
+    });
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -156,10 +182,29 @@ export function ExpensesTable({
           >
             {bulkPending ? "מעדכן…" : "עדכן מחלקה לנבחרים"}
           </button>
+          <button
+            type="button"
+            disabled={selected.size < 2 || groupPending}
+            onClick={applyGroup}
+            className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+            title="מקבץ צ׳קים/העברות לאותו ספק תחת אותה פריסה, מבלי לשנות סכומים"
+          >
+            {groupPending ? "מקבץ…" : "קבץ כפריסה"}
+          </button>
+          <button
+            type="button"
+            disabled={selected.size < 2}
+            onClick={() => setSplitOpen(true)}
+            className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+            title="פיצול הסכום הכולל של הנבחרים בין כמה מחלקות"
+          >
+            חלוקה למחלקות מהסכום הכולל
+          </button>
           <button type="button" onClick={() => setSelected(new Set())} className="text-sm text-muted underline">
             בטל בחירה
           </button>
           {bulkError && <span className="text-sm text-danger">{bulkError}</span>}
+          {groupError && <span className="text-sm text-danger">{groupError}</span>}
         </div>
       )}
 
@@ -239,6 +284,139 @@ export function ExpensesTable({
           />
         </Modal>
       )}
+
+      {splitOpen && (
+        <Modal onClose={() => setSplitOpen(false)}>
+          <SplitAcrossDepartmentsForm
+            checkIds={[...selected]}
+            total={selectedTotal}
+            departments={departments}
+            onClose={() => setSplitOpen(false)}
+            onDone={() => {
+              setSelected(new Set());
+              setSplitOpen(false);
+              router.refresh();
+            }}
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function SplitAcrossDepartmentsForm({
+  checkIds,
+  total,
+  departments,
+  onClose,
+  onDone,
+}: {
+  checkIds: string[];
+  total: number;
+  departments: Option[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [rows, setRows] = useState<CheckAllocationInput[]>([
+    { departmentId: "", amount: 0 },
+    { departmentId: "", amount: 0 },
+  ]);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const allocated = rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  const remaining = Math.round((total - allocated) * 100) / 100;
+
+  function updateRow(idx: number, patch: Partial<CheckAllocationInput>) {
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  }
+
+  function addRow() {
+    setRows((prev) => [...prev, { departmentId: "", amount: 0 }]);
+  }
+
+  function removeRow(idx: number) {
+    setRows((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function save() {
+    const valid = rows.filter((r) => r.departmentId && r.amount > 0);
+    if (valid.length < 2) {
+      setError("יש להזין לפחות שתי מחלקות עם סכום");
+      return;
+    }
+    if (Math.abs(remaining) > 0.01) {
+      setError(`הסכום שהוזן (${allocated}) חייב להיות שווה לסכום הכולל של הנבחרים (${total})`);
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await splitChecksAcrossDepartments(checkIds, valid);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      onDone();
+    });
+  }
+
+  return (
+    <div className="card p-4 space-y-3">
+      <h2 className="font-bold">חלוקת {checkIds.length} צ׳קים/העברות למחלקות</h2>
+      <p className="text-sm text-muted">
+        הסכום הכולל של הנבחרים: <strong>{formatCurrency(total)}</strong> — יחולק בין המחלקות שתבחרו, גם אם זה חוצה בין
+        הצ׳קים/העברות עצמם.
+      </p>
+
+      <div className="space-y-2">
+        {rows.map((r, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <SearchableSelect
+              value={r.departmentId}
+              onChange={(id) => updateRow(i, { departmentId: id })}
+              options={departments.map((d) => ({ id: d.id, label: d.name }))}
+              placeholder="בחר מחלקה"
+              className="flex-1 rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+            />
+            <input
+              type="number"
+              value={r.amount || ""}
+              onChange={(e) => updateRow(i, { amount: Number(e.target.value) })}
+              placeholder="סכום"
+              className="w-32 rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+            />
+            {rows.length > 2 && (
+              <button type="button" onClick={() => removeRow(i)} className="text-sm text-danger">
+                הסר
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <button type="button" onClick={addRow} className="text-sm text-primary underline">
+        + הוספת מחלקה
+      </button>
+
+      <p className={`text-sm ${Math.abs(remaining) > 0.01 ? "text-warning" : "text-success"}`}>
+        {Math.abs(remaining) > 0.01 ? `נותר לחלק: ${formatCurrency(remaining)}` : "הסכום מאוזן ✓"}
+      </p>
+
+      {error && <p className="text-sm text-danger">{error}</p>}
+
+      <div className="flex items-center gap-2 justify-end">
+        <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm">
+          ביטול
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={isPending}
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+        >
+          {isPending ? "שומר…" : "שמירה"}
+        </button>
+      </div>
     </div>
   );
 }

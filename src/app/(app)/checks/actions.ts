@@ -404,6 +404,83 @@ export async function bulkAssignCheckDepartment(checkIds: string[], departmentId
   return { error: error?.message };
 }
 
+// Splits the combined total of several already-existing checks/transfers
+// (e.g. old checks being reviewed on /expenses) across multiple
+// departments, without changing how many checks there are or their
+// individual amounts. Distributes each department's target amount across
+// the selected checks in order (a "waterfall" fill), so a check whose
+// amount doesn't land exactly on a department boundary gets split via
+// check_allocations same as any other split check; a check that lands
+// entirely within one department's share just gets that department_id
+// directly, matching the single-department convention used everywhere
+// else. Replaces any existing department/allocation on the selected checks.
+export async function splitChecksAcrossDepartments(
+  checkIds: string[],
+  allocations: CheckAllocationInput[],
+): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const validAllocations = allocations.filter((a) => a.departmentId && a.amount > 0);
+  if (checkIds.length === 0) return { error: "יש לבחור צ׳קים/העברות" };
+  if (validAllocations.length < 2) return { error: "יש להזין לפחות שתי מחלקות עם סכום" };
+
+  const supabase = await createClient();
+  const { data: checks, error: fetchError } = await supabase
+    .from("checks")
+    .select("id, amount")
+    .in("id", checkIds)
+    .order("created_at");
+  if (fetchError) return { error: fetchError.message };
+  if (!checks || checks.length !== checkIds.length) return { error: "חלק מהצ׳קים לא נמצאו" };
+
+  const totalChecks = checks.reduce((sum, c) => sum + Number(c.amount), 0);
+  const totalAllocated = validAllocations.reduce((sum, a) => sum + a.amount, 0);
+  if (Math.abs(totalChecks - totalAllocated) > 0.01) {
+    return { error: `סכום החלוקה (${totalAllocated}) חייב להיות שווה לסכום הצ׳קים שנבחרו (${totalChecks})` };
+  }
+
+  const deptQueue = validAllocations.map((a) => ({ departmentId: a.departmentId, remaining: a.amount }));
+  let deptIdx = 0;
+  const rowsByCheck = new Map<string, { department_id: string; amount: number }[]>();
+
+  for (const check of checks) {
+    let remaining = Number(check.amount);
+    while (remaining > 0.001 && deptIdx < deptQueue.length) {
+      const dept = deptQueue[deptIdx];
+      const take = Math.min(remaining, dept.remaining);
+      if (take > 0.001) {
+        const list = rowsByCheck.get(check.id) ?? [];
+        list.push({ department_id: dept.departmentId, amount: Math.round(take * 100) / 100 });
+        rowsByCheck.set(check.id, list);
+        remaining -= take;
+        dept.remaining -= take;
+      }
+      if (dept.remaining <= 0.001) deptIdx += 1;
+    }
+  }
+
+  await supabase.from("check_allocations").delete().in("check_id", checkIds);
+
+  for (const [checkId, rows] of rowsByCheck.entries()) {
+    if (rows.length === 1) {
+      const { error } = await supabase
+        .from("checks")
+        .update({ department_id: rows[0].department_id })
+        .eq("id", checkId);
+      if (error) return { error: error.message };
+    } else {
+      const { error: clearError } = await supabase.from("checks").update({ department_id: null }).eq("id", checkId);
+      if (clearError) return { error: clearError.message };
+      const { error } = await supabase
+        .from("check_allocations")
+        .insert(rows.map((r) => ({ check_id: checkId, department_id: r.department_id, amount: r.amount })));
+      if (error) return { error: error.message };
+    }
+  }
+
+  revalidateCheckPaths();
+  return {};
+}
+
 export async function updateCheckStatus(
   checkId: string,
   status: "UNPAID" | "CLEARED" | "CANCELLED",
