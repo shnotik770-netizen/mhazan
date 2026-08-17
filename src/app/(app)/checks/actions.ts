@@ -514,6 +514,44 @@ export async function bulkAssignCheckNumbers(
   return { outcomes };
 }
 
+// Records a physical check number as burned/voided (e.g. torn or misprinted
+// while writing a "הנפקה מהירה" batch by hand) — a CANCELLED placeholder
+// check so the number is accounted for in the sequence/audit trail instead
+// of just silently missing, without being assigned to any real payment
+// request or counting toward any balance (CANCELLED checks are excluded
+// from every balance/forecast query already).
+export async function recordCancelledCheckNumber(
+  bankAccountId: string,
+  checkNumber: string,
+): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const trimmed = checkNumber.trim();
+  if (!bankAccountId) return { error: "לא נמצא חשבון בנק לצ׳ק המדולג" };
+  if (!trimmed) return { error: "חסר מספר צ׳ק לדילוג" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { error } = await supabase.from("checks").insert({
+    bank_account_id: bankAccountId,
+    payment_method: "CHECK",
+    payee: "דילוג — צ׳ק תקול",
+    amount: 1,
+    check_number: trimmed,
+    status: "CANCELLED",
+    department_id: null,
+    notes: "מספר צ׳ק שדולג (פגום) בהנפקה מהירה",
+    created_by: user?.id ?? null,
+    approved_at: new Date().toISOString(),
+    approved_by: user?.id ?? null,
+  });
+
+  revalidateCheckPaths();
+  return { error: error?.message };
+}
+
 // Lightweight single-field update for setting a due date directly on the
 // issuance-queue table — an admin who already knows the date but not yet
 // the check number shouldn't have to open the full "הנפק"/edit flow just

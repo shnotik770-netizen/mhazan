@@ -361,7 +361,7 @@ function SplitAcrossDepartmentsForm({
   }
 
   return (
-    <div className="card p-4 space-y-3">
+    <div className="card p-4 space-y-3 overflow-y-auto">
       <h2 className="font-bold">חלוקת {checkIds.length} צ׳קים/העברות למחלקות</h2>
       <p className="text-sm text-muted">
         הסכום הכולל של הנבחרים: <strong>{formatCurrency(total)}</strong> — יחולק בין המחלקות שתבחרו, גם אם זה חוצה בין
@@ -481,7 +481,7 @@ function EditExpenseForm({
   }
 
   return (
-    <div className="card p-4 space-y-3">
+    <div className="card p-4 space-y-3 overflow-y-auto">
       <h2 className="font-bold">עריכת {row.isCheck ? "צ׳ק / העברה" : "הוצאה ידנית"}</h2>
 
       {row.isCheck && (

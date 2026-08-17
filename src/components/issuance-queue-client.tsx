@@ -7,6 +7,7 @@ import {
   mergeChecks,
   updateCheckDueDate,
   bulkAssignCheckNumbers,
+  recordCancelledCheckNumber,
   type CheckAllocationInput,
 } from "@/app/(app)/checks/actions";
 import { EditDeleteCheckRow, IssueCheckRow } from "@/components/checks-client";
@@ -27,6 +28,7 @@ type QueueRow = {
   due_date: string | null;
   notes: string | null;
   created_at: string | null;
+  bank_account_id: string | null;
 };
 
 type AllocationInfo = { departmentId: string; departmentName: string | null; amount: number };
@@ -77,18 +79,51 @@ function InlineDueDateCell({ checkId, dueDate }: { checkId: string; dueDate: str
   );
 }
 
-type QuickRow = { id: string; payee: string; amount: number; dueDate: string; checkNumber: string; include: boolean };
+type QuickRow = {
+  id: string;
+  payee: string;
+  amount: number;
+  dueDate: string;
+  checkNumber: string;
+  include: boolean;
+  isSkip: boolean;
+  bankAccountId: string;
+};
 
-// Setting one row's number mid-run renumbers every row AFTER it
-// sequentially (leaving earlier rows untouched) — the same "anchor point"
-// pattern used for cascading spread dates elsewhere in the app.
-function renumberFrom(rows: QuickRow[], fromIdx: number, newValue: string): QuickRow[] {
-  const base = Number(newValue);
-  const isSequential = newValue.trim() !== "" && !Number.isNaN(base);
+let nextSkipKey = 1;
+
+function blankSkipRow(bankAccountId: string): QuickRow {
+  return {
+    id: `skip-${nextSkipKey++}`,
+    payee: "דילוג — צ׳ק תקול",
+    amount: 0,
+    dueDate: "",
+    checkNumber: "",
+    include: true,
+    isSkip: true,
+    bankAccountId,
+  };
+}
+
+// Recomputes sequential numbers forward from the first row that already
+// has one typed in (the "anchor") — rows before the anchor are untouched,
+// so a correction mid-list only renumbers what comes after it. A skip row
+// always consumes the next number (a real, physical check blank was
+// burned); an unchecked real row consumes none and shows no number at all
+// — its physical blank was never used, so nothing after it should skip a
+// number on its account.
+function recomputeSequence(rows: QuickRow[]): QuickRow[] {
+  const anchorIdx = rows.findIndex((r) => r.checkNumber.trim() !== "" && !Number.isNaN(Number(r.checkNumber)));
+  if (anchorIdx === -1) return rows;
+  let next = Number(rows[anchorIdx].checkNumber) + 1;
   return rows.map((r, i) => {
-    if (i < fromIdx) return r;
-    if (i === fromIdx) return { ...r, checkNumber: newValue };
-    return isSequential ? { ...r, checkNumber: String(base + (i - fromIdx)) } : r;
+    if (i <= anchorIdx) return r;
+    if (r.isSkip || r.include) {
+      const assigned = String(next);
+      next += 1;
+      return { ...r, checkNumber: assigned };
+    }
+    return { ...r, checkNumber: "" };
   });
 }
 
@@ -189,6 +224,8 @@ export function IssuanceQueueTable({
         dueDate: r.due_date ?? "",
         checkNumber: "",
         include: true,
+        isSkip: false,
+        bankAccountId: r.bank_account_id ?? "",
       })),
     );
     setQuickError(null);
@@ -196,32 +233,65 @@ export function IssuanceQueueTable({
   }
 
   function updateQuickNumber(idx: number, value: string) {
-    setQuickRows((prev) => renumberFrom(prev, idx, value));
+    setQuickRows((prev) => recomputeSequence(prev.map((r, i) => (i === idx ? { ...r, checkNumber: value } : r))));
   }
 
   function toggleQuickInclude(idx: number) {
-    setQuickRows((prev) => prev.map((r, i) => (i === idx ? { ...r, include: !r.include } : r)));
+    setQuickRows((prev) => recomputeSequence(prev.map((r, i) => (i === idx ? { ...r, include: !r.include } : r))));
   }
 
   // "עד כאן הונפק": everything before this row was already issued by hand
   // outside this run — uncheck this row and every row after it, leaving
-  // the earlier rows (already accounted for) as they were.
+  // the earlier rows (already accounted for) as they were. Unchecked rows
+  // consume no number (see recomputeSequence), so this also frees up the
+  // rest of the sequence instead of reserving it for nothing.
   function markIssuedFromHere(idx: number) {
-    setQuickRows((prev) => prev.map((r, i) => (i >= idx ? { ...r, include: false } : r)));
+    setQuickRows((prev) =>
+      recomputeSequence(prev.map((r, i) => (i >= idx && !r.isSkip ? { ...r, include: false } : r))),
+    );
+  }
+
+  // "דלג על מספר (צ׳ק תקול)": a real physical check blank right after this
+  // row got ruined — insert a marker that still consumes the next number
+  // (unlike an unchecked row) so the rest of the sequence lines up with
+  // the actual numbered blanks, and record it as a cancelled check on
+  // submit for the audit trail.
+  function insertSkipAfter(idx: number) {
+    setQuickRows((prev) => {
+      const bankAccountId = prev[idx]?.bankAccountId || prev.find((r) => !r.isSkip)?.bankAccountId || "";
+      const next = [...prev];
+      next.splice(idx + 1, 0, blankSkipRow(bankAccountId));
+      return recomputeSequence(next);
+    });
+  }
+
+  function removeSkipRow(idx: number) {
+    setQuickRows((prev) => recomputeSequence(prev.filter((_, i) => i !== idx)));
   }
 
   function submitQuickIssuance() {
-    const assignments = quickRows.filter((r) => r.include && r.checkNumber.trim()).map((r) => ({ checkId: r.id, checkNumber: r.checkNumber.trim() }));
-    if (assignments.length === 0) {
+    const assignments = quickRows
+      .filter((r) => !r.isSkip && r.include && r.checkNumber.trim())
+      .map((r) => ({ checkId: r.id, checkNumber: r.checkNumber.trim() }));
+    const skips = quickRows.filter((r) => r.isSkip && r.checkNumber.trim());
+    if (assignments.length === 0 && skips.length === 0) {
       setQuickError("יש להזין לפחות מספר צ׳ק אחד");
       return;
     }
     setQuickError(null);
     startQuickTransition(async () => {
-      const { outcomes } = await bulkAssignCheckNumbers(assignments);
-      const failed = outcomes.filter((o) => !o.success);
-      if (failed.length > 0) {
-        setQuickError(`${failed.length} מתוך ${assignments.length} נכשלו: ${failed.map((f) => f.reason).join("; ")}`);
+      const [assignResult, skipResults] = await Promise.all([
+        assignments.length > 0 ? bulkAssignCheckNumbers(assignments) : Promise.resolve({ outcomes: [] }),
+        Promise.all(skips.map((s) => recordCancelledCheckNumber(s.bankAccountId, s.checkNumber))),
+      ]);
+      const failed = assignResult.outcomes.filter((o) => !o.success);
+      const skipFailed = skipResults.filter((r) => r.error);
+      if (failed.length > 0 || skipFailed.length > 0) {
+        const parts = [
+          ...failed.map((f) => f.reason),
+          ...skipFailed.map((f) => f.error),
+        ];
+        setQuickError(`חלק מהפעולות נכשלו: ${parts.join("; ")}`);
       } else {
         setQuickOpen(false);
         setQuickRows([]);
@@ -381,69 +451,111 @@ export function IssuanceQueueTable({
 
       {quickOpen && (
         <Modal onClose={() => setQuickOpen(false)}>
-          <div className="card p-4 space-y-3">
-            <div className="flex items-center justify-between">
+          {/* flex-col h-full so the footer below can stay pinned while only
+              the row list scrolls — the submit button is reachable right
+              away, no matter how long the list or where you are in it. */}
+          <div className="card flex flex-col overflow-hidden min-h-0">
+            <div className="flex items-center justify-between p-4 pb-3 border-b border-border shrink-0">
               <h2 className="font-semibold">הנפקה מהירה — מספור רציף</h2>
               <button type="button" onClick={() => setQuickOpen(false)} className="text-sm text-muted">
                 סגור
               </button>
             </div>
-            <p className="text-xs text-muted">
-              כל הצ׳קים שכבר נקבע להם תאריך אך חסר מספר. הזנת מספר לצ׳ק הראשון תמלא אוטומטית מספור רציף לשאר; תיקון
-              מספר באמצע הרשימה ימספר מחדש רק את מה שאחריו.
-            </p>
-            <div className="overflow-x-auto">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th></th>
-                    <th>מוטב</th>
-                    <th>סכום</th>
-                    <th>תאריך</th>
-                    <th>מספר צ׳ק</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {quickRows.map((r, i) => (
-                    <tr key={r.id}>
-                      <td>
-                        <input type="checkbox" checked={r.include} onChange={() => toggleQuickInclude(i)} />
-                      </td>
-                      <td className={r.include ? "" : "text-muted line-through"}>{r.payee}</td>
-                      <td className={r.include ? "" : "text-muted line-through"}>{formatCurrency(r.amount)}</td>
-                      <td>{r.dueDate ? formatDate(r.dueDate) : "—"}</td>
-                      <td>
-                        <input
-                          value={r.checkNumber}
-                          onChange={(e) => updateQuickNumber(i, e.target.value)}
-                          disabled={!r.include}
-                          className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm disabled:opacity-50"
-                        />
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          onClick={() => markIssuedFromHere(i)}
-                          className="text-xs text-muted underline whitespace-nowrap"
-                          title="מבטל את הסימון משורה זו והלאה"
-                        >
-                          עד כאן הונפק
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {quickRows.length === 0 && (
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+              <p className="text-xs text-muted">
+                כל הצ׳קים שכבר נקבע להם תאריך אך חסר מספר. הזנת מספר לצ׳ק הראשון תמלא אוטומטית מספור רציף לשאר; תיקון
+                מספר באמצע הרשימה ימספר מחדש רק את מה שאחריו. ביטול סימון ה־V מוציא צ׳ק מההנפקה ולא מצמיד לו מספר כלל;
+                &quot;דלג על מספר&quot; שומר מספר לצ׳ק פגום שלא ינופק, כדי שהרצף יתאים לפנקס בפועל.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="data-table">
+                  <thead>
                     <tr>
-                      <td colSpan={6} className="text-center text-muted py-4">
-                        אין צ׳קים מתאימים
-                      </td>
+                      <th></th>
+                      <th>מוטב</th>
+                      <th>סכום</th>
+                      <th>תאריך</th>
+                      <th>מספר צ׳ק</th>
+                      <th></th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {quickRows.map((r, i) =>
+                      r.isSkip ? (
+                        <tr key={r.id} className="bg-warning-bg/40">
+                          <td></td>
+                          <td className="text-warning text-xs">דילוג — צ׳ק תקול (מבוטל)</td>
+                          <td>—</td>
+                          <td>—</td>
+                          <td>
+                            <input
+                              value={r.checkNumber}
+                              onChange={(e) => updateQuickNumber(i, e.target.value)}
+                              className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm"
+                            />
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              onClick={() => removeSkipRow(i)}
+                              className="text-xs text-danger underline whitespace-nowrap"
+                            >
+                              הסר דילוג
+                            </button>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={r.id}>
+                          <td>
+                            <input type="checkbox" checked={r.include} onChange={() => toggleQuickInclude(i)} />
+                          </td>
+                          <td className={r.include ? "" : "text-muted line-through"}>{r.payee}</td>
+                          <td className={r.include ? "" : "text-muted line-through"}>{formatCurrency(r.amount)}</td>
+                          <td>{r.dueDate ? formatDate(r.dueDate) : "—"}</td>
+                          <td>
+                            <input
+                              value={r.checkNumber}
+                              onChange={(e) => updateQuickNumber(i, e.target.value)}
+                              disabled={!r.include}
+                              placeholder={r.include ? "" : "לא ינופק"}
+                              className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm disabled:opacity-50"
+                            />
+                          </td>
+                          <td className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => markIssuedFromHere(i)}
+                              className="text-xs text-muted underline whitespace-nowrap"
+                              title="מבטל את הסימון משורה זו והלאה"
+                            >
+                              עד כאן הונפק
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => insertSkipAfter(i)}
+                              className="text-xs text-muted underline whitespace-nowrap"
+                              title="שומר את המספר הבא כפגום/מבוטל ולא מקצה אותו לאף דרישה"
+                            >
+                              דלג על מספר
+                            </button>
+                          </td>
+                        </tr>
+                      ),
+                    )}
+                    {quickRows.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="text-center text-muted py-4">
+                          אין צ׳קים מתאימים
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+
+            <div className="flex items-center gap-2 p-4 pt-3 border-t border-border shrink-0">
               <button
                 type="button"
                 disabled={quickPending}

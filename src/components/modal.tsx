@@ -19,13 +19,16 @@ export function Modal({ onClose, children }: { onClose: () => void; children: Re
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4" onClick={onClose}>
-      {/* Scrolls internally within a bounded height instead of relying on
-          the fixed-position backdrop to scroll — the latter is unreliable
-          on long content (mobile browsers in particular can get "stuck"
-          partway through instead of reaching the rest of the content). */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      {/* max-h-[85dvh] (not 100vh) leaves a deliberate safety margin below
+          the outer p-4 padding, and dvh (not vh) accounts for mobile
+          browser toolbars — a bare 100vh calc can end up taller than what
+          the fixed backdrop actually shows, clipping the bottom of the
+          content with no way to scroll to it. flex overflow-hidden on this
+          wrapper plus overflow-y-auto on the inner content area (not this
+          element) lets a caller pin a footer below the scrolling part. */}
       <div
-        className="w-full max-w-3xl my-8 max-h-[calc(100vh-4rem)] overflow-y-auto"
+        className="w-full max-w-3xl max-h-[85dvh] flex flex-col overflow-hidden rounded-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {children}
