@@ -45,7 +45,7 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold">דשבורד מוסדי מרכזי</h1>
+          <h1 className="text-2xl font-bold">דשבורד מוסדי מרכזי</h1>
           <p className="text-sm text-muted">
             שלום {user.profile.full_name ?? user.email} — סקירה כללית של המצב הפיננסי
           </p>
@@ -147,17 +147,23 @@ export default async function DashboardPage() {
       {myDepartments.length > 0 && <NewManualEntryForm departments={myDepartments} />}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card p-4">
+        <div className="card stat-card p-4 ps-5">
           <p className="text-sm text-muted mb-1">סה&quot;כ יתרת בנקים</p>
-          <p className="text-2xl font-bold">{formatCurrency(totalBalance)}</p>
+          <p className="text-2xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
+            {formatCurrency(totalBalance)}
+          </p>
         </div>
-        <div className="card p-4">
+        <div className="card stat-card p-4 ps-5">
           <p className="text-sm text-muted mb-1">חובות פנימיים פתוחים</p>
-          <p className="text-2xl font-bold">{ledgerBalances?.length ?? 0} זוגות מחלקות</p>
+          <p className="text-2xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
+            {ledgerBalances?.length ?? 0} זוגות מחלקות
+          </p>
         </div>
-        <div className="card p-4">
+        <div className="card stat-card p-4 ps-5">
           <p className="text-sm text-muted mb-1">פריטים בהמתנה לסיווג</p>
-          <p className="text-2xl font-bold">{totalPending}</p>
+          <p className="text-2xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
+            {totalPending}
+          </p>
         </div>
       </div>
 

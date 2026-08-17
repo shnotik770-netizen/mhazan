@@ -1,13 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f8fa;
-  --surface: #ffffff;
-  --foreground: #1a1d23;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --primary: #1d4ed8;
+  --background: #faf7f1;
+  --surface: #fffdf9;
+  --foreground: #211a12;
+  --muted: #8a7d6a;
+  --border: #e8dfd0;
+  --primary: #0e6b64;
   --primary-foreground: #ffffff;
+  --accent: #c1902c;
+  --accent-foreground: #241a04;
   --success: #15803d;
   --success-bg: #dcfce7;
   --danger: #b91c1c;
@@ -24,6 +26,8 @@
   --color-border: var(--border);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-success: var(--success);
   --color-success-bg: var(--success-bg);
   --color-danger: var(--danger);
@@ -31,17 +35,20 @@
   --color-warning: var(--warning);
   --color-warning-bg: var(--warning-bg);
   --font-sans: var(--font-heebo);
+  --font-display: var(--font-frank);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #101215;
-    --surface: #181b20;
-    --foreground: #e8eaed;
-    --muted: #9aa0aa;
-    --border: #2a2e35;
-    --primary: #5b8cf5;
-    --primary-foreground: #0b1220;
+    --background: #0d1615;
+    --surface: #131f1d;
+    --foreground: #ecefec;
+    --muted: #93a29c;
+    --border: #24322f;
+    --primary: #4fd1c0;
+    --primary-foreground: #06201b;
+    --accent: #e0b24a;
+    --accent-foreground: #241a04;
     --success: #4ade80;
     --success-bg: #123a24;
     --danger: #f87171;
@@ -51,15 +58,86 @@
   }
 }
 
-body {
-  background: var(--background);
+* {
+  scrollbar-color: var(--muted) transparent;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
   color: var(--foreground);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 100% -10%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 55%),
+    var(--background);
+  color: var(--foreground);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display), var(--font-sans), serif;
+  letter-spacing: -0.01em;
 }
 
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 0.75rem;
+  border-radius: 1rem;
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--foreground) 4%, transparent),
+    0 8px 24px -12px color-mix(in srgb, var(--foreground) 12%, transparent);
+  animation: card-rise 0.35s ease-out both;
+}
+
+@keyframes card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+}
+
+.stat-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--accent), var(--primary));
 }
 
 .badge {
@@ -69,6 +147,28 @@ body {
   padding: 0.125rem 0.625rem;
   font-size: 0.75rem;
   font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Every primary action button across the app already shares this exact
+   Tailwind class string — targeting it here gives them a consistent
+   hover-lift without touching ~30 individual form/page files. */
+.bg-primary {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+
+button.bg-primary:not(:disabled):hover,
+a.bg-primary:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+
+button.bg-primary:not(:disabled):active {
+  transform: translateY(0);
 }
 
 table.data-table {
@@ -92,8 +192,12 @@ table.data-table td {
   white-space: nowrap;
 }
 
+table.data-table tbody tr {
+  transition: background-color 0.1s ease;
+}
+
 table.data-table tbody tr:hover {
-  background: color-mix(in srgb, var(--primary) 5%, transparent);
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
 }
 
 @media print {
@@ -108,6 +212,8 @@ table.data-table tbody tr:hover {
   .card {
     border-color: #ccc;
     break-inside: avoid;
+    box-shadow: none;
+    animation: none;
   }
   a {
     color: inherit;

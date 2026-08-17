@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { signOut } from "@/app/login/actions";
 import type { CurrentUser } from "@/lib/auth";
 
@@ -22,18 +23,36 @@ const links = [
 export function Nav({ user }: { user: CurrentUser }) {
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
   const visibleLinks = links.filter((l) => !l.adminOnly || isAdmin);
 
   return (
     <header className="border-b border-border bg-surface no-print">
-      <div className="mx-auto max-w-7xl px-4 flex items-center justify-between h-14">
-        <nav className="hidden md:flex items-center gap-1">
-          {visibleLinks.map((l) => (
-            <Link key={l.href} href={l.href} className="px-3 py-2 rounded-lg text-sm font-medium hover:bg-background">
-              {l.label}
-            </Link>
-          ))}
-        </nav>
+      <div className="mx-auto max-w-7xl px-4 flex items-center justify-between gap-6 h-14">
+        <div className="flex items-center gap-6 min-w-0">
+          <span
+            className="text-lg font-bold tracking-tight shrink-0"
+            style={{ fontFamily: "var(--font-display)", color: "var(--primary)" }}
+          >
+            קופה<span style={{ color: "var(--accent)" }}>·</span>מוסד
+          </span>
+          <nav className="hidden md:flex items-center gap-1">
+            {visibleLinks.map((l) => {
+              const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
+              return (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    active ? "bg-primary/10 text-primary" : "hover:bg-background"
+                  }`}
+                >
+                  {l.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
 
         <button
           onClick={() => setOpen((v) => !v)}
@@ -46,7 +65,7 @@ export function Nav({ user }: { user: CurrentUser }) {
           </svg>
         </button>
 
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden md:flex items-center gap-3 shrink-0">
           <span className="text-sm text-muted">
             {user.profile.full_name ?? user.email}
             <span className="badge bg-background text-muted mr-2">{isAdmin ? "מנהל כספים" : "מנהל מחלקה"}</span>
