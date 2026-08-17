@@ -13,6 +13,7 @@ const links = [
   { href: "/transactions", label: "כל התנועות" },
   { href: "/incomes", label: "הכנסות" },
   { href: "/checks", label: "צ׳קים" },
+  { href: "/expenses", label: "הוצאות" },
   { href: "/ledger", label: "התחשבנות פנימית" },
   { href: "/forecast", label: "תחזית תזרים" },
   { href: "/settings", label: "הגדרות", adminOnly: true },

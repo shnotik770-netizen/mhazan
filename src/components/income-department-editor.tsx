@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { splitIncome, updateIncomeDepartment } from "@/app/(app)/incomes/actions";
 import { SplitAllocationEditor, type Allocation } from "@/components/split-allocation-editor";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -60,18 +61,13 @@ export function IncomeDepartmentEditor({
         פצל בין מחלקות
       </label>
       {!isSplitting ? (
-        <select
+        <SearchableSelect
           value={departmentId}
-          onChange={(e) => setDepartmentId(e.target.value)}
+          onChange={setDepartmentId}
+          options={departments.map((d) => ({ id: d.id, label: d.name }))}
+          placeholder="בחר מחלקה..."
           className="rounded border border-border bg-transparent px-2 py-1 text-xs"
-        >
-          <option value="">בחר מחלקה...</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
+        />
       ) : (
         <SplitAllocationEditor
           departments={departments}

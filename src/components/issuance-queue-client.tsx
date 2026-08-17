@@ -39,6 +39,12 @@ export function IssuanceQueueTable({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [query, setQuery] = useState("");
+  const filteredRows = rows.filter((r) => {
+    if (!query.trim()) return true;
+    const q = query.trim().toLowerCase();
+    return (r.payee ?? "").toLowerCase().includes(q);
+  });
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -95,6 +101,12 @@ export function IssuanceQueueTable({
           {error && <span className="text-xs text-danger">{error}</span>}
         </div>
       )}
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="חיפוש לפי מוטב"
+        className="w-full max-w-xs rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm"
+      />
       <div className="overflow-x-auto">
       <table className="data-table">
         <thead>
@@ -108,7 +120,7 @@ export function IssuanceQueueTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((c) => (
+          {filteredRows.map((c) => (
             <tr key={c.id!}>
               <td>
                 <input type="checkbox" checked={selected.has(c.id!)} onChange={() => toggle(c.id!)} />

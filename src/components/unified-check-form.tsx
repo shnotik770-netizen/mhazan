@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createCheck, createPaymentSpread, type CheckAllocationInput } from "@/app/(app)/checks/actions";
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { MiniCalculator } from "@/components/mini-calculator";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -210,18 +211,13 @@ export function UnifiedCheckForm({
           <option value="CHECK">צ׳ק</option>
           <option value="TRANSFER">העברה בנקאית</option>
         </select>
-        <select
+        <SearchableSelect
           value={bankAccountId}
-          onChange={(e) => setBankAccountId(e.target.value)}
+          onChange={setBankAccountId}
+          options={bankAccounts.map((b) => ({ id: b.id, label: `${b.departments?.name ?? ""} — ${b.bank_name}` }))}
+          placeholder="חשבון בנק..."
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        >
-          <option value="">חשבון בנק...</option>
-          {bankAccounts.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.departments?.name} — {b.bank_name}
-            </option>
-          ))}
-        </select>
+        />
         <input
           value={payee}
           onChange={(e) => setPayee(e.target.value)}
@@ -370,18 +366,14 @@ export function UnifiedCheckForm({
                 />
               )}
               {!isSplitting && (
-                <select
+                <SearchableSelect
                   value={row.departmentId}
-                  onChange={(e) => updateRow(i, { departmentId: e.target.value })}
+                  onChange={(id) => updateRow(i, { departmentId: id })}
+                  options={departments.map((d) => ({ id: d.id, label: d.name }))}
+                  placeholder="מחלקה"
+                  required
                   className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-                >
-                  <option value="">מחלקה (ריק = ימתין לסיווג)</option>
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
+                />
               )}
               {rows.length > 1 && (
                 <button type="button" onClick={() => removeRow(i)} className="text-xs text-danger">
@@ -406,7 +398,13 @@ export function UnifiedCheckForm({
 
       <div className="flex items-center gap-2">
         <button
-          disabled={isPending || !bankAccountId || !payee || rows.every((r) => r.amount <= 0)}
+          disabled={
+            isPending ||
+            !bankAccountId ||
+            !payee ||
+            rows.every((r) => r.amount <= 0) ||
+            (!isSplitting && rows.some((r) => !r.departmentId))
+          }
           onClick={submit}
           className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
         >

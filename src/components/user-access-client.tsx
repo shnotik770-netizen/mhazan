@@ -117,6 +117,7 @@ export function UserAccessRow({
   departments: Department[];
 }) {
   const router = useRouter();
+  const [editing, setEditing] = useState(false);
   const [role, setRole] = useState(initialRole);
   const [selected, setSelected] = useState<Set<string>>(new Set(grantedDepartmentIds));
   const [canSetCheckDates, setCanSetCheckDates] = useState(initialCanSetCheckDates);
@@ -132,6 +133,14 @@ export function UserAccessRow({
     });
   }
 
+  function cancel() {
+    setRole(initialRole);
+    setSelected(new Set(grantedDepartmentIds));
+    setCanSetCheckDates(initialCanSetCheckDates);
+    setError(null);
+    setEditing(false);
+  }
+
   function save() {
     setError(null);
     startTransition(async () => {
@@ -142,11 +151,54 @@ export function UserAccessRow({
           Array.from(selected),
           canSetCheckDates,
         );
+        setEditing(false);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "שגיאה בעדכון הרשאות");
       }
     });
+  }
+
+  if (!editing) {
+    const grantedNames = departments.filter((d) => grantedDepartmentIds.includes(d.id)).map((d) => d.name);
+    return (
+      <tr>
+        <td>{fullName}</td>
+        <td>
+          <span className="text-sm">
+            {initialRole === "FINANCE_ADMIN" ? "מנהל כספים — גישה מלאה" : "צפייה בלבד — מחלקות נבחרות"}
+          </span>
+        </td>
+        <td>
+          {initialRole === "FINANCE_ADMIN" ? (
+            <span className="text-sm text-muted">רואה את כל המחלקות</span>
+          ) : grantedNames.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {grantedNames.map((name) => (
+                <span key={name} className="rounded bg-background px-2 py-0.5 text-xs border border-border">
+                  {name}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="text-sm text-muted">אין מחלקות מאושרות</span>
+          )}
+        </td>
+        <td>
+          {initialRole !== "FINANCE_ADMIN" && initialCanSetCheckDates && (
+            <span className="text-xs text-muted whitespace-nowrap">רשאי לקבוע תאריך</span>
+          )}
+        </td>
+        <td>
+          <button
+            onClick={() => setEditing(true)}
+            className="rounded border border-border text-xs px-3 py-1"
+          >
+            עריכה
+          </button>
+        </td>
+      </tr>
+    );
   }
 
   return (
@@ -190,13 +242,18 @@ export function UserAccessRow({
         )}
       </td>
       <td>
-        <button
-          disabled={isPending}
-          onClick={save}
-          className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
-        >
-          שמור
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={isPending}
+            onClick={save}
+            className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
+          >
+            שמור
+          </button>
+          <button disabled={isPending} onClick={cancel} className="text-xs text-muted underline">
+            ביטול
+          </button>
+        </div>
         {error && <p className="text-xs text-danger mt-1">{error}</p>}
       </td>
     </tr>

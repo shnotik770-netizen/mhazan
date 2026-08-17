@@ -9,6 +9,7 @@ import {
   type BulkExpenseRequestRow,
 } from "@/app/(app)/checks/actions";
 import { DateInput } from "@/components/date-input";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -66,7 +67,7 @@ export function BulkCheckEntryForm({
   }
 
   function saveAll() {
-    const savable = rows.filter((r) => r.bankAccountId && r.payee && r.amount > 0);
+    const savable = rows.filter((r) => r.bankAccountId && r.payee && r.amount > 0 && r.departmentId);
     if (savable.length === 0) return;
     startTransition(async () => {
       const { outcomes } = await createCheckBatch(
@@ -135,18 +136,13 @@ export function BulkCheckEntryForm({
                   </select>
                 </td>
                 <td>
-                  <select
+                  <SearchableSelect
                     value={row.bankAccountId}
-                    onChange={(e) => update(row.key, { bankAccountId: e.target.value })}
-                    className="rounded border border-border bg-transparent px-1 py-1 text-xs"
-                  >
-                    <option value="">בחר...</option>
-                    {bankAccounts.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.departments?.name} — {b.bank_name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(id) => update(row.key, { bankAccountId: id })}
+                    options={bankAccounts.map((b) => ({ id: b.id, label: `${b.departments?.name ?? ""} — ${b.bank_name}` }))}
+                    placeholder="בחר..."
+                    className="rounded border border-border bg-transparent px-1 py-1 text-xs w-32"
+                  />
                 </td>
                 <td>
                   <input
@@ -179,18 +175,14 @@ export function BulkCheckEntryForm({
                   />
                 </td>
                 <td>
-                  <select
+                  <SearchableSelect
                     value={row.departmentId ?? ""}
-                    onChange={(e) => update(row.key, { departmentId: e.target.value || null })}
-                    className="rounded border border-border bg-transparent px-1 py-1 text-xs"
-                  >
-                    <option value="">ימתין</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(id) => update(row.key, { departmentId: id || null })}
+                    options={departments.map((d) => ({ id: d.id, label: d.name }))}
+                    placeholder="מחלקה"
+                    required
+                    className="rounded border border-border bg-transparent px-1 py-1 text-xs w-28"
+                  />
                 </td>
                 <td>
                   <input
@@ -295,7 +287,7 @@ export function BulkExpenseRequestFormMulti({
   if (!open) {
     return (
       <button onClick={openForm} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold">
-        + רשימת בקשות הוצאה ברצף
+        + רשימת דרישות תשלום ברצף
       </button>
     );
   }
@@ -303,16 +295,17 @@ export function BulkExpenseRequestFormMulti({
   return (
     <div className="card p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold">הכנסת רשימת בקשות הוצאה ברצף</h2>
+        <h2 className="font-semibold">הכנסת רשימת דרישות תשלום ברצף</h2>
         <button onClick={() => setOpen(false)} className="text-sm text-muted">
           סגור
         </button>
       </div>
+      {departments.length === 1 && <p className="text-xs text-muted">מחלקה: {departments[0].name}</p>}
       <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
-              <th>מחלקה</th>
+              {departments.length > 1 && <th>מחלקה</th>}
               <th>אמצעי</th>
               <th>חשבון בנק</th>
               <th>מוטב</th>
@@ -325,19 +318,17 @@ export function BulkExpenseRequestFormMulti({
           <tbody>
             {rows.map((row) => (
               <tr key={row.key}>
-                <td>
-                  <select
-                    value={row.departmentId}
-                    onChange={(e) => update(row.key, { departmentId: e.target.value })}
-                    className="rounded border border-border bg-transparent px-1 py-1 text-xs"
-                  >
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
+                {departments.length > 1 && (
+                  <td>
+                    <SearchableSelect
+                      value={row.departmentId}
+                      onChange={(id) => update(row.key, { departmentId: id })}
+                      options={departments.map((d) => ({ id: d.id, label: d.name }))}
+                      required
+                      className="rounded border border-border bg-transparent px-1 py-1 text-xs w-28"
+                    />
+                  </td>
+                )}
                 <td>
                   <select
                     value={row.paymentMethod}
@@ -349,18 +340,13 @@ export function BulkExpenseRequestFormMulti({
                   </select>
                 </td>
                 <td>
-                  <select
+                  <SearchableSelect
                     value={row.bankAccountId}
-                    onChange={(e) => update(row.key, { bankAccountId: e.target.value })}
-                    className="rounded border border-border bg-transparent px-1 py-1 text-xs"
-                  >
-                    <option value="">בחר...</option>
-                    {bankAccounts.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.departments?.name} — {b.bank_name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(id) => update(row.key, { bankAccountId: id })}
+                    options={bankAccounts.map((b) => ({ id: b.id, label: `${b.departments?.name ?? ""} — ${b.bank_name}` }))}
+                    placeholder="בחר..."
+                    className="rounded border border-border bg-transparent px-1 py-1 text-xs w-32"
+                  />
                 </td>
                 <td>
                   <input

@@ -14,6 +14,7 @@ import {
 } from "@/app/(app)/checks/actions";
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { MiniCalculator } from "@/components/mini-calculator";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -36,21 +37,16 @@ export function ClassifyCheckRow({
 
   return (
     <div className="flex items-center gap-2">
-      <select
-        className="rounded border border-border bg-transparent text-sm px-2 py-1"
+      <SearchableSelect
         value={departmentId}
-        onChange={(e) => {
-          setDepartmentId(e.target.value);
+        onChange={(id) => {
+          setDepartmentId(id);
           setCategoryId("");
         }}
-      >
-        <option value="">בחר מחלקה...</option>
-        {departments.map((d) => (
-          <option key={d.id} value={d.id}>
-            {d.name}
-          </option>
-        ))}
-      </select>
+        options={departments.map((d) => ({ id: d.id, label: d.name }))}
+        placeholder="בחר מחלקה..."
+        className="rounded border border-border bg-transparent text-sm px-2 py-1"
+      />
       <select
         className="rounded border border-border bg-transparent text-sm px-2 py-1"
         value={categoryId}
@@ -250,24 +246,26 @@ export function DeptExpenseRequestForm({
 
   return (
     <div className="card p-4 space-y-3">
-      <h2 className="font-semibold">בקשת הוצאה (צ׳ק / העברה)</h2>
+      <h2 className="font-semibold">דרישת תשלום (צ׳ק / העברה)</h2>
       {!canSetDates && (
         <p className="text-xs text-muted">
-          אין לך הרשאה לקבוע תאריך — הבקשה תיכנס כהוצאה ממתינה לאישור עד שמנהל הכספים יקבע תאריך.
+          אין לך הרשאה לקבוע תאריך — הבקשה תיכנס כדרישת תשלום ממתינה לאישור עד שמנהל הכספים יקבע תאריך.
         </p>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        <select
-          value={departmentId}
-          onChange={(e) => setDepartmentId(e.target.value)}
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        >
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
+        {departments.length === 1 ? (
+          <div className="flex items-center rounded border border-border bg-background px-2 py-1 text-sm text-muted">
+            מחלקה: {departments[0].name}
+          </div>
+        ) : (
+          <SearchableSelect
+            value={departmentId}
+            onChange={setDepartmentId}
+            options={departments.map((d) => ({ id: d.id, label: d.name }))}
+            required
+            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+          />
+        )}
         <select
           value={paymentMethod}
           onChange={(e) => setPaymentMethod(e.target.value as "CHECK" | "TRANSFER")}
@@ -276,18 +274,13 @@ export function DeptExpenseRequestForm({
           <option value="CHECK">צ׳ק</option>
           <option value="TRANSFER">העברה בנקאית</option>
         </select>
-        <select
+        <SearchableSelect
           value={bankAccountId}
-          onChange={(e) => setBankAccountId(e.target.value)}
+          onChange={setBankAccountId}
+          options={bankAccounts.map((b) => ({ id: b.id, label: `${b.departments?.name ?? ""} — ${b.bank_name}` }))}
+          placeholder="חשבון בנק..."
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        >
-          <option value="">חשבון בנק...</option>
-          {bankAccounts.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.departments?.name} — {b.bank_name}
-            </option>
-          ))}
-        </select>
+        />
         <input
           value={payee}
           onChange={(e) => setPayee(e.target.value)}
@@ -331,6 +324,66 @@ export function DeptExpenseRequestForm({
         {error && <span className="text-sm text-danger">{error}</span>}
         {message && <span className="text-sm text-success">{message}</span>}
       </div>
+    </div>
+  );
+}
+
+// The direct, one-step approval action for a "דרישת תשלום" waiting for
+// approval: set a date (plus, for a check, optionally a check number) and
+// click once. No split/spread chooser here — the department was already
+// fixed when the request was created, so approval is just "when" (and
+// "which check number", if already known).
+export function ApprovePaymentRequestRow({
+  checkId,
+  paymentMethod,
+}: {
+  checkId: string;
+  paymentMethod?: string;
+}) {
+  const router = useRouter();
+  const isCheck = paymentMethod !== "TRANSFER";
+  const [dueDate, setDueDate] = useState("");
+  const [checkNumber, setCheckNumber] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function approve() {
+    setError(null);
+    startTransition(async () => {
+      const result = await issueCheck(checkId, {
+        checkNumber: isCheck ? checkNumber || null : null,
+        dueDate: dueDate || null,
+        allocations: [],
+      });
+      if (result.error) setError(result.error);
+      else router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <input
+        type="date"
+        value={dueDate}
+        onChange={(e) => setDueDate(e.target.value)}
+        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+      />
+      {isCheck && (
+        <input
+          value={checkNumber}
+          onChange={(e) => setCheckNumber(e.target.value)}
+          placeholder="מספר צ׳ק (אופציונלי)"
+          className="w-32 rounded border border-border bg-transparent px-2 py-1 text-xs"
+        />
+      )}
+      <button
+        disabled={isPending || !dueDate}
+        onClick={approve}
+        className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
+      >
+        אשר
+      </button>
+      {error && <span className="text-xs text-danger">{error}</span>}
     </div>
   );
 }
@@ -505,22 +558,15 @@ export function IssueCheckRow({
                 className="w-20 rounded border border-border bg-transparent px-1 py-0.5 text-xs"
               />
             )}
-            <select
+            <SearchableSelect
               value={row.departmentId}
-              onChange={(e) =>
-                setSpreadRows((prev) =>
-                  prev.map((r, idx) => (idx === i ? { ...r, departmentId: e.target.value } : r)),
-                )
+              onChange={(id) =>
+                setSpreadRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, departmentId: id } : r)))
               }
+              options={departments.map((d) => ({ id: d.id, label: d.name }))}
+              placeholder="מחלקה"
               className="rounded border border-border bg-transparent px-1 py-0.5 text-xs"
-            >
-              <option value="">מחלקה</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
+            />
             {spreadRows.length > 1 && (
               <button
                 onClick={() => setSpreadRows((prev) => prev.filter((_, idx) => idx !== i))}
@@ -736,18 +782,13 @@ export function EditDeleteCheckRow({
         פצל בין מחלקות
       </label>
       {!isSplitting ? (
-        <select
+        <SearchableSelect
           value={editDepartmentId}
-          onChange={(e) => setEditDepartmentId(e.target.value)}
+          onChange={setEditDepartmentId}
+          options={departments.map((d) => ({ id: d.id, label: d.name }))}
+          placeholder="מחלקה (ריק = ימתין לסיווג)"
           className="rounded border border-border bg-transparent px-2 py-1 text-xs"
-        >
-          <option value="">מחלקה (ריק = ימתין לסיווג)</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
+        />
       ) : (
         <SplitAllocationEditor
           departments={departments}

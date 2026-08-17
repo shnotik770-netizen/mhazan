@@ -1,29 +1,32 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
-import { formatCurrency, formatDate } from "@/lib/format";
 import {
   ClassifyCheckRow,
-  CheckStatusControls,
   DeptExpenseRequestForm,
-  EditDeleteCheckRow,
-  IssueCheckRow,
-  VerifyTransferButton,
 } from "@/components/checks-client";
 import { PasteExistingChecksForm } from "@/components/checks-paste-client";
 import { UnifiedCheckForm } from "@/components/unified-check-form";
 import { BulkCheckEntryForm, BulkExpenseRequestFormMulti } from "@/components/bulk-checks-client";
 import { IssuanceQueueTable } from "@/components/issuance-queue-client";
 import { BankReconciliationPanel } from "@/components/bank-reconciliation-client";
+import { ChecksFilterBar } from "@/components/checks-filter-bar";
+import {
+  AllChecksTable,
+  IssuedChecksTable,
+  OverdueChecksTable,
+  OverdueTransfersTable,
+  PendingApprovalTable,
+  TransfersPendingExecutionTable,
+} from "@/components/checks-sections-client";
+import { formatCurrency, formatDate } from "@/lib/format";
 
 export default async function ChecksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ asOf?: string; q?: string; pm?: string; st?: string; dept?: string; bank?: string }>;
+  searchParams: Promise<{ asOf?: string; pm?: string; st?: string; dept?: string; bank?: string }>;
 }) {
-  const { asOf: asOfParam, q: qParam, pm: pmParam, st: stParam, dept: deptParam, bank: bankParam } =
-    await searchParams;
+  const { asOf: asOfParam, pm: pmParam, st: stParam, dept: deptParam, bank: bankParam } = await searchParams;
   const asOf = asOfParam || new Date().toISOString().slice(0, 10);
-  const q = (qParam ?? "").trim();
   const pmFilter = pmParam === "CHECK" || pmParam === "TRANSFER" ? pmParam : "ALL";
   const stFilter = ["UNPAID", "CLEARED", "CANCELLED"].includes(stParam ?? "") ? stParam! : "ALL";
   const deptFilter = deptParam ?? "";
@@ -35,6 +38,8 @@ export default async function ChecksPage({
 
   let pendingApprovalQuery = supabase.from("v_checks_pending_approval").select("*").order("created_at");
   let needingIssuanceQuery = supabase.from("v_checks_needing_issuance").select("*").order("created_at");
+  let issuedQuery = supabase.from("v_checks_issued").select("*").order("due_date");
+  let transfersPendingExecutionQuery = supabase.from("v_transfers_pending_execution").select("*").order("due_date");
   let overdueQuery = supabase
     .from("checks")
     .select("*, bank_accounts(bank_name, account_number), departments(name)")
@@ -48,17 +53,13 @@ export default async function ChecksPage({
     .order("due_date", { ascending: false })
     .limit(200);
 
-  if (q) {
-    pendingApprovalQuery = pendingApprovalQuery.or(`payee.ilike.%${q}%,notes.ilike.%${q}%`);
-    needingIssuanceQuery = needingIssuanceQuery.or(`payee.ilike.%${q}%,notes.ilike.%${q}%`);
-    overdueQuery = overdueQuery.or(`payee.ilike.%${q}%,notes.ilike.%${q}%`);
-    allChecksQuery = allChecksQuery.or(`payee.ilike.%${q}%,notes.ilike.%${q}%`);
-  }
   if (pmFilter !== "ALL") allChecksQuery = allChecksQuery.eq("payment_method", pmFilter);
   if (stFilter !== "ALL") allChecksQuery = allChecksQuery.eq("status", stFilter);
   if (bankFilter) {
     pendingApprovalQuery = pendingApprovalQuery.eq("bank_account_id", bankFilter);
     needingIssuanceQuery = needingIssuanceQuery.eq("bank_account_id", bankFilter);
+    issuedQuery = issuedQuery.eq("bank_account_id", bankFilter);
+    transfersPendingExecutionQuery = transfersPendingExecutionQuery.eq("bank_account_id", bankFilter);
     overdueQuery = overdueQuery.eq("bank_account_id", bankFilter);
     allChecksQuery = allChecksQuery.eq("bank_account_id", bankFilter);
   }
@@ -67,6 +68,8 @@ export default async function ChecksPage({
     { data: pendingChecks },
     { data: pendingApproval },
     { data: needingIssuance },
+    { data: issuedChecks },
+    { data: transfersPendingExecution },
     { data: overdueByAsOf },
     { data: checks },
     { data: departments },
@@ -79,6 +82,8 @@ export default async function ChecksPage({
     supabase.from("v_pending_checks").select("*").order("due_date"),
     pendingApprovalQuery,
     needingIssuanceQuery,
+    issuedQuery,
+    transfersPendingExecutionQuery,
     overdueQuery,
     allChecksQuery,
     supabase.from("departments").select("*").order("name"),
@@ -116,6 +121,8 @@ export default async function ChecksPage({
 
   const filteredPendingApproval = (pendingApproval ?? []).filter(matchesDeptFilter);
   const filteredNeedingIssuance = (needingIssuance ?? []).filter(matchesDeptFilter);
+  const filteredIssued = (issuedChecks ?? []).filter(matchesDeptFilter);
+  const filteredTransfersPendingExecution = (transfersPendingExecution ?? []).filter(matchesDeptFilter);
   const filteredChecks = (checks ?? []).filter(matchesDeptFilter);
   const filteredOverdue = (overdueByAsOf ?? []).filter(matchesDeptFilter);
   const overdueTransfers = filteredOverdue.filter((c) => c.payment_method === "TRANSFER");
@@ -143,21 +150,6 @@ export default async function ChecksPage({
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
 
-  // Shared so every list on this page shows a split check's real
-  // department breakdown instead of a bare "בהמתנה" that looks unclassified.
-  function departmentCell(checkId: string, departmentName: string | null) {
-    if (departmentName) return departmentName;
-    const allocations = allocationsByCheck.get(checkId);
-    if (allocations) {
-      return (
-        <span className="text-xs">
-          מפוצל: {allocations.map((a) => `${a.departmentName ?? "?"} (${formatCurrency(a.amount)})`).join(", ")}
-        </span>
-      );
-    }
-    return <span className="text-warning">בהמתנה</span>;
-  }
-
   return (
     <div className="space-y-6">
       <datalist id="supplier-names">
@@ -181,41 +173,15 @@ export default async function ChecksPage({
         )}
       </div>
 
-      <form className="flex items-center gap-2 flex-wrap" method="get">
-        <input type="hidden" name="asOf" value={asOf} />
-        <input type="hidden" name="pm" value={pmFilter} />
-        <input type="hidden" name="st" value={stFilter} />
-        <input
-          name="q"
-          defaultValue={q}
-          placeholder="חיפוש לפי מוטב / הערות — בכל הרשימות בעמוד"
-          className="w-full max-w-sm rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-        />
-        <select name="dept" defaultValue={deptFilter} className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm">
-          <option value="">כל המחלקות</option>
-          {(departments ?? []).map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
-        <select name="bank" defaultValue={bankFilter} className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm">
-          <option value="">כל חשבונות הבנק</option>
-          {(bankAccounts ?? []).map((b) => (
-            <option key={b.id} value={b.id}>
-              {(b as { departments: { name: string } | null }).departments?.name} — {b.bank_name}
-            </option>
-          ))}
-        </select>
-        <button type="submit" className="rounded-lg border border-border px-4 py-2 text-sm font-semibold">
-          חיפוש / סינון
-        </button>
-        {(q || deptFilter || bankFilter) && (
-          <a href="/checks" className="text-sm text-muted underline">
-            נקה הכל
-          </a>
-        )}
-      </form>
+      <ChecksFilterBar
+        deptFilter={deptFilter}
+        bankFilter={bankFilter}
+        asOf={asOf}
+        pmFilter={pmFilter}
+        stFilter={stFilter}
+        departments={departments ?? []}
+        bankAccounts={bankAccounts ?? []}
+      />
 
       {myDepartments.length > 0 && (
         <div className="space-y-2">
@@ -235,7 +201,6 @@ export default async function ChecksPage({
       {isAdmin && (
         <div className="card p-4">
           <form className="flex flex-wrap items-end gap-3 mb-3" method="get">
-            <input type="hidden" name="q" value={q} />
             <input type="hidden" name="dept" value={deptFilter} />
             <input type="hidden" name="bank" value={bankFilter} />
             <div>
@@ -255,78 +220,24 @@ export default async function ChecksPage({
           </form>
 
           {overdueTransfers.length > 0 && (
-            <div className="mb-4 overflow-x-auto">
-              <h2 className="font-semibold mb-1">⚠ {overdueTransfers.length} העברות שטרם אושרו כבוצעו</h2>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>מוטב</th>
-                    <th>סכום</th>
-                    <th>תאריך</th>
-                    <th>מחלקה</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {overdueTransfers.map((t) => {
-                    const row = t as unknown as { id: string; payee: string; amount: number; due_date: string; departments: { name: string } | null };
-                    return (
-                      <tr key={row.id}>
-                        <td>{row.payee}</td>
-                        <td>{formatCurrency(Number(row.amount))}</td>
-                        <td>{formatDate(row.due_date)}</td>
-                        <td>{row.departments?.name ?? "בהמתנה"}</td>
-                        <td>
-                          <VerifyTransferButton checkId={row.id} label="אשר שההעברה בוצעה" captureInternalBeneficiary />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <OverdueTransfersTable
+              rows={overdueTransfers as unknown as { id: string; payee: string; amount: number; due_date: string; departments: { name: string } | null }[]}
+            />
           )}
 
           {overdueChecks.length > 0 && (
-            <div className="overflow-x-auto">
-              <h2 className="font-semibold mb-1">⚠ {overdueChecks.length} צ׳קים שטרם אושרו כנפרעו</h2>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>מוטב</th>
-                    <th>מס׳ צ׳ק</th>
-                    <th>סכום</th>
-                    <th>תאריך</th>
-                    <th>מחלקה</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {overdueChecks.map((c) => {
-                    const row = c as unknown as {
-                      id: string;
-                      payee: string;
-                      check_number: string | null;
-                      amount: number;
-                      due_date: string;
-                      departments: { name: string } | null;
-                    };
-                    return (
-                      <tr key={row.id}>
-                        <td>{row.payee}</td>
-                        <td>{row.check_number ?? "—"}</td>
-                        <td>{formatCurrency(Number(row.amount))}</td>
-                        <td>{formatDate(row.due_date)}</td>
-                        <td>{row.departments?.name ?? "בהמתנה"}</td>
-                        <td>
-                          <VerifyTransferButton checkId={row.id} label="סמן כנפרע" />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <OverdueChecksTable
+              rows={
+                overdueChecks as unknown as {
+                  id: string;
+                  payee: string;
+                  check_number: string | null;
+                  amount: number;
+                  due_date: string;
+                  departments: { name: string } | null;
+                }[]
+              }
+            />
           )}
 
           {overdueTransfers.length === 0 && overdueChecks.length === 0 && (
@@ -353,48 +264,28 @@ export default async function ChecksPage({
 
       {filteredPendingApproval.length > 0 && (
         <div className="card p-4">
-          <h2 className="font-semibold mb-1">הוצאות לתשלום — ממתינות לאישור/תאריך (לא משפיעות על התחזית)</h2>
+          <h2 className="font-semibold mb-1">דרישות תשלום ממתינות לאישור (לא משפיעות על התחזית)</h2>
           {isAdmin && (
             <p className="text-xs text-muted mb-2">
               קביעת תאריך כאן מאשרת את הבקשה. עבור צ׳ק ללא מספר היא תעבור למסך &quot;צ׳קים להנפקה&quot; למעלה; עבור
               העברה, או צ׳ק עם מספר, היא תמתין לביצוע בתאריך שנקבע.
             </p>
           )}
-          <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>מוטב</th>
-                <th>סכום</th>
-                <th>מחלקה</th>
-                <th>הערות</th>
-                {isAdmin && <th>אישור</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredPendingApproval.map((c) => (
-                <tr key={c.id!}>
-                  <td>{c.payee}</td>
-                  <td>{formatCurrency(Number(c.amount))}</td>
-                  <td>{departmentCell(c.id!, c.department_name)}</td>
-                  <td>{c.notes ?? "—"}</td>
-                  {isAdmin && (
-                    <td>
-                      <IssueCheckRow
-                        checkId={c.id!}
-                        currentCheckNumber={c.check_number}
-                        currentDueDate={c.due_date}
-                        currentPaymentMethod={c.payment_method ?? undefined}
-                        amount={Number(c.amount)}
-                        departments={departments ?? []}
-                      />
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
+          <PendingApprovalTable rows={filteredPendingApproval} isAdmin={isAdmin} allocationsByCheck={allocationsByCheck} />
+        </div>
+      )}
+
+      {filteredIssued.length > 0 && isAdmin && (
+        <div className="card p-4">
+          <h2 className="font-semibold mb-1">צ׳קים שהונפקו — עם מספר לתאריך</h2>
+          <IssuedChecksTable rows={filteredIssued} allocationsByCheck={allocationsByCheck} />
+        </div>
+      )}
+
+      {filteredTransfersPendingExecution.length > 0 && isAdmin && (
+        <div className="card p-4">
+          <h2 className="font-semibold mb-1">העברות שאושרו עם תאריך — ועוד לא שולמו</h2>
+          <TransfersPendingExecutionTable rows={filteredTransfersPendingExecution} allocationsByCheck={allocationsByCheck} />
         </div>
       )}
 
@@ -443,7 +334,6 @@ export default async function ChecksPage({
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
           <h2 className="font-semibold">כל הצ׳קים וההעברות</h2>
           <form className="flex items-center gap-2" method="get">
-            <input type="hidden" name="q" value={q} />
             <input type="hidden" name="asOf" value={asOf} />
             <input type="hidden" name="dept" value={deptFilter} />
             <input type="hidden" name="bank" value={bankFilter} />
@@ -463,94 +353,29 @@ export default async function ChecksPage({
             </button>
           </form>
         </div>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>אמצעי</th>
-              <th>מס׳ צ׳ק</th>
-              <th>מוטב</th>
-              <th>סכום</th>
-              <th>תאריך פירעון</th>
-              <th>חשבון</th>
-              <th>מחלקה</th>
-              <th>סטטוס</th>
-              {isAdmin && <th></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredChecks.map((c) => {
-              const row = c as unknown as {
-                id: string;
-                check_number: string | null;
-                payee: string;
-                amount: number;
-                due_date: string | null;
-                status: string;
-                payment_method: string;
-                department_id: string | null;
-                notes: string | null;
-                skip_department_ledger: boolean;
-                spread_id: string | null;
-                internal_beneficiary: string | null;
-                bank_accounts: { bank_name: string; account_number: string } | null;
-                departments: { name: string } | null;
-              };
-              return (
-                <tr key={row.id}>
-                  <td>{row.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"}</td>
-                  <td>{row.check_number ?? "—"}</td>
-                  <td>
-                    {row.payee}
-                    {row.spread_id && <span className="badge bg-background text-muted mr-1">פריסה</span>}
-                    {row.internal_beneficiary && (
-                      <div className="text-xs text-muted">מוטב פנימי: {row.internal_beneficiary}</div>
-                    )}
-                  </td>
-                  <td>{formatCurrency(Number(row.amount))}</td>
-                  <td>{row.due_date ? formatDate(row.due_date) : <span className="text-muted">ללא תאריך</span>}</td>
-                  <td>
-                    {row.bank_accounts?.bank_name} ({row.bank_accounts?.account_number})
-                  </td>
-                  <td>
-                    {departmentCell(row.id, row.departments?.name ?? null)}
-                    {row.skip_department_ledger && (
-                      <span className="badge bg-background text-muted mr-1">חוץ מהמאזן הפנימי</span>
-                    )}
-                  </td>
-                  <td>
-                    <CheckStatusControls checkId={row.id} status={row.status} paymentMethod={row.payment_method} />
-                  </td>
-                  {isAdmin && (
-                    <td>
-                      <EditDeleteCheckRow
-                        checkId={row.id}
-                        payee={row.payee}
-                        amount={Number(row.amount)}
-                        dueDate={row.due_date}
-                        checkNumber={row.check_number}
-                        departmentId={row.department_id}
-                        notes={row.notes}
-                        paymentMethod={row.payment_method}
-                        existingAllocations={(allocationsByCheck.get(row.id) ?? []).map((a) => ({
-                          departmentId: a.departmentId,
-                          amount: a.amount,
-                        }))}
-                        departments={departments ?? []}
-                      />
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-            {filteredChecks.length === 0 && (
-              <tr>
-                <td colSpan={isAdmin ? 9 : 8} className="text-center text-muted py-6">
-                  אין צ׳קים רשומים עדיין
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <AllChecksTable
+          rows={
+            filteredChecks as unknown as {
+              id: string;
+              check_number: string | null;
+              payee: string;
+              amount: number;
+              due_date: string | null;
+              status: string;
+              payment_method: string;
+              department_id: string | null;
+              notes: string | null;
+              skip_department_ledger: boolean;
+              spread_id: string | null;
+              internal_beneficiary: string | null;
+              bank_accounts: { bank_name: string; account_number: string } | null;
+              departments: { name: string } | null;
+            }[]
+          }
+          isAdmin={isAdmin}
+          departments={departments ?? []}
+          allocationsByCheck={allocationsByCheck}
+        />
       </div>
     </div>
   );

@@ -186,6 +186,13 @@ export type Database = {
             foreignKeyName: "check_allocations_check_id_fkey"
             columns: ["check_id"]
             isOneToOne: false
+            referencedRelation: "v_checks_issued"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_allocations_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
             referencedRelation: "v_checks_needing_issuance"
             referencedColumns: ["id"]
           },
@@ -208,6 +215,13 @@ export type Database = {
             columns: ["check_id"]
             isOneToOne: false
             referencedRelation: "v_transfers_needing_verification"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_allocations_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_transfers_pending_execution"
             referencedColumns: ["id"]
           },
           {
@@ -837,6 +851,67 @@ export type Database = {
         }
         Relationships: []
       }
+      v_checks_issued: {
+        Row: {
+          account_number: string | null
+          amount: number | null
+          bank_account_id: string | null
+          bank_name: string | null
+          category_id: string | null
+          check_number: string | null
+          cleared_at: string | null
+          created_at: string | null
+          created_by: string | null
+          department_id: string | null
+          department_name: string | null
+          due_date: string | null
+          id: string | null
+          internal_beneficiary: string | null
+          notes: string | null
+          payee: string | null
+          payment_method: string | null
+          skip_department_ledger: boolean | null
+          spread_id: string | null
+          status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checks_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_spread_id_fkey"
+            columns: ["spread_id"]
+            isOneToOne: false
+            referencedRelation: "payment_spreads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_checks_needing_issuance: {
         Row: {
           account_number: string | null
@@ -1059,6 +1134,67 @@ export type Database = {
         Relationships: []
       }
       v_transfers_needing_verification: {
+        Row: {
+          account_number: string | null
+          amount: number | null
+          bank_account_id: string | null
+          bank_name: string | null
+          category_id: string | null
+          check_number: string | null
+          cleared_at: string | null
+          created_at: string | null
+          created_by: string | null
+          department_id: string | null
+          department_name: string | null
+          due_date: string | null
+          id: string | null
+          internal_beneficiary: string | null
+          notes: string | null
+          payee: string | null
+          payment_method: string | null
+          skip_department_ledger: boolean | null
+          spread_id: string | null
+          status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checks_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_spread_id_fkey"
+            columns: ["spread_id"]
+            isOneToOne: false
+            referencedRelation: "payment_spreads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_transfers_pending_execution: {
         Row: {
           account_number: string | null
           amount: number | null
