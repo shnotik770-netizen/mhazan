@@ -17,7 +17,6 @@ import {
   OverdueChecksTable,
   OverdueTransfersTable,
   PendingApprovalTable,
-  TransfersPendingExecutionTable,
 } from "@/components/checks-sections-client";
 import { formatCurrency, formatDate } from "@/lib/format";
 
@@ -40,7 +39,6 @@ export default async function ChecksPage({
   let pendingApprovalQuery = supabase.from("v_checks_pending_approval").select("*").order("created_at");
   let needingIssuanceQuery = supabase.from("v_checks_needing_issuance").select("*").order("created_at");
   let issuedQuery = supabase.from("v_checks_issued").select("*").order("due_date");
-  let transfersPendingExecutionQuery = supabase.from("v_transfers_pending_execution").select("*").order("due_date");
   let overdueQuery = supabase
     .from("checks")
     .select("*, bank_accounts(bank_name, account_number), departments(name)")
@@ -60,7 +58,6 @@ export default async function ChecksPage({
     pendingApprovalQuery = pendingApprovalQuery.eq("bank_account_id", bankFilter);
     needingIssuanceQuery = needingIssuanceQuery.eq("bank_account_id", bankFilter);
     issuedQuery = issuedQuery.eq("bank_account_id", bankFilter);
-    transfersPendingExecutionQuery = transfersPendingExecutionQuery.eq("bank_account_id", bankFilter);
     overdueQuery = overdueQuery.eq("bank_account_id", bankFilter);
     allChecksQuery = allChecksQuery.eq("bank_account_id", bankFilter);
   }
@@ -70,7 +67,6 @@ export default async function ChecksPage({
     { data: pendingApproval },
     { data: needingIssuance },
     { data: issuedChecks },
-    { data: transfersPendingExecution },
     { data: overdueByAsOf },
     { data: checks },
     { data: departments },
@@ -84,7 +80,6 @@ export default async function ChecksPage({
     pendingApprovalQuery,
     needingIssuanceQuery,
     issuedQuery,
-    transfersPendingExecutionQuery,
     overdueQuery,
     allChecksQuery,
     supabase.from("departments").select("*").order("name"),
@@ -123,7 +118,6 @@ export default async function ChecksPage({
   const filteredPendingApproval = (pendingApproval ?? []).filter(matchesDeptFilter);
   const filteredNeedingIssuance = (needingIssuance ?? []).filter(matchesDeptFilter);
   const filteredIssued = (issuedChecks ?? []).filter(matchesDeptFilter);
-  const filteredTransfersPendingExecution = (transfersPendingExecution ?? []).filter(matchesDeptFilter);
   const filteredChecks = (checks ?? []).filter(matchesDeptFilter);
   const filteredOverdue = (overdueByAsOf ?? []).filter(matchesDeptFilter);
   const overdueTransfers = filteredOverdue.filter((c) => c.payment_method === "TRANSFER");
@@ -302,18 +296,6 @@ export default async function ChecksPage({
         <div className="card p-4">
           <CollapsibleSection title={<h2 className="font-semibold">צ׳קים שהונפקו — עם מספר לתאריך</h2>}>
             <IssuedChecksTable rows={filteredIssued} departments={departments ?? []} allocationsByCheck={allocationsByCheck} />
-          </CollapsibleSection>
-        </div>
-      )}
-
-      {filteredTransfersPendingExecution.length > 0 && isAdmin && (
-        <div className="card p-4">
-          <CollapsibleSection title={<h2 className="font-semibold">העברות שאושרו עם תאריך — ועוד לא שולמו</h2>}>
-            <TransfersPendingExecutionTable
-              rows={filteredTransfersPendingExecution}
-              departments={departments ?? []}
-              allocationsByCheck={allocationsByCheck}
-            />
           </CollapsibleSection>
         </div>
       )}
