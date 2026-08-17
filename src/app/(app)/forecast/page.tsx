@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { BankBalancePanel, ExpectedIncomeManager } from "@/components/forecast-client";
+import { ForecastDailyTable } from "@/components/forecast-daily-table-client";
+import { ForecastDayLookup } from "@/components/forecast-day-lookup-client";
 
 export default async function ForecastPage({
   searchParams,
@@ -76,6 +78,22 @@ export default async function ForecastPage({
     return [...byDate.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
   })();
 
+  // Every calendar month touched by the horizon, from the current month
+  // onward — used both to size the monthly cards and to drive the "עד
+  // חודש" cumulative selector on the daily table below.
+  const monthsInHorizon = (() => {
+    const months: string[] = [];
+    const cursor = new Date();
+    cursor.setDate(1);
+    const horizonEnd = new Date();
+    horizonEnd.setDate(horizonEnd.getDate() + horizonDays);
+    while (cursor <= horizonEnd) {
+      months.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return months;
+  })();
+
   // One box per month covered by the horizon: that month's forecasted
   // income/expenses, plus the balance it closes with — starting from the
   // account's current balance for the present month, or carried forward
@@ -84,18 +102,8 @@ export default async function ForecastPage({
     mode === "bank" && selectedAccount
       ? (() => {
           const startBalance = Number(selectedAccount.current_balance);
-          const months: string[] = [];
-          const cursor = new Date();
-          cursor.setDate(1);
-          const horizonEnd = new Date();
-          horizonEnd.setDate(horizonEnd.getDate() + horizonDays);
-          while (cursor <= horizonEnd) {
-            months.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
-            cursor.setMonth(cursor.getMonth() + 1);
-          }
-
           let openingBalance = startBalance;
-          return months.map((month) => {
+          return monthsInHorizon.map((month) => {
             const monthRows = dailyBreakdown.filter(([date]) => date.startsWith(month));
             const income = monthRows.reduce((sum, [, d]) => sum + d.income, 0);
             const expense = monthRows.reduce((sum, [, d]) => sum + d.checks + d.transfers + d.recurring, 0);
@@ -201,6 +209,8 @@ export default async function ForecastPage({
             <option value="30">30 יום</option>
             <option value="60">60 יום</option>
             <option value="90">90 יום</option>
+            <option value="180">180 יום</option>
+            <option value="365">שנה</option>
           </select>
         </div>
         <button
@@ -234,10 +244,14 @@ export default async function ForecastPage({
 
       {error && <div className="card p-4 bg-danger-bg text-danger text-sm">{error.message}</div>}
 
+      {mode === "bank" && selectedAccount && (
+        <ForecastDayLookup rows={dailyBreakdown} startingBalance={Number(selectedAccount.current_balance)} />
+      )}
+
       {mode === "bank" && monthlyCards.length > 0 && (
         <div>
           <h2 className="font-semibold mb-2">מצב חזוי לפי חודשים</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="flex flex-col gap-3">
             {monthlyCards.map((c) => (
               <div key={c.month} className="card p-4 space-y-1">
                 <p className="font-semibold">
@@ -282,44 +296,7 @@ export default async function ForecastPage({
         </div>
       )}
 
-      <div className="card p-4 overflow-x-auto">
-        <h2 className="font-semibold mb-2">סיכום יומי — כמה כסף אמור לרדת/להיכנס בכל יום</h2>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>תאריך</th>
-              <th>צ׳קים</th>
-              <th>העברות</th>
-              <th>הוראות קבע</th>
-              {mode === "bank" && <th>צפי הכנסה</th>}
-              <th>סה״כ שינוי יומי</th>
-              <th>{mode === "bank" ? "יתרה בסוף היום" : "יתרה מצטברת בסוף היום"}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dailyBreakdown.map(([date, d]) => (
-              <tr key={date}>
-                <td>{formatDate(date)}</td>
-                <td className={d.checks < 0 ? "text-danger" : undefined}>{formatCurrency(d.checks)}</td>
-                <td className={d.transfers < 0 ? "text-danger" : undefined}>{formatCurrency(d.transfers)}</td>
-                <td className={d.recurring < 0 ? "text-danger" : undefined}>{formatCurrency(d.recurring)}</td>
-                {mode === "bank" && <td className="text-success">{formatCurrency(d.income)}</td>}
-                <td className={`font-semibold ${d.total < 0 ? "text-danger" : "text-success"}`}>
-                  {formatCurrency(d.total)}
-                </td>
-                <td className="font-semibold">{formatCurrency(d.runningBalance)}</td>
-              </tr>
-            ))}
-            {dailyBreakdown.length === 0 && (
-              <tr>
-                <td colSpan={mode === "bank" ? 7 : 6} className="text-center text-muted py-6">
-                  אין תנועות צפויות בטווח שנבחר
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <ForecastDailyTable rows={dailyBreakdown} months={monthsInHorizon} mode={mode} />
 
       <details className="card p-4">
         <summary className="cursor-pointer font-semibold">פירוט מלא לפי פריט</summary>

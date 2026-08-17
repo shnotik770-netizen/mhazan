@@ -50,22 +50,30 @@ export default async function DashboardPage() {
             שלום {user.profile.full_name ?? user.email} — סקירה כללית של המצב הפיננסי
           </p>
         </div>
-        {user.profile.role === "FINANCE_ADMIN" && (
-          <div className="flex items-center gap-2">
-            <Link
-              href="/settings#recurring-schedules"
-              className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
-            >
-              + הוראת קבע חדשה
-            </Link>
-            <Link
-              href="/settings"
-              className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
-            >
-              הגדרות מערכת
-            </Link>
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href="/forecast"
+            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+          >
+            תחזית תזרים ←
+          </Link>
+          {user.profile.role === "FINANCE_ADMIN" && (
+            <>
+              <Link
+                href="/settings#recurring-schedules"
+                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
+              >
+                + הוראת קבע חדשה
+              </Link>
+              <Link
+                href="/settings"
+                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
+              >
+                הגדרות מערכת
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
       {totalPending > 0 && (
