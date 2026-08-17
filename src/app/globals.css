@@ -172,7 +172,11 @@ button.bg-primary:not(:disabled):active {
 }
 
 table.data-table {
-  width: 100%;
+  /* Not width: 100% — a table with few/narrow columns inside a wide card
+     would otherwise get stretched to fill the container, spreading its
+     columns apart with large empty gaps. Sizing to content (with the
+     wrapper's overflow-x-auto handling the rare overflow case) keeps
+     columns snug regardless of how wide the surrounding card is. */
   border-collapse: collapse;
   font-size: 0.875rem;
 }
