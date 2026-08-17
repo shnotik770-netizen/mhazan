@@ -178,6 +178,21 @@ export async function updateIncomeDepartment(incomeId: string, departmentId: str
   return {};
 }
 
+// Mirrors updateCheckLedgerFlag: reclassify an income tagged "old"
+// (skip_department_ledger) while reviewing a department report — confirm
+// it's really old history that shouldn't count again, or flip it back to
+// counting toward the department's balance.
+export async function updateIncomeLedgerFlag(incomeId: string, skipDepartmentLedger: boolean): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("incomes")
+    .update({ skip_department_ledger: skipDepartmentLedger })
+    .eq("id", incomeId);
+  revalidateIncomePaths();
+  return { error: error?.message };
+}
+
 // Splits an existing (previously single-department) income across several
 // departments: deletes the original row and inserts one row per
 // allocation, preserving everything else. Only possible when the income's

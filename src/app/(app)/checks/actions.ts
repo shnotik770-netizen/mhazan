@@ -313,10 +313,11 @@ export async function createPaymentSpread(input: {
 export async function pasteExistingChecks(
   bankAccountId: string,
   rows: {
+    checkNumber: string | null;
     payee: string;
     amount: number;
     date: string | null;
-    cleared: boolean;
+    status: "UNPAID" | "CLEARED" | "CANCELLED";
     departmentId: string | null;
     includeInDepartmentLedger: boolean;
   }[],
@@ -334,10 +335,11 @@ export async function pasteExistingChecks(
     validRows.map((r) => ({
       payment_method: "CHECK" as const,
       bank_account_id: bankAccountId,
+      check_number: r.checkNumber,
       payee: r.payee,
       amount: r.amount,
       due_date: r.date || null,
-      status: r.cleared ? ("CLEARED" as const) : ("UNPAID" as const),
+      status: r.status,
       department_id: r.departmentId,
       skip_department_ledger: !r.includeInDepartmentLedger,
       created_by: user?.id ?? null,
@@ -750,4 +752,20 @@ export async function updateCheck(
 
   revalidateCheckPaths();
   return {};
+}
+
+// Lets an admin reclassify a check tagged "old" (skip_department_ledger)
+// while reviewing a department report — either confirm it really is old
+// history that shouldn't count again, or flip it back to counting toward
+// the department's balance because it turns out it was never accounted
+// for under the old system after all.
+export async function updateCheckLedgerFlag(checkId: string, skipDepartmentLedger: boolean): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("checks")
+    .update({ skip_department_ledger: skipDepartmentLedger })
+    .eq("id", checkId);
+  revalidateCheckPaths();
+  return { error: error?.message };
 }

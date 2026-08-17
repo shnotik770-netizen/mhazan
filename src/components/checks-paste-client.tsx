@@ -9,11 +9,14 @@ import type { Tables } from "@/lib/supabase/database.types";
 type Department = Tables<"departments">;
 type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | null };
 
+type CheckStatus = "UNPAID" | "CLEARED" | "CANCELLED";
+
 type Row = {
+  checkNumber: string;
   payee: string;
   amount: number;
   date: string;
-  cleared: boolean;
+  status: CheckStatus;
   departmentId: string;
   includeInDepartmentLedger: boolean;
   autoMatched: boolean;
@@ -30,6 +33,19 @@ function normalizeDate(text: string): string {
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
   return trimmed;
+}
+
+function normalizeAmount(text: string): number {
+  return Number(String(text ?? "").replace(/[^\d.-]/g, "")) || 0;
+}
+
+// V = נפרע, ריק = לא נפרע, X = מבוטל — matches the status column exactly
+// as it comes out of the bank/office export, not a plain yes/no.
+function parseStatus(text: string): CheckStatus {
+  const t = (text ?? "").trim().toLowerCase();
+  if (t === "x" || t === "מבוטל" || t === "בוטל") return "CANCELLED";
+  if (t === "v" || t === "✓" || t === "כן" || t === "נפרע" || t === "יש") return "CLEARED";
+  return "UNPAID";
 }
 
 export function PasteExistingChecksForm({
@@ -54,15 +70,19 @@ export function PasteExistingChecksForm({
       .trim()
       .split("\n")
       .map((line) => line.split(/\t|,(?!\d{3})/).map((c) => c.trim()))
-      .filter((cols) => cols.some((c) => c.length > 0));
+      .filter((cols) => cols.some((c) => c.length > 0))
+      // A header row ("מס' צ׳ק, שם, סכום, ...") has no numeric amount in
+      // the amount column — drop it instead of importing it as a row.
+      .filter((cols) => normalizeAmount(cols[2] ?? "") > 0);
 
     const initialRows: Row[] = parsed.map((cols) => {
-      const [payee, amountText, dateText, clearedText] = cols;
+      const [checkNumber, payee, amountText, dateText, statusText] = cols;
       return {
+        checkNumber: (checkNumber ?? "").trim(),
         payee: (payee ?? "").trim(),
-        amount: Number(String(amountText ?? "").replace(/[^\d.-]/g, "")) || 0,
+        amount: normalizeAmount(amountText ?? ""),
         date: normalizeDate(dateText ?? ""),
-        cleared: /^(כן|יש|נפרע|v|x|true|1)$/i.test((clearedText ?? "").trim()),
+        status: parseStatus(statusText ?? ""),
         departmentId: "",
         includeInDepartmentLedger: false,
         autoMatched: false,
@@ -102,10 +122,11 @@ export function PasteExistingChecksForm({
         rows
           .filter((r) => r.payee && r.amount > 0)
           .map((r) => ({
+            checkNumber: r.checkNumber || null,
             payee: r.payee,
             amount: r.amount,
             date: r.date || null,
-            cleared: r.cleared,
+            status: r.status,
             departmentId: r.departmentId || null,
             includeInDepartmentLedger: r.includeInDepartmentLedger,
           })),
@@ -151,7 +172,7 @@ export function PasteExistingChecksForm({
       </select>
       <textarea
         className="w-full h-24 rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-mono"
-        placeholder="הדבק כאן: שם מוטב, סכום, תאריך, נפרע? (כן/לא)"
+        placeholder={"הדבק כאן, כולל שורת כותרת אם יש:\nמס' צ׳ק\tשם\tסכום\tתאריך\tמצב\n1352051\tמרכז ההפצה\t1755\t20/11/2025\tV"}
         onPaste={(e) => {
           const text = e.clipboardData.getData("text");
           if (text) {
@@ -162,9 +183,10 @@ export function PasteExistingChecksForm({
         onChange={(e) => handlePaste(e.target.value)}
       />
       <p className="text-xs text-muted">
-        עמודות: שם מוטב, סכום, תאריך, נפרע (כן/לא). מוטב שכבר סווג בעבר למחלקה ישוייך אליה אוטומטית; מוטבים
-        חדשים יישארו בהמתנה לסיווג. כברירת מחדל צ׳קים מיובאים אינם נכללים במאזן הפנימי של המחלקה (מניחים
-        שהחישוב כבר נעשה בדרך הישנה) — ניתן לשנות לכל שורה.
+        עמודות: מספר צ׳ק, שם מוטב, סכום, תאריך, מצב (V = נפרע, ריק = לא נפרע, X = מבוטל). שורת כותרת מזוהה
+        אוטומטית ומדולגת. מוטב שכבר סווג בעבר למחלקה ישוייך אליה אוטומטית; מוטבים חדשים יישארו בהמתנה לסיווג.
+        כברירת מחדל צ׳קים מיובאים אינם נכללים במאזן הפנימי של המחלקה (מניחים שהחישוב כבר נעשה בדרך הישנה) — ניתן
+        לשנות לכל שורה.
       </p>
       {isMatching && <p className="text-sm text-muted">מתאים מחלקות לפי היסטוריה...</p>}
 
@@ -173,10 +195,11 @@ export function PasteExistingChecksForm({
           <table className="data-table">
             <thead>
               <tr>
+                <th>מס׳ צ׳ק</th>
                 <th>מוטב</th>
                 <th>סכום</th>
                 <th>תאריך</th>
-                <th>נפרע</th>
+                <th>מצב</th>
                 <th>מחלקה</th>
                 <th>לכלול במאזן פנימי?</th>
               </tr>
@@ -184,6 +207,13 @@ export function PasteExistingChecksForm({
             <tbody>
               {rows.map((row, i) => (
                 <tr key={i}>
+                  <td>
+                    <input
+                      className="w-20 bg-transparent border-b border-border text-sm"
+                      value={row.checkNumber}
+                      onChange={(e) => updateRow(i, { checkNumber: e.target.value })}
+                    />
+                  </td>
                   <td>{row.payee}</td>
                   <td>
                     <input
@@ -202,11 +232,15 @@ export function PasteExistingChecksForm({
                     />
                   </td>
                   <td>
-                    <input
-                      type="checkbox"
-                      checked={row.cleared}
-                      onChange={(e) => updateRow(i, { cleared: e.target.checked })}
-                    />
+                    <select
+                      className="bg-transparent border-b border-border text-sm"
+                      value={row.status}
+                      onChange={(e) => updateRow(i, { status: e.target.value as CheckStatus })}
+                    >
+                      <option value="UNPAID">לא נפרע</option>
+                      <option value="CLEARED">נפרע</option>
+                      <option value="CANCELLED">בוטל</option>
+                    </select>
                   </td>
                   <td>
                     <select

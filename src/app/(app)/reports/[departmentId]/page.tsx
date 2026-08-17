@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { PrintButton } from "@/components/print-button";
+import { LedgerFlagToggle } from "@/components/ledger-flag-toggle-client";
 
 type RangeKey = "month" | "2months" | "3months" | "custom";
 
@@ -83,10 +84,10 @@ export default async function DepartmentReportPage({
       .gte("entry_date", start)
       .lte("entry_date", end)
       .order("entry_date"),
-    supabase.from("incomes").select("amount").eq("owner_department_id", departmentId),
+    supabase.from("incomes").select("amount, skip_department_ledger").eq("owner_department_id", departmentId),
     supabase
       .from("v_check_department_amounts")
-      .select("amount")
+      .select("amount, skip_department_ledger")
       .eq("department_id", departmentId)
       .neq("status", "CANCELLED"),
     supabase
@@ -97,19 +98,23 @@ export default async function DepartmentReportPage({
     supabase.rpc("get_department_cash_flow_forecast", { p_department_id: departmentId, p_horizon_days: 30 }),
   ]);
 
+  // Rows tagged "old" (skip_department_ledger) stay visible in the lists
+  // below for the historical record, but are excluded from every total —
+  // they're already accounted for under the old system and shouldn't count
+  // toward the department's balance again.
   const currentIncome =
-    (allTimeIncomes ?? []).reduce((sum, i) => sum + Number(i.amount), 0) +
+    (allTimeIncomes ?? []).filter((i) => !i.skip_department_ledger).reduce((sum, i) => sum + Number(i.amount), 0) +
     (allTimeManualEntries ?? []).filter((e) => e.direction === "INCOME").reduce((sum, e) => sum + Number(e.amount), 0);
   const currentExpense =
-    (allTimeExpenses ?? []).reduce((sum, e) => sum + Number(e.amount), 0) +
+    (allTimeExpenses ?? []).filter((e) => !e.skip_department_ledger).reduce((sum, e) => sum + Number(e.amount), 0) +
     (allTimeManualEntries ?? []).filter((e) => e.direction === "EXPENSE").reduce((sum, e) => sum + Number(e.amount), 0);
   const forecastNet = (forecast ?? []).reduce((sum, f) => sum + Number(f.expected_change), 0);
 
   const totalIncome =
-    (incomes ?? []).reduce((sum, i) => sum + Number(i.amount), 0) +
+    (incomes ?? []).filter((i) => !i.skip_department_ledger).reduce((sum, i) => sum + Number(i.amount), 0) +
     (manualEntries ?? []).filter((e) => e.direction === "INCOME").reduce((sum, e) => sum + Number(e.amount), 0);
   const totalExpense =
-    (expenses ?? []).reduce((sum, e) => sum + Number(e.amount), 0) +
+    (expenses ?? []).filter((e) => !e.skip_department_ledger).reduce((sum, e) => sum + Number(e.amount), 0) +
     (manualEntries ?? []).filter((e) => e.direction === "EXPENSE").reduce((sum, e) => sum + Number(e.amount), 0);
 
   const rangeLabel =
@@ -211,6 +216,8 @@ export default async function DepartmentReportPage({
               <th>קטגוריה</th>
               <th>תורם</th>
               <th>סכום</th>
+              <th>תג</th>
+              {isAdmin && <th></th>}
             </tr>
           </thead>
           <tbody>
@@ -221,6 +228,7 @@ export default async function DepartmentReportPage({
                 amount: number;
                 donor_name: string | null;
                 categories: { name: string } | null;
+                skip_department_ledger: boolean;
               };
               return (
                 <tr key={r.id}>
@@ -228,12 +236,20 @@ export default async function DepartmentReportPage({
                   <td>{r.categories?.name}</td>
                   <td>{r.donor_name ?? "—"}</td>
                   <td>{formatCurrency(Number(r.amount))}</td>
+                  <td>
+                    {r.skip_department_ledger && <span className="badge bg-background text-muted">הכנסה ישנה</span>}
+                  </td>
+                  {isAdmin && (
+                    <td>
+                      <LedgerFlagToggle id={r.id} kind="income" skipDepartmentLedger={r.skip_department_ledger} />
+                    </td>
+                  )}
                 </tr>
               );
             })}
             {(incomes ?? []).length === 0 && (
               <tr>
-                <td colSpan={4} className="text-center text-muted py-6">
+                <td colSpan={isAdmin ? 6 : 5} className="text-center text-muted py-6">
                   אין הכנסות בטווח שנבחר
                 </td>
               </tr>
@@ -252,6 +268,8 @@ export default async function DepartmentReportPage({
               <th>אמצעי</th>
               <th>סטטוס</th>
               <th>סכום</th>
+              <th>תג</th>
+              {isAdmin && <th></th>}
             </tr>
           </thead>
           <tbody>
@@ -262,11 +280,23 @@ export default async function DepartmentReportPage({
                 <td>{row.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"}</td>
                 <td>{row.status === "CLEARED" ? "נפרע" : "לא נפרע"}</td>
                 <td>{formatCurrency(Number(row.amount))}</td>
+                <td>
+                  {row.skip_department_ledger && <span className="badge bg-background text-muted">הוצאה ישנה</span>}
+                </td>
+                {isAdmin && (
+                  <td>
+                    <LedgerFlagToggle
+                      id={row.check_id as string}
+                      kind="check"
+                      skipDepartmentLedger={Boolean(row.skip_department_ledger)}
+                    />
+                  </td>
+                )}
               </tr>
             ))}
             {(expenses ?? []).length === 0 && (
               <tr>
-                <td colSpan={5} className="text-center text-muted py-6">
+                <td colSpan={isAdmin ? 7 : 6} className="text-center text-muted py-6">
                   אין הוצאות בטווח שנבחר
                 </td>
               </tr>

@@ -423,6 +423,7 @@ export type Database = {
           raw_paste_data: Json | null
           receipt_number: string | null
           requires_inter_settlement: boolean
+          skip_department_ledger: boolean
           status: string
           transaction_ref: string | null
         }
@@ -444,6 +445,7 @@ export type Database = {
           raw_paste_data?: Json | null
           receipt_number?: string | null
           requires_inter_settlement?: boolean
+          skip_department_ledger?: boolean
           status?: string
           transaction_ref?: string | null
         }
@@ -465,6 +467,7 @@ export type Database = {
           raw_paste_data?: Json | null
           receipt_number?: string | null
           requires_inter_settlement?: boolean
+          skip_department_ledger?: boolean
           status?: string
           transaction_ref?: string | null
         }
