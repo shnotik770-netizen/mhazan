@@ -591,6 +591,153 @@ export async function deleteCheck(checkId: string): Promise<{ error?: string }> 
   return { error: error?.message };
 }
 
+export type CheckSpreadRow = {
+  id: string;
+  check_number: string | null;
+  amount: number;
+  due_date: string | null;
+  status: string;
+  departmentName: string | null;
+  allocations: { departmentId: string; departmentName: string | null; amount: number }[];
+};
+
+export type CheckSpreadDetail = {
+  check: {
+    id: string;
+    payee: string;
+    payment_method: string;
+    notes: string | null;
+    bankName: string | null;
+    accountNumber: string | null;
+  };
+  spreadRows: CheckSpreadRow[];
+};
+
+// Full detail for one check — if it's part of a spread (several checks
+// under one spread_id, whether from a supplier installment plan or several
+// merged payment requests), pulls in every sibling check and each row's
+// department split, not just the one that was clicked.
+export async function getCheckSpreadDetail(checkId: string): Promise<{ error?: string; detail?: CheckSpreadDetail }> {
+  const supabase = await createClient();
+  const { data: check, error } = await supabase
+    .from("checks")
+    .select("*, bank_accounts(bank_name, account_number)")
+    .eq("id", checkId)
+    .single();
+  if (error || !check) return { error: error?.message ?? "הצ׳ק לא נמצא" };
+
+  const rawRows = check.spread_id
+    ? (
+        await supabase
+          .from("checks")
+          .select("id, check_number, amount, due_date, status, department_id, departments(name)")
+          .eq("spread_id", check.spread_id)
+          .order("due_date", { ascending: true, nullsFirst: false })
+      ).data
+    : null;
+  const rows = (rawRows ?? [check]) as unknown as {
+    id: string;
+    check_number: string | null;
+    amount: number;
+    due_date: string | null;
+    status: string;
+    department_id: string | null;
+    departments: { name: string } | null;
+  }[];
+
+  const { data: allocations } = await supabase
+    .from("check_allocations")
+    .select("check_id, department_id, amount, departments(name)")
+    .in(
+      "check_id",
+      rows.map((r) => r.id),
+    );
+  const allocationsByCheck = new Map<string, { departmentId: string; departmentName: string | null; amount: number }[]>();
+  for (const a of (allocations ?? []) as unknown as {
+    check_id: string;
+    department_id: string;
+    amount: number;
+    departments: { name: string } | null;
+  }[]) {
+    const list = allocationsByCheck.get(a.check_id) ?? [];
+    list.push({ departmentId: a.department_id, departmentName: a.departments?.name ?? null, amount: Number(a.amount) });
+    allocationsByCheck.set(a.check_id, list);
+  }
+
+  const bankAccounts = check as unknown as { bank_accounts: { bank_name: string; account_number: string } | null };
+
+  return {
+    detail: {
+      check: {
+        id: check.id,
+        payee: check.payee,
+        payment_method: check.payment_method,
+        notes: check.notes,
+        bankName: bankAccounts.bank_accounts?.bank_name ?? null,
+        accountNumber: bankAccounts.bank_accounts?.account_number ?? null,
+      },
+      spreadRows: rows.map((r) => ({
+        id: r.id,
+        check_number: r.check_number,
+        amount: Number(r.amount),
+        due_date: r.due_date,
+        status: r.status,
+        departmentName: r.departments?.name ?? null,
+        allocations: allocationsByCheck.get(r.id) ?? [],
+      })),
+    },
+  };
+}
+
+export type PayeeExpenseRow = {
+  id: string;
+  due_date: string | null;
+  amount: number;
+  payment_method: string;
+  check_number: string | null;
+  status: string;
+  departmentName: string | null;
+  categoryName: string | null;
+};
+
+// Every approved expense (check/transfer with a due date, not cancelled)
+// for one payee — RLS already scopes this to whatever departments the
+// caller can see, same as every other checks query.
+export async function getExpensesByPayee(payee: string): Promise<{ rows: PayeeExpenseRow[] }> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("checks")
+    .select("id, due_date, amount, payment_method, check_number, status, departments(name), categories(name)")
+    .ilike("payee", payee)
+    .not("due_date", "is", null)
+    .neq("status", "CANCELLED")
+    .order("due_date", { ascending: false });
+
+  const rows = (data ?? []) as unknown as {
+    id: string;
+    due_date: string | null;
+    amount: number;
+    payment_method: string;
+    check_number: string | null;
+    status: string;
+    departments: { name: string } | null;
+    categories: { name: string } | null;
+  }[];
+
+  return {
+    rows: rows.map((r) => ({
+      id: r.id,
+      due_date: r.due_date,
+      amount: Number(r.amount),
+      payment_method: r.payment_method,
+      check_number: r.check_number,
+      status: r.status,
+      departmentName: r.departments?.name ?? null,
+      categoryName: r.categories?.name ?? null,
+    })),
+  };
+}
+
 // Candidate list for the bank-reconciliation panel: unpaid, numbered checks
 // on a given bank account, to be matched client-side against a pasted bank
 // statement by check number + amount.

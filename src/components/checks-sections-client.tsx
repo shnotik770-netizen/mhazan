@@ -8,6 +8,7 @@ import {
   EditDeleteCheckRow,
   VerifyTransferButton,
 } from "@/components/checks-client";
+import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
 import type { CheckAllocationInput } from "@/app/(app)/checks/actions";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -111,7 +112,9 @@ export function PendingApprovalTable({
           <tbody>
             {filtered.map((c) => (
               <tr key={c.id!}>
-                <td>{c.payee}</td>
+                <td>
+                  <PayeeLink payee={c.payee ?? ""} />
+                </td>
                 <td>{formatCurrency(Number(c.amount))}</td>
                 <td>
                   <DepartmentCell checkId={c.id!} departmentName={c.department_name} allocationsByCheck={allocationsByCheck} />
@@ -199,7 +202,9 @@ export function IssuedChecksTable({
                 {bankRows.map((c) => (
                   <tr key={c.id!}>
                     <td>{c.check_number}</td>
-                    <td>{c.payee}</td>
+                    <td>
+                      <PayeeLink payee={c.payee ?? ""} />
+                    </td>
                     <td>{formatCurrency(Number(c.amount))}</td>
                     <td>{c.due_date ? formatDate(c.due_date) : "—"}</td>
                     <td>
@@ -208,7 +213,8 @@ export function IssuedChecksTable({
                     <td>
                       <CheckStatusControls checkId={c.id!} status={c.status ?? "UNPAID"} paymentMethod="CHECK" />
                     </td>
-                    <td>
+                    <td className="flex items-center gap-2">
+                      <CheckDetailLink checkId={c.id!} />
                       <EditDeleteCheckRow
                         checkId={c.id!}
                         payee={c.payee ?? ""}
@@ -291,7 +297,9 @@ export function TransfersPendingExecutionTable({
               <tbody>
                 {bankRows.map((c) => (
                   <tr key={c.id!}>
-                    <td>{c.payee}</td>
+                    <td>
+                      <PayeeLink payee={c.payee ?? ""} />
+                    </td>
                     <td>{formatCurrency(Number(c.amount))}</td>
                     <td>{c.due_date ? formatDate(c.due_date) : "—"}</td>
                     <td>
@@ -300,7 +308,8 @@ export function TransfersPendingExecutionTable({
                     <td>
                       <VerifyTransferButton checkId={c.id!} label="אשר שההעברה בוצעה" captureInternalBeneficiary />
                     </td>
-                    <td>
+                    <td className="flex items-center gap-2">
+                      <CheckDetailLink checkId={c.id!} />
                       <EditDeleteCheckRow
                         checkId={c.id!}
                         payee={c.payee ?? ""}
@@ -354,7 +363,9 @@ export function OverdueTransfersTable({ rows }: { rows: OverdueTransferRow[] }) 
         <tbody>
           {filtered.map((row) => (
             <tr key={row.id}>
-              <td>{row.payee}</td>
+              <td>
+                <PayeeLink payee={row.payee} />
+              </td>
               <td>{formatCurrency(Number(row.amount))}</td>
               <td>{formatDate(row.due_date)}</td>
               <td>{row.departments?.name ?? "בהמתנה"}</td>
@@ -416,7 +427,7 @@ export function AllChecksTable({
             <th>חשבון</th>
             <th>מחלקה</th>
             <th>סטטוס</th>
-            {isAdmin && <th></th>}
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -425,7 +436,7 @@ export function AllChecksTable({
               <td>{row.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"}</td>
               <td>{row.check_number ?? "—"}</td>
               <td>
-                {row.payee}
+                <PayeeLink payee={row.payee} />
                 {row.spread_id && <span className="badge bg-background text-muted mr-1">פריסה</span>}
                 {row.internal_beneficiary && <div className="text-xs text-muted">מוטב פנימי: {row.internal_beneficiary}</div>}
               </td>
@@ -441,8 +452,9 @@ export function AllChecksTable({
               <td>
                 <CheckStatusControls checkId={row.id} status={row.status} paymentMethod={row.payment_method} />
               </td>
-              {isAdmin && (
-                <td>
+              <td className="flex items-center gap-2">
+                <CheckDetailLink checkId={row.id} />
+                {isAdmin && (
                   <EditDeleteCheckRow
                     checkId={row.id}
                     payee={row.payee}
@@ -460,13 +472,13 @@ export function AllChecksTable({
                     }
                     departments={departments}
                   />
-                </td>
-              )}
+                )}
+              </td>
             </tr>
           ))}
           {filtered.length === 0 && (
             <tr>
-              <td colSpan={isAdmin ? 9 : 8} className="text-center text-muted py-6">
+              <td colSpan={9} className="text-center text-muted py-6">
                 אין צ׳קים רשומים עדיין
               </td>
             </tr>
@@ -508,7 +520,9 @@ export function OverdueChecksTable({ rows }: { rows: OverdueCheckRow[] }) {
         <tbody>
           {filtered.map((row) => (
             <tr key={row.id}>
-              <td>{row.payee}</td>
+              <td>
+                <PayeeLink payee={row.payee} />
+              </td>
               <td>{row.check_number ?? "—"}</td>
               <td>{formatCurrency(Number(row.amount))}</td>
               <td>{formatDate(row.due_date)}</td>

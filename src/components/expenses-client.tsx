@@ -6,6 +6,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { SearchableSelect } from "@/components/searchable-select";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
+import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
 import {
   bulkAssignCheckDepartment,
   updateCheck,
@@ -239,7 +240,16 @@ export function ExpensesTable({
                   </td>
                 )}
                 <td>{r.source}</td>
-                <td>{r.description}</td>
+                <td>
+                  {r.isCheck ? (
+                    <>
+                      <PayeeLink payee={r.payeeName} />
+                      {r.notes ? ` — ${r.notes}` : ""}
+                    </>
+                  ) : (
+                    r.description
+                  )}
+                </td>
                 <td>{formatCurrency(r.amount)}</td>
                 <td>{r.date ? formatDate(r.date) : "—"}</td>
                 <td>{r.departmentName ?? <span className="text-warning">בהמתנה</span>}</td>
@@ -255,7 +265,8 @@ export function ExpensesTable({
                   )}
                 </td>
                 {isAdmin && (
-                  <td>
+                  <td className="flex items-center gap-2">
+                    {r.isCheck && <CheckDetailLink checkId={r.id} />}
                     <button type="button" onClick={() => setEditRow(r)} className="text-xs text-primary underline">
                       עריכה
                     </button>
