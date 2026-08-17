@@ -53,6 +53,8 @@ export function ExpensesTable({
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [onlyUnclassified, setOnlyUnclassified] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDepartmentId, setBulkDepartmentId] = useState("");
   const [bulkPending, startBulk] = useTransition();
@@ -65,6 +67,8 @@ export function ExpensesTable({
 
   const filtered = rows.filter((r) => {
     if (onlyUnclassified && r.departmentName) return false;
+    if (fromDate && (!r.date || r.date < fromDate)) return false;
+    if (toDate && (!r.date || r.date > toDate)) return false;
     if (!query.trim()) return true;
     const q = query.trim().toLowerCase();
     return (
@@ -171,6 +175,36 @@ export function ExpensesTable({
           />
           רק ללא מחלקה
         </label>
+        <label className="flex items-center gap-2 text-sm text-muted">
+          מתאריך
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm"
+          />
+        </label>
+        <label className="flex items-center gap-2 text-sm text-muted">
+          עד תאריך
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm"
+          />
+        </label>
+        {(fromDate || toDate) && (
+          <button
+            type="button"
+            onClick={() => {
+              setFromDate("");
+              setToDate("");
+            }}
+            className="text-sm text-muted underline"
+          >
+            נקה תאריכים
+          </button>
+        )}
       </div>
 
       {isAdmin && selected.size > 0 && (
