@@ -27,9 +27,10 @@ function normalizeDate(text: string): string {
   if (!trimmed) return "";
   const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const dmy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  const dmy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
   if (dmy) {
-    const [, d, m, y] = dmy;
+    const [, d, m, yRaw] = dmy;
+    const y = yRaw.length === 2 ? `20${yRaw}` : yRaw;
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
   return trimmed;
@@ -228,6 +229,7 @@ export function PasteExistingChecksForm({
                       className="w-28 bg-transparent border-b border-border text-sm"
                       value={row.date}
                       onChange={(e) => updateRow(i, { date: e.target.value })}
+                      onBlur={(e) => updateRow(i, { date: normalizeDate(e.target.value) })}
                       placeholder="YYYY-MM-DD"
                     />
                   </td>

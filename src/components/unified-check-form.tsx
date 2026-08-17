@@ -6,6 +6,7 @@ import { createCheck, createPaymentSpread, type CheckAllocationInput } from "@/a
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { MiniCalculator } from "@/components/mini-calculator";
 import { SearchableSelect } from "@/components/searchable-select";
+import { Modal } from "@/components/modal";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -68,10 +69,8 @@ export function UnifiedCheckForm({
 
   const isSpread = rows.length > 1;
 
-  function reset() {
+  function resetFields() {
     setPayee("");
-    setPaymentMethod("CHECK");
-    setBankAccountId("");
     setCategoryId("");
     setNotes("");
     setSkipDepartmentLedger(false);
@@ -84,6 +83,12 @@ export function UnifiedCheckForm({
     setHelperCount(1);
     setHelperFirstDate("");
     setHelperFirstCheckNumber("");
+  }
+
+  function reset() {
+    resetFields();
+    setPaymentMethod("CHECK");
+    setBankAccountId("");
   }
 
   function updateRow(i: number, patch: Partial<Row>) {
@@ -144,8 +149,8 @@ export function UnifiedCheckForm({
         if (result.error) {
           setError(result.error);
         } else {
-          reset();
-          setOpen(false);
+          setMessage("נשמר בהצלחה — ניתן להזין דרישת תשלום נוספת");
+          resetFields();
           router.refresh();
         }
         return;
@@ -168,8 +173,8 @@ export function UnifiedCheckForm({
       if (result.error) {
         setError(result.error);
       } else {
-        setMessage("נוצר בהצלחה");
-        reset();
+        setMessage("נשמר בהצלחה — ניתן להזין דרישת תשלום נוספת");
+        resetFields();
         router.refresh();
       }
     });
@@ -187,232 +192,258 @@ export function UnifiedCheckForm({
   }
 
   return (
-    <div className="card p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="font-semibold">{isSpread ? "פריסת צ׳קים / העברות לספק" : "דרישת תשלום חדשה"}</h2>
-        <button
-          type="button"
-          onClick={() => {
-            reset();
-            setOpen(false);
-          }}
-          className="text-sm text-muted"
-        >
-          סגור
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-        <select
-          value={paymentMethod}
-          onChange={(e) => setPaymentMethod(e.target.value as "CHECK" | "TRANSFER")}
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        >
-          <option value="CHECK">צ׳ק</option>
-          <option value="TRANSFER">העברה בנקאית</option>
-        </select>
-        <SearchableSelect
-          value={bankAccountId}
-          onChange={setBankAccountId}
-          options={bankAccounts.map((b) => ({ id: b.id, label: `${b.departments?.name ?? ""} — ${b.bank_name}` }))}
-          placeholder="חשבון בנק..."
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        />
-        <input
-          value={payee}
-          onChange={(e) => setPayee(e.target.value)}
-          placeholder="מוטב"
-          list="supplier-names"
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        />
-        {!isSpread && (
-          <select
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          >
-            <option value="">קטגוריה (אופציונלי)</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <input
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="הערות"
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-4">
-        <label className="flex items-center gap-1 text-sm">
-          <input type="checkbox" checked={isSplitting} onChange={(e) => setIsSplitting(e.target.checked)} />
-          פצל בין מחלקות
-        </label>
-        {!isSpread && (
-          <label className="flex items-center gap-1 text-sm">
-            <input
-              type="checkbox"
-              checked={skipDepartmentLedger}
-              onChange={(e) => setSkipDepartmentLedger(e.target.checked)}
-            />
-            כבר נכלל בחישוב הישן (לא לכלול במאזן הפנימי של המחלקה)
-          </label>
-        )}
-      </div>
-
-      {!helperOpen ? (
-        <button type="button" onClick={() => setHelperOpen(true)} className="text-sm text-primary underline">
-          עזר להגדרת פריסה (כמה תשלומים לאותו מוטב)
-        </button>
-      ) : (
-        <div className="card bg-background p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">עזר להגדרת הפריסה</p>
-            <button type="button" onClick={() => setHelperOpen(false)} className="text-xs text-muted">
-              סגור
-            </button>
-          </div>
+    <Modal
+      onClose={() => {
+        reset();
+        setMessage(null);
+        setOpen(false);
+      }}
+    >
+      <div className="card p-5 space-y-5">
+        <div className="flex items-center justify-between border-b border-border pb-3">
           <div>
-            <p className="text-xs text-muted mb-1">מחלקות מעורבות בפריסה</p>
-            <div className="flex flex-wrap gap-2">
-              {departments.map((d) => (
-                <label key={d.id} className="flex items-center gap-1 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={helperDepartmentIds.includes(d.id)}
-                    onChange={() => toggleHelperDepartment(d.id)}
-                  />
-                  {d.name}
-                </label>
-              ))}
-            </div>
+            <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)" }}>
+              {isSpread ? "פריסת צ׳קים / העברות לספק" : "דרישת תשלום חדשה"}
+            </h2>
+            <p className="text-xs text-muted mt-0.5">{payee ? `לתשלום עבור: ${payee}` : "בחר/י מוטב ופרטי תשלום"}</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
-            <input
-              type="number"
-              value={helperTotal || ""}
-              onChange={(e) => setHelperTotal(Number(e.target.value) || 0)}
-              placeholder="סה״כ סכום מתוכנן"
-              className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-            />
-            <input
-              type="number"
-              min={1}
-              value={helperCount || ""}
-              onChange={(e) => setHelperCount(Number(e.target.value) || 1)}
-              placeholder="למספר צ׳קים/העברות לפרוס"
-              className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-            />
-            <input
-              type="date"
-              value={helperFirstDate}
-              onChange={(e) => setHelperFirstDate(e.target.value)}
-              title="תאריך הצ׳ק הראשון (אופציונלי)"
-              className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-            />
-            <input
-              value={helperFirstCheckNumber}
-              onChange={(e) => setHelperFirstCheckNumber(e.target.value)}
-              placeholder="מספר הצ׳ק הראשון (אופציונלי)"
-              className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-            />
-          </div>
-          <p className="text-xs text-muted">
-            {helperCount > 0 && helperTotal > 0
-              ? `כל תשלום: ${(Math.floor((helperTotal / Math.max(1, helperCount)) * 100) / 100).toLocaleString()}`
-              : "הזן סכום כולל ומספר תשלומים כדי לראות חישוב"}
-          </p>
           <button
             type="button"
-            onClick={generateRowsFromHelper}
-            className="rounded bg-primary text-primary-foreground text-xs px-3 py-1.5"
+            onClick={() => {
+              reset();
+              setMessage(null);
+              setOpen(false);
+            }}
+            className="text-sm text-muted hover:text-foreground"
           >
-            צור שורות תשלום
+            סגור ✕
           </button>
         </div>
-      )}
 
-      <div className="space-y-2">
-        {rows.map((row, i) => (
-          <div key={i} className="border-t border-border pt-2 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="date"
-                value={row.date}
-                onChange={(e) => updateRow(i, { date: e.target.value })}
-                className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-                title="ניתן להשאיר ריק"
-              />
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  value={row.amount || ""}
-                  onChange={(e) => updateRow(i, { amount: Number(e.target.value) || 0 })}
-                  placeholder="סכום"
-                  className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm"
-                />
-                <MiniCalculator onApply={(v) => updateRow(i, { amount: v })} />
+        {/* פרטי התשלום — מי, מאיפה, ולמה */}
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold text-muted">פרטי התשלום</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as "CHECK" | "TRANSFER")}
+              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+            >
+              <option value="CHECK">צ׳ק</option>
+              <option value="TRANSFER">העברה בנקאית</option>
+            </select>
+            <SearchableSelect
+              value={bankAccountId}
+              onChange={setBankAccountId}
+              options={bankAccounts.map((b) => ({ id: b.id, label: `${b.departments?.name ?? ""} — ${b.bank_name}` }))}
+              placeholder="חשבון בנק..."
+              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+            />
+            <input
+              value={payee}
+              onChange={(e) => setPayee(e.target.value)}
+              placeholder="מוטב"
+              list="supplier-names"
+              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+            />
+            {!isSpread && (
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+              >
+                <option value="">קטגוריה (אופציונלי)</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="הערות"
+              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm md:col-span-2"
+            />
+          </div>
+        </section>
+
+        {/* סכום לתשלום — כמה, מתי, ולאיזו מחלקה */}
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold text-muted">סכום לתשלום{isSpread ? " (כל תשלום בנפרד)" : ""}</h3>
+          <div className="space-y-2">
+            {rows.map((row, i) => (
+              <div key={i} className="rounded-lg border border-border p-3 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    value={row.date}
+                    onChange={(e) => updateRow(i, { date: e.target.value })}
+                    className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+                    title="ניתן להשאיר ריק"
+                  />
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      value={row.amount || ""}
+                      onChange={(e) => updateRow(i, { amount: Number(e.target.value) || 0 })}
+                      placeholder="סכום"
+                      className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm"
+                    />
+                    <MiniCalculator onApply={(v) => updateRow(i, { amount: v })} />
+                  </div>
+                  {paymentMethod === "CHECK" && (
+                    <input
+                      value={row.checkNumber}
+                      onChange={(e) => updateRow(i, { checkNumber: e.target.value })}
+                      placeholder="מספר צ׳ק (ניתן להשאיר ריק)"
+                      className="w-32 rounded border border-border bg-transparent px-2 py-1 text-sm"
+                    />
+                  )}
+                  {!isSplitting && (
+                    <SearchableSelect
+                      value={row.departmentId}
+                      onChange={(id) => updateRow(i, { departmentId: id })}
+                      options={departments.map((d) => ({ id: d.id, label: d.name }))}
+                      placeholder="מחלקה"
+                      required
+                      className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+                    />
+                  )}
+                  {rows.length > 1 && (
+                    <button type="button" onClick={() => removeRow(i)} className="text-xs text-danger">
+                      הסר תשלום
+                    </button>
+                  )}
+                </div>
+                {isSplitting && (
+                  <SplitAllocationEditor
+                    departments={departments}
+                    totalAmount={row.amount}
+                    allocations={row.allocations}
+                    onChange={(allocations) => updateRow(i, { allocations })}
+                  />
+                )}
               </div>
-              {paymentMethod === "CHECK" && (
+            ))}
+          </div>
+        </section>
+
+        {/* הגדרות איך הסכום נספר — נפרד מהפריסה בפועל של הצ׳קים */}
+        <section className="rounded-lg bg-background p-3 space-y-2">
+          <h3 className="text-sm font-semibold">מחלקה וספירה במאזן</h3>
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-1 text-sm">
+              <input type="checkbox" checked={isSplitting} onChange={(e) => setIsSplitting(e.target.checked)} />
+              פצל בין מחלקות (מתוך הסכום של כל תשלום)
+            </label>
+            {!isSpread && (
+              <label className="flex items-center gap-1 text-sm">
                 <input
-                  value={row.checkNumber}
-                  onChange={(e) => updateRow(i, { checkNumber: e.target.value })}
-                  placeholder="מספר צ׳ק (ניתן להשאיר ריק)"
-                  className="w-32 rounded border border-border bg-transparent px-2 py-1 text-sm"
+                  type="checkbox"
+                  checked={skipDepartmentLedger}
+                  onChange={(e) => setSkipDepartmentLedger(e.target.checked)}
                 />
-              )}
-              {!isSplitting && (
-                <SearchableSelect
-                  value={row.departmentId}
-                  onChange={(id) => updateRow(i, { departmentId: id })}
-                  options={departments.map((d) => ({ id: d.id, label: d.name }))}
-                  placeholder="מחלקה"
-                  required
-                  className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-                />
-              )}
-              {rows.length > 1 && (
-                <button type="button" onClick={() => removeRow(i)} className="text-xs text-danger">
-                  הסר תשלום
-                </button>
-              )}
-            </div>
-            {isSplitting && (
-              <SplitAllocationEditor
-                departments={departments}
-                totalAmount={row.amount}
-                allocations={row.allocations}
-                onChange={(allocations) => updateRow(i, { allocations })}
-              />
+                כבר נכלל בחישוב הישן (לא לכלול במאזן הפנימי של המחלקה)
+              </label>
             )}
           </div>
-        ))}
-        <button type="button" onClick={addRow} className="text-sm text-primary underline">
-          + הוסף תשלום נוסף לאותו מוטב (פריסה)
-        </button>
-      </div>
+        </section>
 
-      <div className="flex items-center gap-2">
-        <button
-          disabled={
-            isPending ||
-            !bankAccountId ||
-            !payee ||
-            rows.every((r) => r.amount <= 0) ||
-            (!isSplitting && rows.some((r) => !r.departmentId))
-          }
-          onClick={submit}
-          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
-        >
-          שמור
-        </button>
-        {error && <span className="text-sm text-danger">{error}</span>}
-        {message && <span className="text-sm text-success">{message}</span>}
+        {/* פריסה בפועל לכמה תשלומים — נפרד מחישוב הסכום/מחלקה */}
+        <section className="rounded-lg bg-background p-3 space-y-2">
+          <h3 className="text-sm font-semibold">פריסה לכמה תשלומים לאותו מוטב</h3>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" onClick={addRow} className="text-sm text-primary underline">
+              + הוסף תשלום נוסף לאותו מוטב
+            </button>
+            <button type="button" onClick={() => setHelperOpen((v) => !v)} className="text-sm text-primary underline">
+              {helperOpen ? "סגור עזר לפריסה" : "עזר להגדרת פריסה (כמה תשלומים לאותו מוטב)"}
+            </button>
+          </div>
+
+          {helperOpen && (
+            <div className="card p-3 space-y-2">
+              <div>
+                <p className="text-xs text-muted mb-1">מחלקות מעורבות בפריסה</p>
+                <div className="flex flex-wrap gap-2">
+                  {departments.map((d) => (
+                    <label key={d.id} className="flex items-center gap-1 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={helperDepartmentIds.includes(d.id)}
+                        onChange={() => toggleHelperDepartment(d.id)}
+                      />
+                      {d.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                <input
+                  type="number"
+                  value={helperTotal || ""}
+                  onChange={(e) => setHelperTotal(Number(e.target.value) || 0)}
+                  placeholder="סה״כ סכום מתוכנן"
+                  className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  value={helperCount || ""}
+                  onChange={(e) => setHelperCount(Number(e.target.value) || 1)}
+                  placeholder="למספר צ׳קים/העברות לפרוס"
+                  className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+                />
+                <input
+                  type="date"
+                  value={helperFirstDate}
+                  onChange={(e) => setHelperFirstDate(e.target.value)}
+                  title="תאריך הצ׳ק הראשון (אופציונלי)"
+                  className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+                />
+                <input
+                  value={helperFirstCheckNumber}
+                  onChange={(e) => setHelperFirstCheckNumber(e.target.value)}
+                  placeholder="מספר הצ׳ק הראשון (אופציונלי)"
+                  className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+                />
+              </div>
+              <p className="text-xs text-muted">
+                {helperCount > 0 && helperTotal > 0
+                  ? `כל תשלום: ${(Math.floor((helperTotal / Math.max(1, helperCount)) * 100) / 100).toLocaleString()}`
+                  : "הזן סכום כולל ומספר תשלומים כדי לראות חישוב"}
+              </p>
+              <button
+                type="button"
+                onClick={generateRowsFromHelper}
+                className="rounded bg-primary text-primary-foreground text-xs px-3 py-1.5"
+              >
+                צור שורות תשלום
+              </button>
+            </div>
+          )}
+        </section>
+
+        <div className="flex items-center gap-2 border-t border-border pt-3">
+          <button
+            disabled={
+              isPending ||
+              !bankAccountId ||
+              !payee ||
+              rows.every((r) => r.amount <= 0) ||
+              (!isSplitting && rows.some((r) => !r.departmentId))
+            }
+            onClick={submit}
+            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          >
+            שמור
+          </button>
+          {error && <span className="text-sm text-danger">{error}</span>}
+          {message && <span className="text-sm text-success">{message}</span>}
+        </div>
       </div>
-    </div>
+    </Modal>
   );
 }

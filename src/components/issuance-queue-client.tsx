@@ -19,6 +19,7 @@ type QueueRow = {
   check_number: string | null;
   due_date: string | null;
   notes: string | null;
+  created_at: string | null;
 };
 
 type AllocationInfo = { departmentId: string; departmentName: string | null; amount: number };
@@ -162,6 +163,7 @@ export function IssuanceQueueTable({
             <th></th>
             <th>מוטב</th>
             <th>סכום</th>
+            <th>תאריך הזנה</th>
             <th>תאריך</th>
             <th>מחלקה</th>
             <th>אמצעי</th>
@@ -177,6 +179,7 @@ export function IssuanceQueueTable({
               </td>
               <td>{c.payee}</td>
               <td>{formatCurrency(Number(c.amount))}</td>
+              <td className="text-muted text-xs">{c.created_at ? formatDate(c.created_at) : "—"}</td>
               <td>{c.due_date ? formatDate(c.due_date) : <span className="text-warning">ללא תאריך</span>}</td>
               <td>
                 {c.department_name ? (

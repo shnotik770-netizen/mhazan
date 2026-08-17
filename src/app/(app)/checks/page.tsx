@@ -6,7 +6,7 @@ import {
 } from "@/components/checks-client";
 import { PasteExistingChecksForm } from "@/components/checks-paste-client";
 import { UnifiedCheckForm } from "@/components/unified-check-form";
-import { BulkCheckEntryForm, BulkExpenseRequestFormMulti } from "@/components/bulk-checks-client";
+import { BulkExpenseRequestFormMulti } from "@/components/bulk-checks-client";
 import { IssuanceQueueTable } from "@/components/issuance-queue-client";
 import { BankReconciliationPanel } from "@/components/bank-reconciliation-client";
 import { ChecksFilterBar } from "@/components/checks-filter-bar";
@@ -163,12 +163,8 @@ export default async function ChecksPage({
         {isAdmin && (
           <div className="flex items-center gap-2">
             <UnifiedCheckForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} categories={categories ?? []} />
-            <BulkCheckEntryForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <PasteExistingChecksForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <BankReconciliationPanel bankAccounts={bankAccounts ?? []} />
-            <a href="/settings#recurring-schedules" className="rounded-lg border border-border px-4 py-2 text-sm font-semibold">
-              + הוראת קבע חדשה
-            </a>
           </div>
         )}
       </div>
