@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { groupChecksIntoSpread, mergeChecks, type CheckAllocationInput } from "@/app/(app)/checks/actions";
 import { EditDeleteCheckRow, IssueCheckRow } from "@/components/checks-client";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -116,6 +116,7 @@ export function IssuanceQueueTable({
             <th></th>
             <th>מוטב</th>
             <th>סכום</th>
+            <th>תאריך</th>
             <th>מחלקה</th>
             <th>אמצעי</th>
             <th>הנפקה</th>
@@ -130,6 +131,7 @@ export function IssuanceQueueTable({
               </td>
               <td>{c.payee}</td>
               <td>{formatCurrency(Number(c.amount))}</td>
+              <td>{c.due_date ? formatDate(c.due_date) : <span className="text-warning">ללא תאריך</span>}</td>
               <td>
                 {c.department_name ? (
                   c.department_name
