@@ -1307,6 +1307,7 @@ export type Database = {
       get_cash_flow_forecast: {
         Args: { p_bank_account_id: string; p_horizon_days?: number }
         Returns: {
+          category: string
           expected_change: number
           forecast_date: string
           running_balance: number
@@ -1316,6 +1317,7 @@ export type Database = {
       get_department_cash_flow_forecast: {
         Args: { p_department_id: string; p_horizon_days?: number }
         Returns: {
+          category: string
           expected_change: number
           forecast_date: string
           running_balance: number

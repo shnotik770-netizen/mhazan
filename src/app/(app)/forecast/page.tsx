@@ -51,6 +51,55 @@ export default async function ForecastPage({
           })
         : { data: [], error: null };
 
+  // Group the flat per-item forecast rows into a per-day breakdown by
+  // category (checks / transfers / recurring / expected income) — the
+  // per-item list further down stays for anyone who wants to see exactly
+  // what's behind a day's total.
+  const dailyBreakdown = (() => {
+    const byDate = new Map<
+      string,
+      { checks: number; transfers: number; recurring: number; income: number; total: number; runningBalance: number }
+    >();
+    for (const row of forecast ?? []) {
+      const d = row.forecast_date!;
+      const entry =
+        byDate.get(d) ?? { checks: 0, transfers: 0, recurring: 0, income: 0, total: 0, runningBalance: 0 };
+      const change = Number(row.expected_change);
+      if (row.category === "CHECK") entry.checks += change;
+      else if (row.category === "TRANSFER") entry.transfers += change;
+      else if (row.category === "RECURRING") entry.recurring += change;
+      else if (row.category === "INCOME") entry.income += change;
+      entry.total += change;
+      entry.runningBalance = Number(row.running_balance);
+      byDate.set(d, entry);
+    }
+    return [...byDate.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
+  })();
+
+  // Actual recorded income per month, for the bank account's department —
+  // a look back at real history alongside the forward-looking forecast.
+  const monthlyIncome =
+    mode === "bank" && selectedAccount
+      ? (async () => {
+          const twelveMonthsAgo = new Date();
+          twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+          twelveMonthsAgo.setDate(1);
+          const { data: incomeRows } = await supabase
+            .from("incomes")
+            .select("date, amount")
+            .eq("bank_account_id", selectedAccount.id)
+            .gte("date", twelveMonthsAgo.toISOString().slice(0, 10))
+            .order("date");
+          const byMonth = new Map<string, number>();
+          for (const r of incomeRows ?? []) {
+            const key = r.date.slice(0, 7);
+            byMonth.set(key, (byMonth.get(key) ?? 0) + Number(r.amount));
+          }
+          return [...byMonth.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
+        })()
+      : Promise.resolve([]);
+  const monthlyIncomeRows = await monthlyIncome;
+
   return (
     <div className="space-y-6">
       <div>
@@ -154,30 +203,59 @@ export default async function ForecastPage({
 
       {error && <div className="card p-4 bg-danger-bg text-danger text-sm">{error.message}</div>}
 
+      {mode === "bank" && monthlyIncomeRows.length > 0 && (
+        <div className="card p-4 overflow-x-auto">
+          <h2 className="font-semibold mb-2">הכנסות בפועל לפי חודש (12 חודשים אחרונים)</h2>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>חודש</th>
+                <th>סה״כ הכנסות</th>
+              </tr>
+            </thead>
+            <tbody>
+              {monthlyIncomeRows.map(([month, total]) => (
+                <tr key={month}>
+                  <td>{month}</td>
+                  <td className="font-semibold text-success">{formatCurrency(total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="card p-4 overflow-x-auto">
+        <h2 className="font-semibold mb-2">סיכום יומי — כמה כסף אמור לרדת/להיכנס בכל יום</h2>
         <table className="data-table">
           <thead>
             <tr>
               <th>תאריך</th>
-              <th>מקור</th>
-              <th>שינוי צפוי</th>
-              <th>{mode === "bank" ? "יתרה חזויה" : "שינוי נטו מצטבר"}</th>
+              <th>צ׳קים</th>
+              <th>העברות</th>
+              <th>הוראות קבע</th>
+              {mode === "bank" && <th>צפי הכנסה</th>}
+              <th>סה״כ שינוי יומי</th>
+              <th>{mode === "bank" ? "יתרה בסוף היום" : "יתרה מצטברת בסוף היום"}</th>
             </tr>
           </thead>
           <tbody>
-            {(forecast ?? []).map((row, i) => (
-              <tr key={i}>
-                <td>{formatDate(row.forecast_date!)}</td>
-                <td>{row.source}</td>
-                <td className={Number(row.expected_change) < 0 ? "text-danger" : "text-success"}>
-                  {formatCurrency(Number(row.expected_change))}
+            {dailyBreakdown.map(([date, d]) => (
+              <tr key={date}>
+                <td>{formatDate(date)}</td>
+                <td className={d.checks < 0 ? "text-danger" : undefined}>{formatCurrency(d.checks)}</td>
+                <td className={d.transfers < 0 ? "text-danger" : undefined}>{formatCurrency(d.transfers)}</td>
+                <td className={d.recurring < 0 ? "text-danger" : undefined}>{formatCurrency(d.recurring)}</td>
+                {mode === "bank" && <td className="text-success">{formatCurrency(d.income)}</td>}
+                <td className={`font-semibold ${d.total < 0 ? "text-danger" : "text-success"}`}>
+                  {formatCurrency(d.total)}
                 </td>
-                <td className="font-semibold">{formatCurrency(Number(row.running_balance))}</td>
+                <td className="font-semibold">{formatCurrency(d.runningBalance)}</td>
               </tr>
             ))}
-            {(forecast ?? []).length === 0 && (
+            {dailyBreakdown.length === 0 && (
               <tr>
-                <td colSpan={4} className="text-center text-muted py-6">
+                <td colSpan={mode === "bank" ? 7 : 6} className="text-center text-muted py-6">
                   אין תנועות צפויות בטווח שנבחר
                 </td>
               </tr>
@@ -185,6 +263,41 @@ export default async function ForecastPage({
           </tbody>
         </table>
       </div>
+
+      <details className="card p-4">
+        <summary className="cursor-pointer font-semibold">פירוט מלא לפי פריט</summary>
+        <div className="overflow-x-auto mt-3">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>תאריך</th>
+                <th>מקור</th>
+                <th>שינוי צפוי</th>
+                <th>{mode === "bank" ? "יתרה חזויה" : "שינוי נטו מצטבר"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(forecast ?? []).map((row, i) => (
+                <tr key={i}>
+                  <td>{formatDate(row.forecast_date!)}</td>
+                  <td>{row.source}</td>
+                  <td className={Number(row.expected_change) < 0 ? "text-danger" : "text-success"}>
+                    {formatCurrency(Number(row.expected_change))}
+                  </td>
+                  <td className="font-semibold">{formatCurrency(Number(row.running_balance))}</td>
+                </tr>
+              ))}
+              {(forecast ?? []).length === 0 && (
+                <tr>
+                  <td colSpan={4} className="text-center text-muted py-6">
+                    אין תנועות צפויות בטווח שנבחר
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </details>
     </div>
   );
 }
