@@ -451,18 +451,15 @@ export function IssuanceQueueTable({
 
       {quickOpen && (
         <Modal onClose={() => setQuickOpen(false)}>
-          {/* flex-col h-full so the footer below can stay pinned while only
-              the row list scrolls — the submit button is reachable right
-              away, no matter how long the list or where you are in it. */}
-          <div className="card flex flex-col overflow-hidden min-h-0">
-            <div className="flex items-center justify-between p-4 pb-3 border-b border-border shrink-0">
+          <div className="card p-0 overflow-hidden">
+            <div className="flex items-center justify-between p-4 pb-3 border-b border-border">
               <h2 className="font-semibold">הנפקה מהירה — מספור רציף</h2>
               <button type="button" onClick={() => setQuickOpen(false)} className="text-sm text-muted">
                 סגור
               </button>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+            <div className="p-4 space-y-3">
               <p className="text-xs text-muted">
                 כל הצ׳קים שכבר נקבע להם תאריך אך חסר מספר. הזנת מספר לצ׳ק הראשון תמלא אוטומטית מספור רציף לשאר; תיקון
                 מספר באמצע הרשימה ימספר מחדש רק את מה שאחריו. ביטול סימון ה־V מוציא צ׳ק מההנפקה ולא מצמיד לו מספר כלל;
@@ -555,7 +552,11 @@ export function IssuanceQueueTable({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 p-4 pt-3 border-t border-border shrink-0">
+            {/* sticky (not a flex-shrink trick) — works within the modal
+                backdrop's own natural scroll, so the button stays reachable
+                without depending on a bounded-height container that may not
+                actually get bounded in every browser. */}
+            <div className="sticky bottom-0 flex items-center gap-2 p-4 pt-3 border-t border-border bg-surface">
               <button
                 type="button"
                 disabled={quickPending}

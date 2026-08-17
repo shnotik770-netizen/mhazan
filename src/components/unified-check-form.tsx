@@ -200,7 +200,7 @@ export function UnifiedCheckForm({
         setOpen(false);
       }}
     >
-      <div className="card p-5 space-y-5 overflow-y-auto">
+      <div className="card p-5 space-y-5">
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div>
             <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)" }}>

@@ -58,8 +58,8 @@ function CheckDetailModal({ checkId, onClose }: { checkId: string; onClose: () =
 
   return (
     <Modal onClose={onClose}>
-      <div className="card flex flex-col overflow-hidden min-h-0">
-        <div className="flex items-center justify-between p-4 pb-3 border-b border-border shrink-0">
+      <div className="card p-4 space-y-3">
+        <div className="flex items-center justify-between">
           <h2 className="font-semibold">
             פרטי {detail?.check.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"}
             {isSpread ? " — פריסה" : ""}
@@ -68,7 +68,7 @@ function CheckDetailModal({ checkId, onClose }: { checkId: string; onClose: () =
             סגור
           </button>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        <div className="space-y-3">
           {loading && <p className="text-sm text-muted">טוען...</p>}
           {error && <p className="text-sm text-danger">{error}</p>}
           {detail && (
@@ -177,14 +177,14 @@ function PayeeExpensesModal({ payee, onClose }: { payee: string; onClose: () => 
 
   return (
     <Modal onClose={onClose}>
-      <div className="card flex flex-col overflow-hidden min-h-0">
-        <div className="flex items-center justify-between p-4 pb-3 border-b border-border shrink-0">
+      <div className="card p-4 space-y-3">
+        <div className="flex items-center justify-between">
           <h2 className="font-semibold">כל ההוצאות עבור: {payee}</h2>
           <button type="button" onClick={onClose} className="text-sm text-muted">
             סגור
           </button>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        <div className="space-y-3">
           {loading && <p className="text-sm text-muted">טוען...</p>}
           {!loading && (
             <>

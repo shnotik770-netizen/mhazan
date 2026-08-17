@@ -152,7 +152,7 @@ export function PasteExistingChecksForm({
 
   return (
     <Modal onClose={() => setOpen(false)}>
-    <div className="card p-4 space-y-3 overflow-y-auto">
+    <div className="card p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">ייבוא צ׳קים / העברות קיימים (לתחזית בנק)</h2>
         <button onClick={() => setOpen(false)} className="text-sm text-muted">

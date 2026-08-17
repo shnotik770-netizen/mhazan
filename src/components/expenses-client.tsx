@@ -52,6 +52,7 @@ export function ExpensesTable({
 }) {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [onlyUnclassified, setOnlyUnclassified] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDepartmentId, setBulkDepartmentId] = useState("");
   const [bulkPending, startBulk] = useTransition();
@@ -63,6 +64,7 @@ export function ExpensesTable({
   const router = useRouter();
 
   const filtered = rows.filter((r) => {
+    if (onlyUnclassified && r.departmentName) return false;
     if (!query.trim()) return true;
     const q = query.trim().toLowerCase();
     return (
@@ -160,6 +162,14 @@ export function ExpensesTable({
             <option value="department">מחלקה</option>
             <option value="bankAccount">חשבון בנק</option>
           </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={onlyUnclassified}
+            onChange={(e) => setOnlyUnclassified(e.target.checked)}
+          />
+          רק ללא מחלקה
         </label>
       </div>
 
@@ -372,7 +382,7 @@ function SplitAcrossDepartmentsForm({
   }
 
   return (
-    <div className="card p-4 space-y-3 overflow-y-auto">
+    <div className="card p-4 space-y-3">
       <h2 className="font-bold">חלוקת {checkIds.length} צ׳קים/העברות למחלקות</h2>
       <p className="text-sm text-muted">
         הסכום הכולל של הנבחרים: <strong>{formatCurrency(total)}</strong> — יחולק בין המחלקות שתבחרו, גם אם זה חוצה בין
@@ -492,7 +502,7 @@ function EditExpenseForm({
   }
 
   return (
-    <div className="card p-4 space-y-3 overflow-y-auto">
+    <div className="card p-4 space-y-3">
       <h2 className="font-bold">עריכת {row.isCheck ? "צ׳ק / העברה" : "הוצאה ידנית"}</h2>
 
       {row.isCheck && (

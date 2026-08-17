@@ -19,18 +19,18 @@ export function Modal({ onClose, children }: { onClose: () => void; children: Re
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      {/* max-h-[85dvh] (not 100vh) leaves a deliberate safety margin below
-          the outer p-4 padding, and dvh (not vh) accounts for mobile
-          browser toolbars — a bare 100vh calc can end up taller than what
-          the fixed backdrop actually shows, clipping the bottom of the
-          content with no way to scroll to it. flex overflow-hidden on this
-          wrapper plus overflow-y-auto on the inner content area (not this
-          element) lets a caller pin a footer below the scrolling part. */}
-      <div
-        className="w-full max-w-3xl max-h-[85dvh] flex flex-col overflow-hidden rounded-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    // The backdrop itself scrolls (position:fixed + overflow-y-auto) rather
+    // than trying to cap the dialog's height and scroll a region inside it
+    // — bounded-height + flex-shrink tricks (max-height: Ndvh, flex-col,
+    // min-height:0) turned out unreliable in practice (content still got
+    // clipped with no way to reach it). A plain non-fixed child that's
+    // simply taller than the viewport, inside a scrolling fixed backdrop,
+    // is the boring pattern that actually always works.
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <div className="w-full max-w-3xl my-8" onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
     </div>

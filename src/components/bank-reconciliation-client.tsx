@@ -156,7 +156,7 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
 
   return (
     <Modal onClose={() => setOpen(false)}>
-    <div className="card p-4 space-y-3 overflow-y-auto">
+    <div className="card p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">התאמת צ׳קים שנפרעו בבנק (לפי מספר צ׳ק + סכום)</h2>
         <button onClick={() => setOpen(false)} className="text-sm text-muted">
