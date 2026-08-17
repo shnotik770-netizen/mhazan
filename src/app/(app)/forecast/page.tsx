@@ -60,17 +60,31 @@ export default async function ForecastPage({
   const dailyBreakdown = (() => {
     const byDate = new Map<
       string,
-      { checks: number; transfers: number; recurring: number; income: number; total: number; runningBalance: number }
+      {
+        checks: number;
+        transfers: number;
+        recurring: number;
+        income: number;
+        overdue: number;
+        total: number;
+        runningBalance: number;
+      }
     >();
     for (const row of forecast ?? []) {
       const d = row.forecast_date!;
       const entry =
-        byDate.get(d) ?? { checks: 0, transfers: 0, recurring: 0, income: 0, total: 0, runningBalance: 0 };
+        byDate.get(d) ??
+        { checks: 0, transfers: 0, recurring: 0, income: 0, overdue: 0, total: 0, runningBalance: 0 };
       const change = Number(row.expected_change);
       if (row.category === "CHECK") entry.checks += change;
       else if (row.category === "TRANSFER") entry.transfers += change;
       else if (row.category === "RECURRING") entry.recurring += change;
       else if (row.category === "INCOME") entry.income += change;
+      // "OVERDUE" — still-unpaid checks/transfers whose due date already
+      // passed: kept separate from the regular checks/transfers bucket so
+      // the current month's card can show them as their own line, distinct
+      // from newly-scheduled expenses.
+      else if (row.category === "OVERDUE") entry.overdue += change;
       entry.total += change;
       entry.runningBalance = Number(row.running_balance);
       byDate.set(d, entry);
@@ -107,10 +121,14 @@ export default async function ForecastPage({
             const monthRows = dailyBreakdown.filter(([date]) => date.startsWith(month));
             const income = monthRows.reduce((sum, [, d]) => sum + d.income, 0);
             const expense = monthRows.reduce((sum, [, d]) => sum + d.checks + d.transfers + d.recurring, 0);
+            // Only ever lands in the current month, since overdue rows are
+            // attributed to today's date — kept as a separate line rather
+            // than folded into "expense" above.
+            const oldExpense = monthRows.reduce((sum, [, d]) => sum + d.overdue, 0);
             const opening = openingBalance;
             const closing = monthRows.length > 0 ? monthRows[monthRows.length - 1][1].runningBalance : opening;
             openingBalance = closing;
-            return { month, opening, income, expense, closing };
+            return { month, opening, income, expense, oldExpense, closing };
           });
         })()
       : [];
@@ -264,6 +282,11 @@ export default async function ForecastPage({
                 </p>
                 <p className="text-xs text-success">הכנסות: {formatCurrency(c.income)}</p>
                 <p className="text-xs text-danger">הוצאות: {formatCurrency(Math.abs(c.expense))}</p>
+                {c.oldExpense !== 0 && (
+                  <p className="text-xs text-warning">
+                    הוצאות ישנות שלא נפדו מחודשים קודמים: {formatCurrency(Math.abs(c.oldExpense))}
+                  </p>
+                )}
                 <p className="text-sm font-semibold pt-1 border-t border-border">
                   יתרת סגירה:{" "}
                   <span className={c.closing < 0 ? "text-danger" : "text-success"}>{formatCurrency(c.closing)}</span>

@@ -8,6 +8,7 @@ type DayEntry = {
   transfers: number;
   recurring: number;
   income: number;
+  overdue: number;
   total: number;
   runningBalance: number;
 };
@@ -59,6 +60,7 @@ export function ForecastDailyTable({
             <th>העברות</th>
             <th>הוראות קבע</th>
             {mode === "bank" && <th>צפי הכנסה</th>}
+            <th>פיגורים (ישנים)</th>
             <th>סה״כ שינוי יומי</th>
             <th>{mode === "bank" ? "יתרה בסוף היום" : "יתרה מצטברת בסוף היום"}</th>
           </tr>
@@ -72,7 +74,7 @@ export function ForecastDailyTable({
               <Fragment key={date}>
                 {isNewMonth && (
                   <tr key={`sep-${month}`}>
-                    <td colSpan={mode === "bank" ? 7 : 6} className="border-t-2 border-border py-1 text-xs font-semibold text-muted">
+                    <td colSpan={mode === "bank" ? 8 : 7} className="border-t-2 border-border py-1 text-xs font-semibold text-muted">
                       {new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(
                         new Date(`${month}-01T00:00:00`),
                       )}
@@ -85,6 +87,9 @@ export function ForecastDailyTable({
                   <td className={d.transfers < 0 ? "text-danger" : undefined}>{formatCurrency(d.transfers)}</td>
                   <td className={d.recurring < 0 ? "text-danger" : undefined}>{formatCurrency(d.recurring)}</td>
                   {mode === "bank" && <td className="text-success">{formatCurrency(d.income)}</td>}
+                  <td className={d.overdue < 0 ? "text-warning" : undefined}>
+                    {d.overdue !== 0 ? formatCurrency(d.overdue) : "—"}
+                  </td>
                   <td className={`font-semibold ${d.total < 0 ? "text-danger" : "text-success"}`}>
                     {formatCurrency(d.total)}
                   </td>
@@ -95,7 +100,7 @@ export function ForecastDailyTable({
           })}
           {filtered.length === 0 && (
             <tr>
-              <td colSpan={mode === "bank" ? 7 : 6} className="text-center text-muted py-6">
+              <td colSpan={mode === "bank" ? 8 : 7} className="text-center text-muted py-6">
                 אין תנועות צפויות בטווח שנבחר
               </td>
             </tr>
