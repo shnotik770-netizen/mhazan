@@ -115,6 +115,7 @@ export async function createRecurringSchedule(formData: FormData): Promise<void>
       expected_amount: Number(formData.get("expected_amount") ?? 0),
       category_id: String(formData.get("category_id") ?? "") || null,
       bank_account_id: String(formData.get("bank_account_id") ?? "") || null,
+      end_date: String(formData.get("end_date") ?? "") || null,
     })
     .select("id")
     .single();
@@ -258,5 +259,27 @@ export async function confirmScheduleOccurrence(
   revalidatePath("/forecast");
   revalidatePath("/ledger");
   revalidatePath("/");
+  return {};
+}
+
+export async function deleteRecurringSchedule(scheduleId: string): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("recurring_schedules").delete().eq("id", scheduleId);
+  if (error) return { error: error.message };
+  revalidatePath("/settings");
+  revalidatePath("/expenses");
+  revalidatePath("/forecast");
+  return {};
+}
+
+export async function setRecurringScheduleActive(scheduleId: string, isActive: boolean): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("recurring_schedules").update({ is_active: isActive }).eq("id", scheduleId);
+  if (error) return { error: error.message };
+  revalidatePath("/settings");
+  revalidatePath("/expenses");
+  revalidatePath("/forecast");
   return {};
 }

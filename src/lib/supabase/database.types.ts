@@ -791,6 +791,7 @@ export type Database = {
           day_of_week: number | null
           department_id: string | null
           direction: string
+          end_date: string | null
           expected_amount: number
           frequency: string
           id: string
@@ -807,6 +808,7 @@ export type Database = {
           day_of_week?: number | null
           department_id?: string | null
           direction: string
+          end_date?: string | null
           expected_amount: number
           frequency: string
           id?: string
@@ -823,6 +825,7 @@ export type Database = {
           day_of_week?: number | null
           department_id?: string | null
           direction?: string
+          end_date?: string | null
           expected_amount?: number
           frequency?: string
           id?: string
@@ -1463,6 +1466,7 @@ export type Database = {
           schedule_name: string
         }[]
       }
+      materialize_known_recurring_occurrences: { Args: never; Returns: number }
       is_finance_admin: { Args: never; Returns: boolean }
       review_manual_entry: {
         Args: { p_decision: string; p_entry_id: string }

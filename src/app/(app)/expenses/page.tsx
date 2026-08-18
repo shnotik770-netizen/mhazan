@@ -1,17 +1,33 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { ExpensesTable } from "@/components/expenses-client";
+import { RecurringSchedulesButton, type ScheduleRow } from "@/components/recurring-schedules-manager-client";
 
 export default async function ExpensesPage() {
   const user = await requireUser();
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const supabase = await createClient();
 
-  const [{ data: departments }, { data: grants }, { data: categories }] = await Promise.all([
-    supabase.from("departments").select("*").order("name"),
-    supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
-    supabase.from("categories").select("id, name").order("name"),
-  ]);
+  // Turns any FIXED_DATE_FIXED_AMOUNT recurring schedule occurrence whose
+  // date has passed into a real approved manual entry (amount and date are
+  // already fully known — nothing to confirm), so it takes its place in
+  // the list below like any other expense. Runs on every load; the DB
+  // function is idempotent so this is cheap once caught up.
+  await supabase.rpc("materialize_known_recurring_occurrences");
+
+  const [{ data: departments }, { data: grants }, { data: categories }, { data: bankAccounts }, { data: schedules }] =
+    await Promise.all([
+      supabase.from("departments").select("*").order("name"),
+      supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
+      supabase.from("categories").select("id, name").order("name"),
+      supabase.from("bank_accounts").select("id, bank_name, account_number").order("bank_name"),
+      isAdmin
+        ? supabase
+            .from("recurring_schedules")
+            .select("*, departments(name), recurring_schedule_allocations(amount, departments(name))")
+            .order("name")
+        : Promise.resolve({ data: [] as never[] }),
+    ]);
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartmentIds = isAdmin ? null : new Set((departments ?? []).filter((d) => grantedIds.has(d.id)).map((d) => d.id));
 
@@ -29,7 +45,7 @@ export default async function ExpensesPage() {
     .limit(300);
   let manualQuery = supabase
     .from("manual_department_entries")
-    .select("id, entry_date, amount, notes, department_id, departments(name)")
+    .select("id, entry_date, amount, notes, department_id, departments(name), recurring_schedule_id")
     .eq("status", "APPROVED")
     .eq("direction", "EXPENSE")
     .order("entry_date", { ascending: false })
@@ -108,12 +124,13 @@ export default async function ExpensesPage() {
         notes: string | null;
         department_id: string | null;
         departments: { name: string } | null;
+        recurring_schedule_id: string | null;
       };
       return {
         id: row.id,
         isCheck: false,
         date: row.entry_date,
-        source: "הוצאה ידנית",
+        source: row.recurring_schedule_id ? "הוראת קבע" : "הוצאה ידנית",
         description: row.notes ?? "—",
         payeeName: "",
         notes: row.notes,
@@ -131,10 +148,58 @@ export default async function ExpensesPage() {
     }),
   ].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 
+  const scheduleRows: ScheduleRow[] = (schedules ?? []).map((s) => {
+    const row = s as unknown as {
+      id: string;
+      name: string;
+      direction: string;
+      frequency: string;
+      type: string;
+      day_of_month: number | null;
+      day_of_week: number | null;
+      one_time_date: string | null;
+      expected_amount: number;
+      is_active: boolean;
+      end_date: string | null;
+      departments: { name: string } | null;
+      recurring_schedule_allocations: { amount: number; departments: { name: string } | null }[];
+    };
+    return {
+      id: row.id,
+      name: row.name,
+      direction: row.direction,
+      frequency: row.frequency,
+      type: row.type,
+      day_of_month: row.day_of_month,
+      day_of_week: row.day_of_week,
+      one_time_date: row.one_time_date,
+      expected_amount: Number(row.expected_amount),
+      is_active: row.is_active,
+      end_date: row.end_date,
+      departmentName: row.departments?.name ?? null,
+      allocations: row.recurring_schedule_allocations.map((a) => ({
+        amount: Number(a.amount),
+        departmentName: a.departments?.name ?? null,
+      })),
+    };
+  });
+
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">הוצאות</h1>
-      <p className="text-sm text-muted">כל ההוצאות מכל הסוגים שכבר אושרו — צ׳קים, העברות והוצאות ידניות.</p>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-xl font-bold">הוצאות</h1>
+          <p className="text-sm text-muted">כל ההוצאות מכל הסוגים שכבר אושרו — צ׳קים, העברות והוצאות ידניות.</p>
+        </div>
+        {isAdmin && (
+          <RecurringSchedulesButton
+            schedules={scheduleRows}
+            departments={departments ?? []}
+            bankAccounts={bankAccounts ?? []}
+            categories={categories ?? []}
+          />
+        )}
+      </div>
       <div className="card p-4">
         <ExpensesTable
           rows={rows}

@@ -4,7 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, daysAgoLabel } from "@/lib/format";
 import { NewUserForm, UserAccessRow } from "@/components/user-access-client";
 import { NewRecurringScheduleForm } from "@/components/recurring-schedule-form-client";
-import { ScheduleConfirmationsList, type PendingConfirmation } from "@/components/schedule-confirmations-client";
 import { createBankAccount } from "./actions";
 
 const WEEKDAY_LABELS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
@@ -34,7 +33,6 @@ export default async function SettingsPage() {
     { data: schedules },
     { data: profiles },
     { data: accessGrants },
-    { data: pendingConfirmations },
   ] = await Promise.all([
     supabase.from("departments").select("*").order("name"),
     supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
@@ -45,21 +43,10 @@ export default async function SettingsPage() {
       .order("name"),
     supabase.from("user_profiles").select("*").order("full_name"),
     supabase.from("user_department_access").select("user_id, department_id"),
-    supabase.rpc("get_pending_schedule_confirmations"),
   ]);
 
   const grantsFor = (userId: string) =>
     (accessGrants ?? []).filter((g) => g.user_id === userId).map((g) => g.department_id);
-
-  const pendingConfirmationRows: PendingConfirmation[] = (pendingConfirmations ?? []).map((p) => ({
-    scheduleId: p.schedule_id,
-    scheduleName: p.schedule_name,
-    direction: p.direction,
-    departmentId: p.department_id,
-    departmentName: p.department_name,
-    expectedAmount: Number(p.expected_amount),
-    periodDate: p.period_date,
-  }));
 
   return (
     <div className="space-y-8">
@@ -154,10 +141,11 @@ export default async function SettingsPage() {
         </Link>
       </section>
 
-      <ScheduleConfirmationsList pending={pendingConfirmationRows} departments={departments ?? []} />
-
       <section id="recurring-schedules" className="card p-4 space-y-3">
         <h2 className="font-semibold">הוראות קבע (מנוע תחזית)</h2>
+        <p className="text-xs text-muted -mt-2">
+          אישור סכומים בפועל להוראות עם סכום משוער עבר לדף &quot;ניהול צ׳קים והעברות&quot;, יחד עם צ׳קים והעברות שלא נפרעו.
+        </p>
         <div className="overflow-x-auto">
         <table className="data-table">
           <thead>

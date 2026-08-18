@@ -18,6 +18,7 @@ import {
   OverdueTransfersTable,
   PendingApprovalTable,
 } from "@/components/checks-sections-client";
+import { ScheduleConfirmationsList, type PendingConfirmation } from "@/components/schedule-confirmations-client";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 export default async function ChecksPage({
@@ -75,6 +76,7 @@ export default async function ChecksPage({
     { data: grants },
     { data: suppliers },
     { data: checkAllocations },
+    { data: pendingConfirmations },
   ] = await Promise.all([
     supabase.from("v_pending_checks").select("*").order("due_date"),
     pendingApprovalQuery,
@@ -88,6 +90,7 @@ export default async function ChecksPage({
     supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
     supabase.from("suppliers").select("name").order("name"),
     supabase.from("check_allocations").select("check_id, department_id, amount, departments(name)"),
+    isAdmin ? supabase.rpc("get_pending_schedule_confirmations") : Promise.resolve({ data: [] as never[] }),
   ]);
   const supplierNames = (suppliers ?? []).map((s) => s.name);
 
@@ -145,6 +148,16 @@ export default async function ChecksPage({
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
 
+  const pendingConfirmationRows: PendingConfirmation[] = (pendingConfirmations ?? []).map((p) => ({
+    scheduleId: p.schedule_id,
+    scheduleName: p.schedule_name,
+    direction: p.direction,
+    departmentId: p.department_id,
+    departmentName: p.department_name,
+    expectedAmount: Number(p.expected_amount),
+    periodDate: p.period_date,
+  }));
+
   return (
     <div className="space-y-6">
       <datalist id="supplier-names">
@@ -193,6 +206,8 @@ export default async function ChecksPage({
           />
         </div>
       )}
+
+      {isAdmin && <ScheduleConfirmationsList pending={pendingConfirmationRows} departments={departments ?? []} />}
 
       {isAdmin && (
         <div id="due-checks" className="card p-4 scroll-mt-4">
