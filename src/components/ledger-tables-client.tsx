@@ -2,11 +2,8 @@
 
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
-import { SettleBalancesButton } from "@/components/settle-balances-button";
 
 type BalanceRow = {
-  debtorId: string;
-  creditorId: string;
   debtorName: string;
   creditorName: string;
   netAmount: number;
@@ -35,7 +32,6 @@ export function LedgerBalancesTable({ rows }: { rows: BalanceRow[] }) {
               setColumnFilter={setColumnFilter}
             />
           ))}
-          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -44,19 +40,11 @@ export function LedgerBalancesTable({ rows }: { rows: BalanceRow[] }) {
             <td>{row.debtorName}</td>
             <td>{row.creditorName}</td>
             <td className="font-semibold">{formatCurrency(row.netAmount)}</td>
-            <td>
-              <SettleBalancesButton
-                deptA={row.debtorId}
-                deptB={row.creditorId}
-                debtorName={row.debtorName}
-                creditorName={row.creditorName}
-              />
-            </td>
           </tr>
         ))}
         {filtered.length === 0 && (
           <tr>
-            <td colSpan={4} className="text-center text-muted py-6">
+            <td colSpan={3} className="text-center text-muted py-6">
               אין יתרות פתוחות בין מחלקות
             </td>
           </tr>

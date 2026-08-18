@@ -74,47 +74,47 @@ export default async function LedgerPage({
         </div>
       )}
 
-      <div>
-        <h2 className="text-lg font-bold mb-3">התחשבנות פנימית בין מחלקות</h2>
-        <p className="text-sm text-muted mb-3">
-          מציג כמה כל מחלקה חייבת למחלקה אחרת, בשל הכנסות שנכנסו לחשבון בנק של מחלקה אחרת מבעלת הקטגוריה.
-        </p>
+      {!selectedDepartment && (
+        <div>
+          <h2 className="text-lg font-bold mb-3">התחשבנות פנימית בין מחלקות</h2>
+          <p className="text-sm text-muted mb-3">
+            מציג כמה כל מחלקה חייבת למחלקה אחרת, בשל הכנסות שנכנסו לחשבון בנק של מחלקה אחרת מבעלת הקטגוריה.
+          </p>
 
-        <div className="card p-4 overflow-x-auto">
-          <h3 className="font-semibold mb-3">מטריצת יתרות נטו</h3>
-          <LedgerBalancesTable
-            rows={(balances ?? []).map((row) => ({
-              debtorId: row.debtor_department_id!,
-              creditorId: row.creditor_department_id!,
-              debtorName: deptName(row.debtor_department_id),
-              creditorName: deptName(row.creditor_department_id),
-              netAmount: Number(row.net_amount),
-            }))}
-          />
-        </div>
+          <div className="card p-4 overflow-x-auto">
+            <h3 className="font-semibold mb-3">מטריצת יתרות נטו</h3>
+            <LedgerBalancesTable
+              rows={(balances ?? []).map((row) => ({
+                debtorName: deptName(row.debtor_department_id),
+                creditorName: deptName(row.creditor_department_id),
+                netAmount: Number(row.net_amount),
+              }))}
+            />
+          </div>
 
-        <div className="card p-4 overflow-x-auto mt-4">
-          <h3 className="font-semibold mb-3">תנועות פתוחות (לפני נטו)</h3>
-          <LedgerOpenEntriesTable
-            rows={(openEntries ?? []).map((e) => {
-              const row = e as unknown as {
-                id: string;
-                created_at: string;
-                amount: number;
-                from_dept: { name: string } | null;
-                to_dept: { name: string } | null;
-              };
-              return {
-                id: row.id,
-                createdAt: row.created_at,
-                amount: Number(row.amount),
-                fromName: row.from_dept?.name ?? "—",
-                toName: row.to_dept?.name ?? "—",
-              };
-            })}
-          />
+          <div className="card p-4 overflow-x-auto mt-4">
+            <h3 className="font-semibold mb-3">תנועות פתוחות (לפני נטו)</h3>
+            <LedgerOpenEntriesTable
+              rows={(openEntries ?? []).map((e) => {
+                const row = e as unknown as {
+                  id: string;
+                  created_at: string;
+                  amount: number;
+                  from_dept: { name: string } | null;
+                  to_dept: { name: string } | null;
+                };
+                return {
+                  id: row.id,
+                  createdAt: row.created_at,
+                  amount: Number(row.amount),
+                  fromName: row.from_dept?.name ?? "—",
+                  toName: row.to_dept?.name ?? "—",
+                };
+              })}
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

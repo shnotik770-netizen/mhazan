@@ -3,11 +3,12 @@
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 
-type Row = { id: string; date: string | null; description: string; amount: number };
+type Row = { id: string; date: string | null; type: string; description: string; amount: number };
 
 export function DepartmentTransactionsTable({ rows }: { rows: Row[] }) {
   const columns: ColumnDef<Row>[] = [
     { key: "date", label: "תאריך", sortValue: (r) => r.date ?? "" },
+    { key: "type", label: "סוג", sortValue: (r) => r.type, filterValue: (r) => r.type },
     { key: "description", label: "תיאור", sortValue: (r) => r.description, filterValue: (r) => r.description },
     { key: "amount", label: "סכום", sortValue: (r) => r.amount },
   ];
@@ -34,13 +35,14 @@ export function DepartmentTransactionsTable({ rows }: { rows: Row[] }) {
         {filtered.map((r) => (
           <tr key={r.id}>
             <td>{r.date ? formatDate(r.date) : "—"}</td>
+            <td>{r.type}</td>
             <td>{r.description}</td>
             <td className={r.amount >= 0 ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>
           </tr>
         ))}
         {filtered.length === 0 && (
           <tr>
-            <td colSpan={3} className="text-center text-muted py-6">
+            <td colSpan={4} className="text-center text-muted py-6">
               אין תנועות
             </td>
           </tr>

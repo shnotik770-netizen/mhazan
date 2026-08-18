@@ -6,7 +6,13 @@ import { createDepartment, deleteDepartment, updateDepartment } from "@/app/(app
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
-type BankAccountOption = { id: string; department_id: string; bank_name: string; account_number: string };
+type BankAccountOption = {
+  id: string;
+  department_id: string;
+  bank_name: string;
+  account_number: string;
+  departments: { name: string } | null;
+};
 
 export function DepartmentRow({
   department,
@@ -98,7 +104,16 @@ export function DepartmentRow({
             ))}
           </select>
         ) : homeAccount ? (
-          `${homeAccount.bank_name} (${homeAccount.account_number})`
+          <>
+            {homeAccount.bank_name} ({homeAccount.account_number})
+            {usage.bankAccounts > 0 ? (
+              <span className="badge bg-background text-muted mr-1">מנהלת חשבון</span>
+            ) : (
+              homeAccount.departments && (
+                <span className="badge bg-background text-muted mr-1">שייך ל{homeAccount.departments.name}</span>
+              )
+            )}
+          </>
         ) : (
           "—"
         )}

@@ -5,6 +5,7 @@ import { DepartmentTransactionsTable } from "@/components/department-report-tabl
 type CombinedRow = {
   id: string;
   date: string | null;
+  type: string;
   description: string;
   amount: number;
 };
@@ -31,7 +32,7 @@ export async function DepartmentReport({
       .order("date", { ascending: false }),
     supabase
       .from("v_check_department_amounts")
-      .select("check_id, due_date, amount, payee, skip_department_ledger")
+      .select("check_id, due_date, amount, payee, payment_method, skip_department_ledger")
       .eq("department_id", departmentId)
       .neq("status", "CANCELLED")
       .order("due_date", { ascending: false }),
@@ -48,7 +49,8 @@ export async function DepartmentReport({
     .map((r) => ({
       id: r.id,
       date: r.date,
-      description: r.donor_name || (r as unknown as { categories: { name: string } | null }).categories?.name || "הכנסה",
+      type: (r as unknown as { categories: { name: string } | null }).categories?.name ?? "הכנסה",
+      description: r.donor_name || "—",
       amount: Number(r.amount),
     }));
 
@@ -57,6 +59,7 @@ export async function DepartmentReport({
     .map((r) => ({
       id: r.check_id as string,
       date: r.due_date,
+      type: r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק",
       description: r.payee ?? "הוצאה",
       amount: -Number(r.amount),
     }));
@@ -76,6 +79,7 @@ export async function DepartmentReport({
     return {
       id: e.id,
       date: e.entry_date,
+      type: e.direction === "INCOME" ? "הכנסה ידנית" : "הוצאה ידנית",
       description: e.notes ? `${label} (${e.notes})` : label,
       amount: e.direction === "INCOME" ? Number(e.amount) : -Number(e.amount),
     };
