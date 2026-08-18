@@ -66,14 +66,24 @@ export async function createRecurringSchedule(formData: FormData): Promise<void>
   await requireFinanceAdmin();
   const supabase = await createClient();
   const frequency = String(formData.get("frequency") ?? "MONTHLY");
+  const type = String(formData.get("type") ?? "FIXED_DATE_FIXED_AMOUNT");
+  // A variable-date monthly schedule (its whole point: the day isn't known
+  // in advance) is the one case that's allowed to skip day_of_month —
+  // every other combination still needs its date field, enforced again by
+  // the DB check constraint either way.
+  const dayOfMonthRaw = formData.get("day_of_month");
+  const dayOfMonth =
+    (frequency === "MONTHLY" && type === "VARIABLE_DATE_ESTIMATED_AMOUNT" && !dayOfMonthRaw) || frequency === "WEEKLY" || frequency === "ONCE"
+      ? null
+      : Number(dayOfMonthRaw);
 
   const { error } = await supabase.from("recurring_schedules").insert({
     department_id: String(formData.get("department_id") ?? ""),
     name: String(formData.get("name") ?? ""),
-    type: String(formData.get("type") ?? "FIXED_AMOUNT"),
+    type,
     direction: String(formData.get("direction") ?? "EXPENSE"),
     frequency,
-    day_of_month: frequency === "MONTHLY" || frequency === "YEARLY" ? Number(formData.get("day_of_month")) : null,
+    day_of_month: frequency === "MONTHLY" || frequency === "YEARLY" ? dayOfMonth : null,
     day_of_week: frequency === "WEEKLY" ? Number(formData.get("day_of_week")) : null,
     one_time_date: frequency === "ONCE" ? String(formData.get("one_time_date")) : null,
     expected_amount: Number(formData.get("expected_amount") ?? 0),

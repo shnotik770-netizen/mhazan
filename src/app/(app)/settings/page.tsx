@@ -5,6 +5,22 @@ import { formatCurrency, daysAgoLabel } from "@/lib/format";
 import { NewUserForm, UserAccessRow } from "@/components/user-access-client";
 import { createBankAccount, createRecurringSchedule } from "./actions";
 
+const WEEKDAY_LABELS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
+
+function frequencyLabel(frequency: string) {
+  if (frequency === "MONTHLY") return "חודשי";
+  if (frequency === "WEEKLY") return "שבועי";
+  if (frequency === "YEARLY") return "שנתי";
+  return "חד פעמי";
+}
+
+function scheduleDateLabel(s: { frequency: string; day_of_month: number | null; day_of_week: number | null; one_time_date: string | null }) {
+  if (s.frequency === "WEEKLY" && s.day_of_week !== null) return `יום ${WEEKDAY_LABELS[s.day_of_week] ?? s.day_of_week}`;
+  if ((s.frequency === "MONTHLY" || s.frequency === "YEARLY") && s.day_of_month !== null) return `${s.day_of_month} לחודש`;
+  if (s.frequency === "ONCE" && s.one_time_date) return s.one_time_date;
+  return "—";
+}
+
 export default async function SettingsPage() {
   await requireFinanceAdmin();
   const supabase = await createClient();
@@ -131,6 +147,7 @@ export default async function SettingsPage() {
               <th>מחלקה</th>
               <th>כיוון</th>
               <th>תדירות</th>
+              <th>תאריך</th>
               <th>סכום צפוי</th>
               <th>פעיל</th>
             </tr>
@@ -141,8 +158,18 @@ export default async function SettingsPage() {
                 <td>{s.name}</td>
                 <td>{(s as { departments: { name: string } | null }).departments?.name}</td>
                 <td>{s.direction === "INCOME" ? "הכנסה" : "הוצאה"}</td>
-                <td>{s.frequency}</td>
-                <td>{formatCurrency(Number(s.expected_amount))}</td>
+                <td>{frequencyLabel(s.frequency)}</td>
+                <td>
+                  {s.type === "VARIABLE_DATE_ESTIMATED_AMOUNT" ? (
+                    <span className="badge bg-background text-muted">תאריך לא קבוע</span>
+                  ) : (
+                    scheduleDateLabel(s)
+                  )}
+                </td>
+                <td>
+                  {formatCurrency(Number(s.expected_amount))}
+                  {s.type !== "FIXED_DATE_FIXED_AMOUNT" && <span className="badge bg-background text-muted mr-1">משוער</span>}
+                </td>
                 <td>{s.is_active ? "כן" : "לא"}</td>
               </tr>
             ))}
@@ -164,9 +191,9 @@ export default async function SettingsPage() {
             <option value="INCOME">הכנסה</option>
           </select>
           <select name="type" className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-            <option value="FIXED_AMOUNT">סכום קבוע</option>
-            <option value="VARIABLE_AMOUNT">סכום משתנה</option>
-            <option value="ONE_TIME">חד פעמי</option>
+            <option value="FIXED_DATE_FIXED_AMOUNT">תאריך קבוע עם סכום קבוע</option>
+            <option value="FIXED_DATE_ESTIMATED_AMOUNT">תאריך קבוע עם סכום משוער</option>
+            <option value="VARIABLE_DATE_ESTIMATED_AMOUNT">תאריך לא קבוע עם סכום משוער (חודשי בלבד)</option>
           </select>
           <select name="frequency" className="rounded border border-border bg-transparent px-2 py-1 text-sm">
             <option value="MONTHLY">חודשי</option>
@@ -174,7 +201,14 @@ export default async function SettingsPage() {
             <option value="YEARLY">שנתי</option>
             <option value="ONCE">חד פעמי</option>
           </select>
-          <input name="day_of_month" type="number" min="1" max="31" placeholder="יום בחודש" className="rounded border border-border bg-transparent px-2 py-1 text-sm" />
+          <input
+            name="day_of_month"
+            type="number"
+            min="1"
+            max="31"
+            placeholder="יום בחודש (ריק = תאריך לא קבוע, חודשי בלבד)"
+            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+          />
           <input name="day_of_week" type="number" min="0" max="6" placeholder="יום בשבוע (0=א׳)" className="rounded border border-border bg-transparent px-2 py-1 text-sm" />
           <input name="one_time_date" type="date" className="rounded border border-border bg-transparent px-2 py-1 text-sm" />
           <input name="expected_amount" type="number" placeholder="סכום צפוי" required className="rounded border border-border bg-transparent px-2 py-1 text-sm" />
