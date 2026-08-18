@@ -1,38 +1,48 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
-// A real overlay dialog instead of a card that expands inline and pushes
-// the rest of the page down — for actions (import, reconciliation) that
-// are their own focused task, not part of reading the checks page itself.
+// The custom div-based overlay (fixed inset-0 + overflow-y-auto backdrop)
+// kept getting reported as "stuck" for different modals (quick issuance,
+// check detail, payee history) even after being simplified back to the
+// pattern that used to work — likely a mobile-Safari quirk with scrolling
+// inside a position:fixed + overflow-y:auto container. The native <dialog>
+// element sidesteps all of that: the browser renders it in the top layer
+// (no z-index/stacking issues), handles its own scrolling, backdrop, and
+// Escape-to-close natively, and that behavior is consistent across
+// browsers/devices instead of being something we hand-roll.
 export function Modal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (!dialog.open) dialog.showModal();
+
+    function handleClose() {
+      onClose();
     }
-    document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
+    dialog.addEventListener("close", handleClose);
     return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      dialog.removeEventListener("close", handleClose);
+      if (dialog.open) dialog.close();
     };
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    // The backdrop itself scrolls (position:fixed + overflow-y-auto) rather
-    // than trying to cap the dialog's height and scroll a region inside it
-    // — bounded-height + flex-shrink tricks (max-height: Ndvh, flex-col,
-    // min-height:0) turned out unreliable in practice (content still got
-    // clipped with no way to reach it). A plain non-fixed child that's
-    // simply taller than the viewport, inside a scrolling fixed backdrop,
-    // is the boring pattern that actually always works.
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4"
-      onClick={onClose}
+    <dialog
+      ref={ref}
+      className="m-auto max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-3xl overflow-y-auto rounded-2xl border-0 bg-transparent p-0 backdrop:bg-black/50"
+      onClick={(e) => {
+        // A click lands directly on the <dialog> element itself (not a
+        // child) only when it hits the dialog's own box outside any
+        // content — i.e. effectively the backdrop area right around the
+        // centered box, since the true ::backdrop is a separate layer.
+        if (e.target === ref.current) onClose();
+      }}
     >
-      <div className="w-full max-w-3xl my-8" onClick={(e) => e.stopPropagation()}>
-        {children}
-      </div>
-    </div>
+      <div onClick={(e) => e.stopPropagation()}>{children}</div>
+    </dialog>
   );
 }

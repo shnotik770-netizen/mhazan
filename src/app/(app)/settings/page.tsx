@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireFinanceAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, daysAgoLabel } from "@/lib/format";
 import { NewUserForm, UserAccessRow } from "@/components/user-access-client";
 import { createBankAccount, createRecurringSchedule } from "./actions";
 
@@ -65,7 +65,10 @@ export default async function SettingsPage() {
                 <td>{(b as { departments: { name: string } | null }).departments?.name}</td>
                 <td>{b.bank_name}</td>
                 <td>{b.account_number}</td>
-                <td>{formatCurrency(Number(b.current_balance))}</td>
+                <td>
+                  {formatCurrency(Number(b.current_balance))}
+                  <div className="text-xs text-muted">{daysAgoLabel(b.balance_as_of)}</div>
+                </td>
               </tr>
             ))}
           </tbody>

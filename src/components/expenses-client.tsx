@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { SearchableSelect } from "@/components/searchable-select";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
 import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
+import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import {
   bulkAssignCheckDepartment,
   updateCheck,
@@ -38,7 +39,7 @@ type ExpenseRow = {
 
 type Option = { id: string; name: string };
 
-type SortKey = "date" | "payee" | "department" | "bankAccount";
+const statusLabel = (s: string | null) => (s === "CLEARED" ? "נפרע" : s === "APPROVED" ? "מאושר" : "לא נפרע");
 
 export function ExpensesTable({
   rows,
@@ -52,7 +53,6 @@ export function ExpensesTable({
   isAdmin: boolean;
 }) {
   const [query, setQuery] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("date");
   const [onlyUnclassified, setOnlyUnclassified] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -80,23 +80,22 @@ export function ExpensesTable({
     );
   });
 
-  const sorted = useMemo(() => {
-    const list = [...filtered];
-    list.sort((a, b) => {
-      switch (sortKey) {
-        case "payee":
-          return a.payeeName.localeCompare(b.payeeName, "he");
-        case "department":
-          return (a.departmentName ?? "").localeCompare(b.departmentName ?? "", "he");
-        case "bankAccount":
-          return (a.bankAccountName ?? "").localeCompare(b.bankAccountName ?? "", "he");
-        case "date":
-        default:
-          return (b.date ?? "").localeCompare(a.date ?? "");
-      }
-    });
-    return list;
-  }, [filtered, sortKey]);
+  const columns: ColumnDef<ExpenseRow>[] = [
+    { key: "source", label: "סוג", sortValue: (r) => r.source, filterValue: (r) => r.source },
+    {
+      key: "description",
+      label: "תיאור",
+      sortValue: (r) => (r.isCheck ? r.payeeName : r.description),
+      filterValue: (r) => (r.isCheck ? r.payeeName : r.description),
+    },
+    { key: "amount", label: "סכום", sortValue: (r) => r.amount },
+    { key: "date", label: "תאריך", sortValue: (r) => r.date ?? "" },
+    { key: "department", label: "מחלקה", sortValue: (r) => r.departmentName ?? "", filterValue: (r) => r.departmentName ?? "בהמתנה" },
+    { key: "category", label: "קטגוריה", sortValue: (r) => r.categoryName ?? "", filterValue: (r) => r.categoryName ?? "—" },
+    { key: "bankAccount", label: "חשבון בנק", sortValue: (r) => r.bankAccountName ?? "", filterValue: (r) => r.bankAccountName ?? "—" },
+    { key: "status", label: "סטטוס", sortValue: (r) => r.status ?? "", filterValue: (r) => statusLabel(r.status) },
+  ];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(filtered, columns);
 
   const selectableIds = new Set(sorted.filter((r) => r.isCheck).map((r) => r.id));
   const allSelectableSelected = selectableIds.size > 0 && [...selectableIds].every((id) => selected.has(id));
@@ -155,19 +154,6 @@ export function ExpensesTable({
           placeholder="חיפוש לפי תיאור / ספק / מחלקה / קטגוריה / בנק"
           className="w-full max-w-sm rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
         />
-        <label className="flex items-center gap-2 text-sm text-muted">
-          מיון לפי
-          <select
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm"
-          >
-            <option value="date">תאריך</option>
-            <option value="payee">ספק</option>
-            <option value="department">מחלקה</option>
-            <option value="bankAccount">חשבון בנק</option>
-          </select>
-        </label>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -263,14 +249,17 @@ export function ExpensesTable({
                   <input type="checkbox" checked={allSelectableSelected} onChange={toggleAll} disabled={selectableIds.size === 0} />
                 </th>
               )}
-              <th>סוג</th>
-              <th>תיאור</th>
-              <th>סכום</th>
-              <th>תאריך</th>
-              <th>מחלקה</th>
-              <th>קטגוריה</th>
-              <th>חשבון בנק</th>
-              <th>סטטוס</th>
+              {columns.map((col) => (
+                <SortFilterTh
+                  key={col.key}
+                  col={col}
+                  allRows={filtered}
+                  sort={sort}
+                  toggleSort={toggleSort}
+                  activeFilter={filters[col.key]}
+                  setColumnFilter={setColumnFilter}
+                />
+              ))}
               {isAdmin && <th></th>}
             </tr>
           </thead>

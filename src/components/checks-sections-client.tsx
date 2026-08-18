@@ -9,6 +9,7 @@ import {
   VerifyTransferButton,
 } from "@/components/checks-client";
 import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
+import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import type { CheckAllocationInput } from "@/app/(app)/checks/actions";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -413,7 +414,35 @@ export function AllChecksTable({
   allocationsByCheck: Map<string, AllocationInfo[]>;
 }) {
   const [query, setQuery] = useState("");
-  const filtered = rows.filter((r) => matches(query, r.payee, r.notes, r.check_number));
+  const searched = rows.filter((r) => matches(query, r.payee, r.notes, r.check_number));
+
+  const statusLabel = (s: string) => (s === "CLEARED" ? "נפרע" : s === "CANCELLED" ? "בוטל" : "לא נפרע");
+  const columns: ColumnDef<FullCheckRow>[] = [
+    {
+      key: "payment_method",
+      label: "אמצעי",
+      sortValue: (r) => r.payment_method,
+      filterValue: (r) => (r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"),
+    },
+    { key: "check_number", label: "מס׳ צ׳ק", sortValue: (r) => r.check_number ?? "" },
+    { key: "payee", label: "מוטב", sortValue: (r) => r.payee, filterValue: (r) => r.payee },
+    { key: "amount", label: "סכום", sortValue: (r) => Number(r.amount) },
+    { key: "due_date", label: "תאריך פירעון", sortValue: (r) => r.due_date ?? "" },
+    {
+      key: "bank",
+      label: "חשבון",
+      sortValue: (r) => `${r.bank_accounts?.bank_name ?? ""} ${r.bank_accounts?.account_number ?? ""}`,
+      filterValue: (r) => (r.bank_accounts ? `${r.bank_accounts.bank_name} (${r.bank_accounts.account_number})` : "—"),
+    },
+    {
+      key: "department",
+      label: "מחלקה",
+      sortValue: (r) => r.departments?.name ?? "",
+      filterValue: (r) => r.departments?.name ?? "ללא מחלקה",
+    },
+    { key: "status", label: "סטטוס", sortValue: (r) => r.status, filterValue: (r) => statusLabel(r.status) },
+  ];
+  const { rows: filtered, sort, toggleSort, filters, setColumnFilter } = useSortFilter(searched, columns);
 
   return (
     <div>
@@ -421,14 +450,17 @@ export function AllChecksTable({
       <table className="data-table">
         <thead>
           <tr>
-            <th>אמצעי</th>
-            <th>מס׳ צ׳ק</th>
-            <th>מוטב</th>
-            <th>סכום</th>
-            <th>תאריך פירעון</th>
-            <th>חשבון</th>
-            <th>מחלקה</th>
-            <th>סטטוס</th>
+            {columns.map((col) => (
+              <SortFilterTh
+                key={col.key}
+                col={col}
+                allRows={searched}
+                sort={sort}
+                toggleSort={toggleSort}
+                activeFilter={filters[col.key]}
+                setColumnFilter={setColumnFilter}
+              />
+            ))}
             <th></th>
           </tr>
         </thead>

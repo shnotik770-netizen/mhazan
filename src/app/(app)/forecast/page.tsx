@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, daysAgoLabel } from "@/lib/format";
 import { BankBalancePanel, ExpectedIncomeManager } from "@/components/forecast-client";
 import { ForecastDailyTable } from "@/components/forecast-daily-table-client";
 import { ForecastDayLookup } from "@/components/forecast-day-lookup-client";
@@ -240,12 +240,17 @@ export default async function ForecastPage({
       </form>
 
       {mode === "bank" && selectedAccount && isAdmin && (
-        <BankBalancePanel bankAccountId={selectedAccount.id} currentBalance={Number(selectedAccount.current_balance)} />
+        <BankBalancePanel
+          bankAccountId={selectedAccount.id}
+          currentBalance={Number(selectedAccount.current_balance)}
+          balanceAsOf={selectedAccount.balance_as_of}
+        />
       )}
       {mode === "bank" && selectedAccount && !isAdmin && (
         <div className="card p-4">
           <p className="text-sm text-muted mb-1">יתרת פתיחה נוכחית</p>
           <p className="text-2xl font-bold">{formatCurrency(Number(selectedAccount.current_balance))}</p>
+          <p className="text-xs text-muted">{daysAgoLabel(selectedAccount.balance_as_of)}</p>
         </div>
       )}
 

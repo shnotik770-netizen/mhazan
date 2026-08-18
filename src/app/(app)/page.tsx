@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, daysAgoLabel } from "@/lib/format";
 import { ManualEntryApprovalRow, NewManualEntryForm } from "@/components/manual-entries-client";
 
 export default async function DashboardPage() {
@@ -192,6 +192,7 @@ export default async function DashboardPage() {
                   <td>{b.account_number}</td>
                   <td className={Number(b.current_balance) < 0 ? "text-danger" : ""}>
                     {formatCurrency(Number(b.current_balance))}
+                    <div className="text-xs text-muted font-normal">{daysAgoLabel(b.balance_as_of)}</div>
                   </td>
                 </tr>
               ))}

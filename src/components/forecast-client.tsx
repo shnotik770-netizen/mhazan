@@ -9,12 +9,20 @@ import {
   updateExpectedIncomeStatus,
 } from "@/app/(app)/forecast/actions";
 import { DateInput } from "@/components/date-input";
-import { formatCurrency, formatDate, todayIso } from "@/lib/format";
+import { formatCurrency, formatDate, todayIso, daysAgoLabel } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type ExpectedIncome = Tables<"expected_incomes">;
 
-export function BankBalancePanel({ bankAccountId, currentBalance }: { bankAccountId: string; currentBalance: number }) {
+export function BankBalancePanel({
+  bankAccountId,
+  currentBalance,
+  balanceAsOf,
+}: {
+  bankAccountId: string;
+  currentBalance: number;
+  balanceAsOf: string | null;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(String(currentBalance));
@@ -39,6 +47,7 @@ export function BankBalancePanel({ bankAccountId, currentBalance }: { bankAccoun
       {!editing ? (
         <div className="flex items-center gap-3">
           <p className="text-2xl font-bold">{formatCurrency(currentBalance)}</p>
+          <span className="text-xs text-muted">{daysAgoLabel(balanceAsOf)}</span>
           <button onClick={() => setEditing(true)} className="text-xs text-primary underline">
             עדכון יתרה
           </button>
@@ -105,15 +114,26 @@ export function ExpectedIncomeManager({
     });
   }
 
+  const needsConfirmationCount = expectedIncomes.filter(
+    (e) => e.status === "PENDING" && e.expected_date < todayIso(),
+  ).length;
+
   return (
     <div className="card p-4 space-y-3">
       <div>
         <h2 className="font-semibold">הכנסות עתידיות צפויות (הערכה, לא מדוייקת)</h2>
         <p className="text-xs text-muted">
           לדוגמה: סיכומי חברת אשראי או מקורות אחרים שידוע כי יגיעו בתאריך משוער. מופיע בתחזית בלבד — לא משפיע על
-          היתרה או ההכנסות בפועל, עד שמסמנים שאכן התקבל.
+          היתרה או ההכנסות בפועל, עד שמסמנים שאכן התקבל. כל עוד לא סומן, ההכנסה נשארת בתחזית גם אחרי שהתאריך עבר.
         </p>
       </div>
+
+      {needsConfirmationCount > 0 && (
+        <p className="text-sm font-medium text-warning bg-warning-bg rounded-lg px-3 py-2">
+          ⚠ {needsConfirmationCount} הכנסות צפויות עברו את התאריך שלהן וטרם סומנו — האם התקבלו בפועל? (ראו שורות
+          מסומנות למטה)
+        </p>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
         <input
@@ -184,8 +204,10 @@ function ExpectedIncomeRow({ income }: { income: ExpectedIncome }) {
     });
   }
 
+  const needsConfirmation = isPast && income.status === "PENDING";
+
   return (
-    <tr>
+    <tr className={needsConfirmation ? "bg-warning-bg/40" : undefined}>
       <td>{formatDate(income.expected_date)}</td>
       <td>{income.description ?? "—"}</td>
       <td>{formatCurrency(Number(income.amount))}</td>
