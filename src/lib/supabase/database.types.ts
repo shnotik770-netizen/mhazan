@@ -538,6 +538,7 @@ export type Database = {
       inter_department_ledger: {
         Row: {
           amount: number
+          check_id: string | null
           created_at: string
           from_department_id: string
           id: string
@@ -551,6 +552,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          check_id?: string | null
           created_at?: string
           from_department_id: string
           id?: string
@@ -564,6 +566,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          check_id?: string | null
           created_at?: string
           from_department_id?: string
           id?: string
@@ -576,6 +579,13 @@ export type Database = {
           to_department_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "inter_department_ledger_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "checks"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inter_department_ledger_from_department_id_fkey"
             columns: ["from_department_id"]
