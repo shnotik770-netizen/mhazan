@@ -195,7 +195,7 @@ export default async function ChecksPage({
       )}
 
       {isAdmin && (
-        <div className="card p-4">
+        <div id="due-checks" className="card p-4 scroll-mt-4">
           <CollapsibleSection title={<h2 className="font-semibold">צ׳קים והעברות שהגיע תאריכם ולא נפרעו</h2>}>
             <p className="text-xs text-muted mb-2">
               כל צ׳ק/העברה עם תאריך פירעון שעבר (או שווה לתאריך שנבחר) וסטטוס עדיין &quot;לא נפרע&quot;.

@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import {
   getCheckSpreadDetail,
   getExpensesByPayee,
+  type CheckAllocationInput,
   type CheckSpreadDetail,
   type PayeeExpenseRow,
 } from "@/app/(app)/checks/actions";
+import { EditDeleteCheckRow } from "@/components/checks-client";
 import { Modal } from "@/components/modal";
 import { formatCurrency, formatDate } from "@/lib/format";
+import type { Tables } from "@/lib/supabase/database.types";
 
 function statusLabel(status: string) {
   if (status === "CLEARED") return "נפרע";
@@ -156,6 +159,8 @@ export function PayeeLink({ payee }: { payee: string }) {
 
 function PayeeExpensesModal({ payee, onClose }: { payee: string; onClose: () => void }) {
   const [rows, setRows] = useState<PayeeExpenseRow[]>([]);
+  const [departments, setDepartments] = useState<Tables<"departments">[]>([]);
+  const [allocationsByCheck, setAllocationsByCheck] = useState<Record<string, CheckAllocationInput[]>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -165,6 +170,8 @@ function PayeeExpensesModal({ payee, onClose }: { payee: string; onClose: () => 
       const result = await getExpensesByPayee(payee);
       if (cancelled) return;
       setRows(result.rows);
+      setDepartments(result.departments);
+      setAllocationsByCheck(result.allocationsByCheck);
       setLoading(false);
     }
     load();
@@ -201,6 +208,7 @@ function PayeeExpensesModal({ payee, onClose }: { payee: string; onClose: () => 
                     <th>מחלקה</th>
                     <th>קטגוריה</th>
                     <th>סטטוס</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -209,15 +217,33 @@ function PayeeExpensesModal({ payee, onClose }: { payee: string; onClose: () => 
                       <td>{r.due_date ? formatDate(r.due_date) : "—"}</td>
                       <td>{formatCurrency(r.amount)}</td>
                       <td>{r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"}</td>
-                      <td>{r.check_number ?? "—"}</td>
+                      <td>
+                        {r.check_number ?? "—"}
+                        {r.spread_id && <span className="badge bg-background text-muted mr-1">פריסה</span>}
+                      </td>
                       <td>{r.departmentName ?? <span className="text-warning">בהמתנה</span>}</td>
                       <td>{r.categoryName ?? "—"}</td>
                       <td>{statusLabel(r.status)}</td>
+                      <td className="flex items-center gap-2">
+                        <CheckDetailLink checkId={r.id} />
+                        <EditDeleteCheckRow
+                          checkId={r.id}
+                          payee={payee}
+                          amount={r.amount}
+                          dueDate={r.due_date}
+                          checkNumber={r.check_number}
+                          departmentId={r.department_id}
+                          notes={r.notes}
+                          paymentMethod={r.payment_method}
+                          existingAllocations={allocationsByCheck[r.id] ?? []}
+                          departments={departments}
+                        />
+                      </td>
                     </tr>
                   ))}
                   {rows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="text-center text-muted py-4">
+                      <td colSpan={8} className="text-center text-muted py-4">
                         אין הוצאות
                       </td>
                     </tr>

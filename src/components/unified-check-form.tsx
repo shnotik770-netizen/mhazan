@@ -299,8 +299,7 @@ export function UnifiedCheckForm({
                       value={row.departmentId}
                       onChange={(id) => updateRow(i, { departmentId: id })}
                       options={departments.map((d) => ({ id: d.id, label: d.name }))}
-                      placeholder="מחלקה"
-                      required
+                      placeholder="מחלקה (ברירת מחדל: מחלקת חשבון הבנק)"
                       className="rounded border border-border bg-transparent px-2 py-1 text-sm"
                     />
                   )}
@@ -380,13 +379,7 @@ export function UnifiedCheckForm({
 
         <div className="flex items-center gap-2 border-t border-border pt-3">
           <button
-            disabled={
-              isPending ||
-              !bankAccountId ||
-              !payee ||
-              rows.every((r) => r.amount <= 0) ||
-              (!isSplitting && rows.some((r) => !r.departmentId))
-            }
+            disabled={isPending || !bankAccountId || !payee || rows.every((r) => r.amount <= 0)}
             onClick={submit}
             className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
           >

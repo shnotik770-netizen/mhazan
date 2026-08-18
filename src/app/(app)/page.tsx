@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { formatCurrency, daysAgoLabel } from "@/lib/format";
 import { ManualEntryApprovalRow, NewManualEntryForm } from "@/components/manual-entries-client";
+import { QuickActionsPanel } from "@/components/quick-actions-fab";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -75,6 +76,8 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
+
+      {isAdmin && <QuickActionsPanel />}
 
       {totalPending > 0 && (
         <div className="space-y-2">

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceAdmin } from "@/lib/auth";
+import type { Tables } from "@/lib/supabase/database.types";
 
 export type CheckAllocationInput = { departmentId: string; amount: number };
 
@@ -723,22 +724,36 @@ export type PayeeExpenseRow = {
   payment_method: string;
   check_number: string | null;
   status: string;
+  department_id: string | null;
   departmentName: string | null;
   categoryName: string | null;
+  notes: string | null;
+  spread_id: string | null;
 };
 
 // Every approved expense (check/transfer with a due date, not cancelled)
 // for one payee — RLS already scopes this to whatever departments the
-// caller can see, same as every other checks query.
-export async function getExpensesByPayee(payee: string): Promise<{ rows: PayeeExpenseRow[] }> {
+// caller can see, same as every other checks query. Also returns the
+// department list and each check's split allocations so the payee-history
+// modal can offer full inline editing per row, not just a read-only list.
+export async function getExpensesByPayee(payee: string): Promise<{
+  rows: PayeeExpenseRow[];
+  departments: Tables<"departments">[];
+  allocationsByCheck: Record<string, CheckAllocationInput[]>;
+}> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("checks")
-    .select("id, due_date, amount, payment_method, check_number, status, departments(name), categories(name)")
-    .ilike("payee", payee)
-    .not("due_date", "is", null)
-    .neq("status", "CANCELLED")
-    .order("due_date", { ascending: false });
+  const [{ data }, { data: departments }] = await Promise.all([
+    supabase
+      .from("checks")
+      .select(
+        "id, due_date, amount, payment_method, check_number, status, department_id, notes, spread_id, departments(name), categories(name)",
+      )
+      .ilike("payee", payee)
+      .not("due_date", "is", null)
+      .neq("status", "CANCELLED")
+      .order("due_date", { ascending: false }),
+    supabase.from("departments").select("*").order("name"),
+  ]);
 
   const rows = (data ?? []) as unknown as {
     id: string;
@@ -747,9 +762,22 @@ export async function getExpensesByPayee(payee: string): Promise<{ rows: PayeeEx
     payment_method: string;
     check_number: string | null;
     status: string;
+    department_id: string | null;
+    notes: string | null;
+    spread_id: string | null;
     departments: { name: string } | null;
     categories: { name: string } | null;
   }[];
+
+  const checkIds = rows.map((r) => r.id);
+  const { data: allocations } =
+    checkIds.length > 0
+      ? await supabase.from("check_allocations").select("check_id, department_id, amount").in("check_id", checkIds)
+      : { data: [] as { check_id: string; department_id: string; amount: number }[] };
+  const allocationsByCheck: Record<string, CheckAllocationInput[]> = {};
+  for (const a of allocations ?? []) {
+    (allocationsByCheck[a.check_id] ??= []).push({ departmentId: a.department_id, amount: Number(a.amount) });
+  }
 
   return {
     rows: rows.map((r) => ({
@@ -759,9 +787,14 @@ export async function getExpensesByPayee(payee: string): Promise<{ rows: PayeeEx
       payment_method: r.payment_method,
       check_number: r.check_number,
       status: r.status,
+      department_id: r.department_id,
       departmentName: r.departments?.name ?? null,
       categoryName: r.categories?.name ?? null,
+      notes: r.notes,
+      spread_id: r.spread_id,
     })),
+    departments: departments ?? [],
+    allocationsByCheck,
   };
 }
 

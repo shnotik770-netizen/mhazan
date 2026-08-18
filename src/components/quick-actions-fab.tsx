@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { UnifiedCheckForm } from "@/components/unified-check-form";
 import { Modal } from "@/components/modal";
@@ -9,27 +10,31 @@ import { getQuickActionRefData } from "@/app/(app)/quick-actions-actions";
 import { createExpectedIncome } from "@/app/(app)/forecast/actions";
 
 type RefData = Awaited<ReturnType<typeof getQuickActionRefData>>;
-type ActionKey = "payment_request" | "expected_income";
+type ModalActionKey = "payment_request" | "expected_income";
 
-// A floating "+" button (bottom-right, visible on every admin page) that
-// opens a small speed-dial of quick-entry actions — reuses the same forms/
-// server actions as their full pages instead of duplicating logic, and
-// only fetches the reference data (bank accounts/departments/categories)
-// the first time it's actually opened. New actions get added to `ACTIONS`
-// plus a case in the render switch below.
-const ACTIONS: { key: ActionKey; label: string }[] = [
-  { key: "payment_request", label: "דרישת תשלום חדשה" },
-  { key: "expected_income", label: "הכנסה צפויה חדשה" },
+// Every quick action shows up in two places — the floating "+" speed-dial
+// (QuickActionsFab) and a plain button grid on the dashboard
+// (QuickActionsPanel) — both built on the same ACTIONS list and the same
+// useQuickActionsState() below, so a new action only needs to be added
+// once here. A "link" action just navigates; a "modal" action opens the
+// matching form via openAction().
+type ActionDef =
+  | { key: ModalActionKey; label: string; type: "modal" }
+  | { key: string; label: string; type: "link"; href: string };
+
+const ACTIONS: ActionDef[] = [
+  { key: "payment_request", label: "דרישת תשלום חדשה", type: "modal" },
+  { key: "expected_income", label: "הכנסה צפויה חדשה", type: "modal" },
+  { key: "forecast", label: "מעבר לתחזית", type: "link", href: "/forecast" },
+  { key: "due_checks", label: "צ׳קים והעברות שהגיע תאריכם", type: "link", href: "/checks#due-checks" },
 ];
 
-export function QuickActionsFab() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [activeAction, setActiveAction] = useState<ActionKey | null>(null);
+function useQuickActionsState() {
+  const [activeAction, setActiveAction] = useState<ModalActionKey | null>(null);
   const [refData, setRefData] = useState<RefData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function openAction(key: ActionKey) {
-    setMenuOpen(false);
+  async function openAction(key: ModalActionKey) {
     if (!refData) {
       setLoading(true);
       try {
@@ -41,21 +46,62 @@ export function QuickActionsFab() {
     setActiveAction(key);
   }
 
+  const modals = (
+    <>
+      {activeAction === "payment_request" && refData && (
+        <UnifiedCheckForm
+          bankAccounts={refData.bankAccounts}
+          departments={refData.departments}
+          categories={refData.categories}
+          open
+          onOpenChange={(v) => !v && setActiveAction(null)}
+          hideTrigger
+        />
+      )}
+      {activeAction === "expected_income" && refData && (
+        <QuickExpectedIncomeForm bankAccounts={refData.bankAccounts} onClose={() => setActiveAction(null)} />
+      )}
+    </>
+  );
+
+  return { openAction, loading, modals };
+}
+
+export function QuickActionsFab() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { openAction, loading, modals } = useQuickActionsState();
+
+  function handleClick(action: ActionDef) {
+    setMenuOpen(false);
+    if (action.type === "modal") openAction(action.key);
+  }
+
   return (
     <>
       <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2 no-print">
         {menuOpen && (
           <div className="flex flex-col items-end gap-2 mb-1">
-            {ACTIONS.map((a) => (
-              <button
-                key={a.key}
-                type="button"
-                onClick={() => openAction(a.key)}
-                className="rounded-full bg-surface border border-border shadow-lg px-4 py-2 text-sm font-medium hover:bg-background whitespace-nowrap"
-              >
-                {a.label}
-              </button>
-            ))}
+            {ACTIONS.map((a) =>
+              a.type === "link" ? (
+                <Link
+                  key={a.key}
+                  href={a.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-full bg-surface border border-border shadow-lg px-4 py-2 text-sm font-medium hover:bg-background whitespace-nowrap"
+                >
+                  {a.label}
+                </Link>
+              ) : (
+                <button
+                  key={a.key}
+                  type="button"
+                  onClick={() => handleClick(a)}
+                  className="rounded-full bg-surface border border-border shadow-lg px-4 py-2 text-sm font-medium hover:bg-background whitespace-nowrap"
+                >
+                  {a.label}
+                </button>
+              ),
+            )}
           </div>
         )}
         <button
@@ -70,21 +116,44 @@ export function QuickActionsFab() {
         </button>
       </div>
 
-      {activeAction === "payment_request" && refData && (
-        <UnifiedCheckForm
-          bankAccounts={refData.bankAccounts}
-          departments={refData.departments}
-          categories={refData.categories}
-          open
-          onOpenChange={(v) => !v && setActiveAction(null)}
-          hideTrigger
-        />
-      )}
-
-      {activeAction === "expected_income" && refData && (
-        <QuickExpectedIncomeForm bankAccounts={refData.bankAccounts} onClose={() => setActiveAction(null)} />
-      )}
+      {modals}
     </>
+  );
+}
+
+// The same actions rendered as a proper button grid on the dashboard, for
+// admins who'd rather see them up front than discover the floating button.
+export function QuickActionsPanel() {
+  const { openAction, loading, modals } = useQuickActionsState();
+
+  return (
+    <div className="card p-4">
+      <h2 className="font-semibold mb-3">פעולות מהירות</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {ACTIONS.map((a) =>
+          a.type === "link" ? (
+            <Link
+              key={a.key}
+              href={a.href}
+              className="rounded-xl border border-border bg-background hover:bg-surface transition-colors px-4 py-4 text-sm font-semibold text-center"
+            >
+              {a.label}
+            </Link>
+          ) : (
+            <button
+              key={a.key}
+              type="button"
+              disabled={loading}
+              onClick={() => openAction(a.key)}
+              className="rounded-xl border border-border bg-background hover:bg-surface transition-colors px-4 py-4 text-sm font-semibold text-center disabled:opacity-60"
+            >
+              {a.label}
+            </button>
+          ),
+        )}
+      </div>
+      {modals}
+    </div>
   );
 }
 
