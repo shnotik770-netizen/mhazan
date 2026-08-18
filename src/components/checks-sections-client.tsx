@@ -10,6 +10,7 @@ import {
 } from "@/components/checks-client";
 import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
+import { groupByBank, bankColorFor, BankGroupHeading } from "@/components/bank-grouping";
 import type { CheckAllocationInput } from "@/app/(app)/checks/actions";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -61,56 +62,6 @@ function matches(query: string, ...fields: (string | null | undefined)[]) {
   if (!query.trim()) return true;
   const q = query.trim().toLowerCase();
   return fields.some((f) => (f ?? "").toLowerCase().includes(q));
-}
-
-// Automatically splits a section's rows into one group per bank account
-// instead of one flat list, so it's obvious at a glance which bank each
-// batch of checks/transfers is coming out of.
-function groupByBank<T extends { bank_name: string | null; account_number: string | null }>(
-  rows: T[],
-): [string, T[]][] {
-  const groups = new Map<string, T[]>();
-  for (const row of rows) {
-    const key = `${row.bank_name ?? "?"} (${row.account_number ?? "?"})`;
-    const list = groups.get(key) ?? [];
-    list.push(row);
-    groups.set(key, list);
-  }
-  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
-}
-
-// A fixed, high-contrast palette (not just the theme's --primary/--accent,
-// which would make every bank look the same) mapped deterministically by
-// bank label so the same account always gets the same color across every
-// section on the page, without storing a color anywhere.
-const BANK_COLORS = [
-  { dot: "bg-sky-500", border: "border-sky-500" },
-  { dot: "bg-amber-500", border: "border-amber-500" },
-  { dot: "bg-emerald-500", border: "border-emerald-500" },
-  { dot: "bg-rose-500", border: "border-rose-500" },
-  { dot: "bg-violet-500", border: "border-violet-500" },
-  { dot: "bg-teal-500", border: "border-teal-500" },
-  { dot: "bg-orange-500", border: "border-orange-500" },
-  { dot: "bg-pink-500", border: "border-pink-500" },
-];
-
-function bankColorFor(label: string) {
-  let hash = 0;
-  for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
-  return BANK_COLORS[hash % BANK_COLORS.length];
-}
-
-// Heading for one bank-account group, shared by every grouped checks/
-// transfers table so the same bank reads with the same color dot + border
-// stripe everywhere on the page.
-function BankGroupHeading({ label, count, unit }: { label: string; count: number; unit: string }) {
-  const color = bankColorFor(label);
-  return (
-    <h3 className="flex items-center gap-2 text-sm font-semibold text-muted mb-1">
-      <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${color.dot}`} />
-      {label} — {count} {unit}
-    </h3>
-  );
 }
 
 function DepartmentCell({
@@ -168,7 +119,15 @@ export function PendingApprovalTable({
   allocationsByCheck: Map<string, AllocationInfo[]>;
 }) {
   const [query, setQuery] = useState("");
-  const filtered = rows.filter((r) => matches(query, r.payee, r.notes));
+  const searched = rows.filter((r) => matches(query, r.payee, r.notes));
+
+  const columns: ColumnDef<PaymentRequestRow>[] = [
+    { key: "payee", label: "מוטב", sortValue: (r) => r.payee ?? "", filterValue: (r) => r.payee ?? "" },
+    { key: "amount", label: "סכום", sortValue: (r) => Number(r.amount) },
+    { key: "department", label: "מחלקה", sortValue: (r) => r.department_name ?? "", filterValue: (r) => r.department_name ?? "בהמתנה" },
+    { key: "notes", label: "הערות", sortValue: (r) => r.notes ?? "" },
+  ];
+  const { rows: filtered, sort, toggleSort, filters, setColumnFilter } = useSortFilter(searched, columns);
 
   return (
     <div>
@@ -177,10 +136,17 @@ export function PendingApprovalTable({
         <table className="data-table">
           <thead>
             <tr>
-              <th>מוטב</th>
-              <th>סכום</th>
-              <th>מחלקה</th>
-              <th>הערות</th>
+              {columns.map((col) => (
+                <SortFilterTh
+                  key={col.key}
+                  col={col}
+                  allRows={searched}
+                  sort={sort}
+                  toggleSort={toggleSort}
+                  activeFilter={filters[col.key]}
+                  setColumnFilter={setColumnFilter}
+                />
+              ))}
               {isAdmin && <th>אישור</th>}
             </tr>
           </thead>
@@ -251,7 +217,19 @@ export function IssuedChecksTable({
   allocationsByCheck: Map<string, AllocationInfo[]>;
 }) {
   const [query, setQuery] = useState("");
-  const filtered = rows.filter((r) => matches(query, r.payee, r.check_number));
+  const searched = rows.filter((r) => matches(query, r.payee, r.check_number));
+
+  const statusLabel = (s: string | null) => (s === "CLEARED" ? "נפרע" : s === "CANCELLED" ? "בוטל" : "לא נפרע");
+  const columns: ColumnDef<IssuedCheckRow>[] = [
+    { key: "check_number", label: "מס׳ צ׳ק", sortValue: (r) => r.check_number ?? "" },
+    { key: "payee", label: "מוטב", sortValue: (r) => r.payee ?? "", filterValue: (r) => r.payee ?? "" },
+    { key: "amount", label: "סכום", sortValue: (r) => Number(r.amount) },
+    { key: "due_date", label: "תאריך פירעון", sortValue: (r) => r.due_date ?? "" },
+    { key: "issued_at", label: "תאריך הנפקה", sortValue: (r) => r.issued_at ?? "" },
+    { key: "department", label: "מחלקה", sortValue: (r) => r.department_name ?? "", filterValue: (r) => r.department_name ?? "ללא מחלקה" },
+    { key: "status", label: "סטטוס", sortValue: (r) => r.status ?? "", filterValue: (r) => statusLabel(r.status) },
+  ];
+  const { rows: filtered, sort, toggleSort, filters, setColumnFilter } = useSortFilter(searched, columns);
   const grouped = groupByBank(filtered);
 
   return (
@@ -264,13 +242,17 @@ export function IssuedChecksTable({
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>מס׳ צ׳ק</th>
-                  <th>מוטב</th>
-                  <th>סכום</th>
-                  <th>תאריך פירעון</th>
-                  <th>תאריך הנפקה</th>
-                  <th>מחלקה</th>
-                  <th>סטטוס</th>
+                  {columns.map((col) => (
+                    <SortFilterTh
+                      key={col.key}
+                      col={col}
+                      allRows={searched}
+                      sort={sort}
+                      toggleSort={toggleSort}
+                      activeFilter={filters[col.key]}
+                      setColumnFilter={setColumnFilter}
+                    />
+                  ))}
                   <th></th>
                 </tr>
               </thead>
@@ -336,10 +318,25 @@ type OverdueTransferRow = {
 // each group gets a colored dot + border stripe (bankColorFor) so it's
 // visually obvious at a glance which bank a batch of overdue items belongs
 // to, especially important here since these are unresolved/overdue.
+type OverdueTransferFlatRow = OverdueTransferRow & { bank_name: string | null; account_number: string | null };
+
 export function OverdueTransfersTable({ rows }: { rows: OverdueTransferRow[] }) {
   const [query, setQuery] = useState("");
-  const filtered = rows.filter((r) => matches(query, r.payee));
-  const grouped = groupByBank(filtered.map((r) => ({ ...r, bank_name: r.bank_accounts?.bank_name ?? null, account_number: r.bank_accounts?.account_number ?? null })));
+  const flat: OverdueTransferFlatRow[] = rows.map((r) => ({
+    ...r,
+    bank_name: r.bank_accounts?.bank_name ?? null,
+    account_number: r.bank_accounts?.account_number ?? null,
+  }));
+  const searched = flat.filter((r) => matches(query, r.payee));
+
+  const columns: ColumnDef<OverdueTransferFlatRow>[] = [
+    { key: "payee", label: "מוטב", sortValue: (r) => r.payee, filterValue: (r) => r.payee },
+    { key: "amount", label: "סכום", sortValue: (r) => Number(r.amount) },
+    { key: "due_date", label: "תאריך", sortValue: (r) => r.due_date },
+    { key: "department", label: "מחלקה", sortValue: (r) => r.departments?.name ?? "", filterValue: (r) => r.departments?.name ?? "בהמתנה" },
+  ];
+  const { rows: filtered, sort, toggleSort, filters, setColumnFilter } = useSortFilter(searched, columns);
+  const grouped = groupByBank(filtered);
 
   return (
     <div className="mb-4">
@@ -352,10 +349,17 @@ export function OverdueTransfersTable({ rows }: { rows: OverdueTransferRow[] }) 
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>מוטב</th>
-                  <th>סכום</th>
-                  <th>תאריך</th>
-                  <th>מחלקה</th>
+                  {columns.map((col) => (
+                    <SortFilterTh
+                      key={col.key}
+                      col={col}
+                      allRows={searched}
+                      sort={sort}
+                      toggleSort={toggleSort}
+                      activeFilter={filters[col.key]}
+                      setColumnFilter={setColumnFilter}
+                    />
+                  ))}
                   <th></th>
                 </tr>
               </thead>
@@ -533,10 +537,26 @@ type OverdueCheckRow = {
   bank_accounts: { bank_name: string; account_number: string } | null;
 };
 
+type OverdueCheckFlatRow = OverdueCheckRow & { bank_name: string | null; account_number: string | null };
+
 export function OverdueChecksTable({ rows }: { rows: OverdueCheckRow[] }) {
   const [query, setQuery] = useState("");
-  const filtered = rows.filter((r) => matches(query, r.payee, r.check_number));
-  const grouped = groupByBank(filtered.map((r) => ({ ...r, bank_name: r.bank_accounts?.bank_name ?? null, account_number: r.bank_accounts?.account_number ?? null })));
+  const flat: OverdueCheckFlatRow[] = rows.map((r) => ({
+    ...r,
+    bank_name: r.bank_accounts?.bank_name ?? null,
+    account_number: r.bank_accounts?.account_number ?? null,
+  }));
+  const searched = flat.filter((r) => matches(query, r.payee, r.check_number));
+
+  const columns: ColumnDef<OverdueCheckFlatRow>[] = [
+    { key: "payee", label: "מוטב", sortValue: (r) => r.payee, filterValue: (r) => r.payee },
+    { key: "check_number", label: "מס׳ צ׳ק", sortValue: (r) => r.check_number ?? "" },
+    { key: "amount", label: "סכום", sortValue: (r) => Number(r.amount) },
+    { key: "due_date", label: "תאריך", sortValue: (r) => r.due_date },
+    { key: "department", label: "מחלקה", sortValue: (r) => r.departments?.name ?? "", filterValue: (r) => r.departments?.name ?? "בהמתנה" },
+  ];
+  const { rows: filtered, sort, toggleSort, filters, setColumnFilter } = useSortFilter(searched, columns);
+  const grouped = groupByBank(filtered);
 
   return (
     <div>
@@ -549,11 +569,17 @@ export function OverdueChecksTable({ rows }: { rows: OverdueCheckRow[] }) {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>מוטב</th>
-                  <th>מס׳ צ׳ק</th>
-                  <th>סכום</th>
-                  <th>תאריך</th>
-                  <th>מחלקה</th>
+                  {columns.map((col) => (
+                    <SortFilterTh
+                      key={col.key}
+                      col={col}
+                      allRows={searched}
+                      sort={sort}
+                      toggleSort={toggleSort}
+                      activeFilter={filters[col.key]}
+                      setColumnFilter={setColumnFilter}
+                    />
+                  ))}
                   <th></th>
                 </tr>
               </thead>

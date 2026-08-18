@@ -12,6 +12,8 @@ import {
 } from "@/app/(app)/checks/actions";
 import { EditDeleteCheckRow, IssueCheckRow } from "@/components/checks-client";
 import { Modal } from "@/components/modal";
+import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
+import { groupByBank, bankColorFor, BankGroupHeading } from "@/components/bank-grouping";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -29,6 +31,8 @@ type QueueRow = {
   notes: string | null;
   created_at: string | null;
   bank_account_id: string | null;
+  bank_name: string | null;
+  account_number: string | null;
 };
 
 type AllocationInfo = { departmentId: string; departmentName: string | null; amount: number };
@@ -153,11 +157,26 @@ export function IssuanceQueueTable({
   const [quickError, setQuickError] = useState<string | null>(null);
   const [quickPending, startQuickTransition] = useTransition();
 
-  const filteredRows = rows.filter((r) => {
+  const searched = rows.filter((r) => {
     if (!query.trim()) return true;
     const q = query.trim().toLowerCase();
     return (r.payee ?? "").toLowerCase().includes(q);
   });
+
+  const columns: ColumnDef<QueueRow>[] = [
+    { key: "payee", label: "מוטב", sortValue: (r) => r.payee ?? "", filterValue: (r) => r.payee ?? "" },
+    { key: "amount", label: "סכום", sortValue: (r) => Number(r.amount) },
+    { key: "created_at", label: "תאריך הזנה", sortValue: (r) => r.created_at ?? "" },
+    { key: "due_date", label: "תאריך", sortValue: (r) => r.due_date ?? "" },
+    { key: "department", label: "מחלקה", sortValue: (r) => r.department_name ?? "", filterValue: (r) => r.department_name ?? "בהמתנה" },
+    {
+      key: "payment_method",
+      label: "אמצעי",
+      sortValue: (r) => r.payment_method ?? "",
+      filterValue: (r) => (r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"),
+    },
+  ];
+  const { rows: filteredRows, sort, toggleSort, filters, setColumnFilter } = useSortFilter(searched, columns);
 
   const eligibleForQuickIssuance = filteredRows.filter(
     (r) => r.payment_method === "CHECK" && r.due_date && !r.check_number,
@@ -380,23 +399,31 @@ export function IssuanceQueueTable({
           </button>
         )}
       </div>
-      <div className="overflow-x-auto">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th></th>
-            <th>מוטב</th>
-            <th>סכום</th>
-            <th>תאריך הזנה</th>
-            <th>תאריך</th>
-            <th>מחלקה</th>
-            <th>אמצעי</th>
-            <th>הנפקה</th>
-            <th></th>
-          </tr>
-        </thead>
+      {groupByBank(filteredRows).map(([bankLabel, bankRows]) => (
+        <div key={bankLabel} className={`mb-4 border-r-4 ${bankColorFor(bankLabel).border} pr-3`}>
+          <BankGroupHeading label={bankLabel} count={bankRows.length} unit="צ׳קים להנפקה" />
+          <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th></th>
+                {columns.map((col) => (
+                  <SortFilterTh
+                    key={col.key}
+                    col={col}
+                    allRows={searched}
+                    sort={sort}
+                    toggleSort={toggleSort}
+                    activeFilter={filters[col.key]}
+                    setColumnFilter={setColumnFilter}
+                  />
+                ))}
+                <th>הנפקה</th>
+                <th></th>
+              </tr>
+            </thead>
         <tbody>
-          {filteredRows.map((c) => (
+          {bankRows.map((c) => (
             <tr key={c.id!}>
               <td>
                 <input type="checkbox" checked={selected.has(c.id!)} onChange={() => toggle(c.id!)} />
@@ -457,8 +484,11 @@ export function IssuanceQueueTable({
             </tr>
           ))}
         </tbody>
-      </table>
-      </div>
+          </table>
+          </div>
+        </div>
+      ))}
+      {filteredRows.length === 0 && <p className="text-center text-muted py-4">אין תוצאות</p>}
 
       {quickOpen && (
         <Modal onClose={() => setQuickOpen(false)}>
