@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
+import { DepartmentTransactionsTable } from "@/components/department-report-table-client";
 
 type CombinedRow = {
   id: string;
@@ -36,7 +37,9 @@ export async function DepartmentReport({
       .order("due_date", { ascending: false }),
     supabase
       .from("manual_department_entries")
-      .select("id, entry_date, amount, direction, notes")
+      .select(
+        "id, entry_date, amount, direction, notes, counterparty:departments!manual_department_entries_counterparty_department_id_fkey(name)",
+      )
       .eq("department_id", departmentId)
       .eq("status", "APPROVED")
       .order("entry_date", { ascending: false }),
@@ -60,12 +63,22 @@ export async function DepartmentReport({
       amount: -Number(r.amount),
     }));
 
-  const manualRows: CombinedRow[] = (manualEntries ?? []).map((e) => ({
-    id: e.id,
-    date: e.entry_date,
-    description: e.notes || (e.direction === "INCOME" ? "רישום ידני — הכנסה" : "רישום ידני — הוצאה"),
-    amount: e.direction === "INCOME" ? Number(e.amount) : -Number(e.amount),
-  }));
+  const manualRows: CombinedRow[] = (manualEntries ?? []).map((e) => {
+    const counterpartyName = (e as unknown as { counterparty: { name: string } | null }).counterparty?.name;
+    const label = counterpartyName
+      ? e.direction === "INCOME"
+        ? `העברה מ-${counterpartyName}`
+        : `העברה ל-${counterpartyName}`
+      : e.direction === "INCOME"
+        ? "רישום ידני — הכנסה"
+        : "רישום ידני — הוצאה";
+    return {
+      id: e.id,
+      date: e.entry_date,
+      description: e.notes ? `${label} (${e.notes})` : label,
+      amount: e.direction === "INCOME" ? Number(e.amount) : -Number(e.amount),
+    };
+  });
 
   const allRows = [...incomeRows, ...expenseRows, ...manualRows].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 
@@ -92,31 +105,7 @@ export async function DepartmentReport({
 
       <div className="card p-4 overflow-x-auto">
         <h2 className="font-semibold mb-3">כל התנועות — {departmentName}</h2>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>תאריך</th>
-              <th>תיאור</th>
-              <th>סכום</th>
-            </tr>
-          </thead>
-          <tbody>
-            {allRows.map((r) => (
-              <tr key={r.id}>
-                <td>{r.date ? formatDate(r.date) : "—"}</td>
-                <td>{r.description}</td>
-                <td className={r.amount >= 0 ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>
-              </tr>
-            ))}
-            {allRows.length === 0 && (
-              <tr>
-                <td colSpan={3} className="text-center text-muted py-6">
-                  אין תנועות למחלקה זו
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <DepartmentTransactionsTable rows={allRows} />
       </div>
     </div>
   );

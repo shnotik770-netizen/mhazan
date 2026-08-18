@@ -1,9 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { SettleBalancesButton } from "@/components/settle-balances-button";
 import { DepartmentReport } from "@/components/department-report";
 import { NewManualEntryForm } from "@/components/manual-entries-client";
+import { LedgerBalancesTable, LedgerOpenEntriesTable } from "@/components/ledger-tables-client";
 
 export default async function LedgerPage({
   searchParams,
@@ -83,80 +82,37 @@ export default async function LedgerPage({
 
         <div className="card p-4 overflow-x-auto">
           <h3 className="font-semibold mb-3">מטריצת יתרות נטו</h3>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>חייב</th>
-                <th>זכאי</th>
-                <th>סכום נטו</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {(balances ?? []).map((row, i) => (
-                <tr key={i}>
-                  <td>{deptName(row.debtor_department_id)}</td>
-                  <td>{deptName(row.creditor_department_id)}</td>
-                  <td className="font-semibold">{formatCurrency(Number(row.net_amount))}</td>
-                  <td>
-                    <SettleBalancesButton
-                      deptA={row.debtor_department_id!}
-                      deptB={row.creditor_department_id!}
-                      debtorName={deptName(row.debtor_department_id)}
-                      creditorName={deptName(row.creditor_department_id)}
-                    />
-                  </td>
-                </tr>
-              ))}
-              {(balances ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={4} className="text-center text-muted py-6">
-                    אין יתרות פתוחות בין מחלקות
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <LedgerBalancesTable
+            rows={(balances ?? []).map((row) => ({
+              debtorId: row.debtor_department_id!,
+              creditorId: row.creditor_department_id!,
+              debtorName: deptName(row.debtor_department_id),
+              creditorName: deptName(row.creditor_department_id),
+              netAmount: Number(row.net_amount),
+            }))}
+          />
         </div>
 
         <div className="card p-4 overflow-x-auto mt-4">
           <h3 className="font-semibold mb-3">תנועות פתוחות (לפני נטו)</h3>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>תאריך</th>
-                <th>ממחלקה (חייב)</th>
-                <th>למחלקה (זכאי)</th>
-                <th>סכום</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(openEntries ?? []).map((e) => {
-                const row = e as unknown as {
-                  id: string;
-                  created_at: string;
-                  amount: number;
-                  from_dept: { name: string } | null;
-                  to_dept: { name: string } | null;
-                };
-                return (
-                  <tr key={row.id}>
-                    <td>{formatDate(row.created_at)}</td>
-                    <td>{row.from_dept?.name}</td>
-                    <td>{row.to_dept?.name}</td>
-                    <td>{formatCurrency(Number(row.amount))}</td>
-                  </tr>
-                );
-              })}
-              {(openEntries ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={4} className="text-center text-muted py-6">
-                    אין תנועות פתוחות
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <LedgerOpenEntriesTable
+            rows={(openEntries ?? []).map((e) => {
+              const row = e as unknown as {
+                id: string;
+                created_at: string;
+                amount: number;
+                from_dept: { name: string } | null;
+                to_dept: { name: string } | null;
+              };
+              return {
+                id: row.id,
+                createdAt: row.created_at,
+                amount: Number(row.amount),
+                fromName: row.from_dept?.name ?? "—",
+                toName: row.to_dept?.name ?? "—",
+              };
+            })}
+          />
         </div>
       </div>
     </div>
