@@ -730,6 +730,45 @@ export type Database = {
         }
         Relationships: []
       }
+      recurring_schedule_allocations: {
+        Row: {
+          amount: number
+          created_at: string
+          department_id: string
+          id: string
+          schedule_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          department_id: string
+          id?: string
+          schedule_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          department_id?: string
+          id?: string
+          schedule_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_schedule_allocations_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_schedule_allocations_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recurring_schedules: {
         Row: {
           bank_account_id: string | null
@@ -737,7 +776,7 @@ export type Database = {
           created_at: string
           day_of_month: number | null
           day_of_week: number | null
-          department_id: string
+          department_id: string | null
           direction: string
           expected_amount: number
           frequency: string
@@ -753,7 +792,7 @@ export type Database = {
           created_at?: string
           day_of_month?: number | null
           day_of_week?: number | null
-          department_id: string
+          department_id?: string | null
           direction: string
           expected_amount: number
           frequency: string
@@ -769,7 +808,7 @@ export type Database = {
           created_at?: string
           day_of_month?: number | null
           day_of_week?: number | null
-          department_id?: string
+          department_id?: string | null
           direction?: string
           expected_amount?: number
           frequency?: string

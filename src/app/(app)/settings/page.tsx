@@ -3,7 +3,8 @@ import { requireFinanceAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, daysAgoLabel } from "@/lib/format";
 import { NewUserForm, UserAccessRow } from "@/components/user-access-client";
-import { createBankAccount, createRecurringSchedule } from "./actions";
+import { NewRecurringScheduleForm } from "@/components/recurring-schedule-form-client";
+import { createBankAccount } from "./actions";
 
 const WEEKDAY_LABELS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
 
@@ -36,7 +37,10 @@ export default async function SettingsPage() {
     supabase.from("departments").select("*").order("name"),
     supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
     supabase.from("categories").select("*, departments(name)").order("name"),
-    supabase.from("recurring_schedules").select("*, departments(name)").order("name"),
+    supabase
+      .from("recurring_schedules")
+      .select("*, departments(name), recurring_schedule_allocations(amount, departments(name))")
+      .order("name"),
     supabase.from("user_profiles").select("*").order("full_name"),
     supabase.from("user_department_access").select("user_id, department_id"),
   ]);
@@ -153,10 +157,21 @@ export default async function SettingsPage() {
             </tr>
           </thead>
           <tbody>
-            {(schedules ?? []).map((s) => (
+            {(schedules ?? []).map((s) => {
+              const row = s as unknown as {
+                departments: { name: string } | null;
+                recurring_schedule_allocations: { amount: number; departments: { name: string } | null }[];
+              };
+              return (
               <tr key={s.id}>
                 <td>{s.name}</td>
-                <td>{(s as { departments: { name: string } | null }).departments?.name}</td>
+                <td>
+                  {row.departments?.name ?? (
+                    <span title={row.recurring_schedule_allocations.map((a) => `${a.departments?.name}: ${formatCurrency(Number(a.amount))}`).join(", ")}>
+                      מפוצל ({row.recurring_schedule_allocations.length} מחלקות)
+                    </span>
+                  )}
+                </td>
                 <td>{s.direction === "INCOME" ? "הכנסה" : "הוצאה"}</td>
                 <td>{frequencyLabel(s.frequency)}</td>
                 <td>
@@ -172,66 +187,16 @@ export default async function SettingsPage() {
                 </td>
                 <td>{s.is_active ? "כן" : "לא"}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
         </div>
-        <form action={createRecurringSchedule} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 pt-2">
-          <input name="name" placeholder="שם ההוראה" required className="rounded border border-border bg-transparent px-2 py-1 text-sm" />
-          <select name="department_id" required className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-            <option value="">מחלקה...</option>
-            {(departments ?? []).map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-          <select name="direction" className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-            <option value="EXPENSE">הוצאה</option>
-            <option value="INCOME">הכנסה</option>
-          </select>
-          <select name="type" className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-            <option value="FIXED_DATE_FIXED_AMOUNT">תאריך קבוע עם סכום קבוע</option>
-            <option value="FIXED_DATE_ESTIMATED_AMOUNT">תאריך קבוע עם סכום משוער</option>
-            <option value="VARIABLE_DATE_ESTIMATED_AMOUNT">תאריך לא קבוע עם סכום משוער (חודשי בלבד)</option>
-          </select>
-          <select name="frequency" className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-            <option value="MONTHLY">חודשי</option>
-            <option value="WEEKLY">שבועי</option>
-            <option value="YEARLY">שנתי</option>
-            <option value="ONCE">חד פעמי</option>
-          </select>
-          <input
-            name="day_of_month"
-            type="number"
-            min="1"
-            max="31"
-            placeholder="יום בחודש (ריק = תאריך לא קבוע, חודשי בלבד)"
-            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          />
-          <input name="day_of_week" type="number" min="0" max="6" placeholder="יום בשבוע (0=א׳)" className="rounded border border-border bg-transparent px-2 py-1 text-sm" />
-          <input name="one_time_date" type="date" className="rounded border border-border bg-transparent px-2 py-1 text-sm" />
-          <input name="expected_amount" type="number" placeholder="סכום צפוי" required className="rounded border border-border bg-transparent px-2 py-1 text-sm" />
-          <select name="bank_account_id" required className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-            <option value="">חשבון בנק...</option>
-            {(bankAccounts ?? []).map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.bank_name} ({b.account_number})
-              </option>
-            ))}
-          </select>
-          <select name="category_id" className="rounded border border-border bg-transparent px-2 py-1 text-sm">
-            <option value="">קטגוריה (אופציונלי)...</option>
-            {(categories ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <button type="submit" className="rounded bg-primary text-primary-foreground text-sm px-3 py-1">
-            הוסף הוראת קבע
-          </button>
-        </form>
+        <NewRecurringScheduleForm
+          departments={departments ?? []}
+          bankAccounts={bankAccounts ?? []}
+          categories={categories ?? []}
+        />
       </section>
 
       <section className="card p-4 space-y-3">

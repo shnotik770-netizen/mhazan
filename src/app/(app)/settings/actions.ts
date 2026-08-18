@@ -90,20 +90,47 @@ export async function createRecurringSchedule(formData: FormData): Promise<void>
       ? null
       : Number(dayOfMonthRaw);
 
-  const { error } = await supabase.from("recurring_schedules").insert({
-    department_id: String(formData.get("department_id") ?? ""),
-    name: String(formData.get("name") ?? ""),
-    type,
-    direction: String(formData.get("direction") ?? "EXPENSE"),
-    frequency,
-    day_of_month: frequency === "MONTHLY" || frequency === "YEARLY" ? dayOfMonth : null,
-    day_of_week: frequency === "WEEKLY" ? Number(formData.get("day_of_week")) : null,
-    one_time_date: frequency === "ONCE" ? String(formData.get("one_time_date")) : null,
-    expected_amount: Number(formData.get("expected_amount") ?? 0),
-    category_id: String(formData.get("category_id") ?? "") || null,
-    bank_account_id: String(formData.get("bank_account_id") ?? "") || null,
-  });
+  // A schedule split across departments (mirrors checks/check_allocations)
+  // is submitted as repeated allocation_department_id/allocation_amount
+  // fields instead of a single department_id.
+  const allocations = formData
+    .getAll("allocation_department_id")
+    .map((departmentId, i) => ({
+      departmentId: String(departmentId),
+      amount: Number(formData.getAll("allocation_amount")[i]),
+    }))
+    .filter((a) => a.departmentId && a.amount > 0);
+
+  const { data: schedule, error } = await supabase
+    .from("recurring_schedules")
+    .insert({
+      department_id: allocations.length >= 2 ? null : String(formData.get("department_id") ?? ""),
+      name: String(formData.get("name") ?? ""),
+      type,
+      direction: String(formData.get("direction") ?? "EXPENSE"),
+      frequency,
+      day_of_month: frequency === "MONTHLY" || frequency === "YEARLY" ? dayOfMonth : null,
+      day_of_week: frequency === "WEEKLY" ? Number(formData.get("day_of_week")) : null,
+      one_time_date: frequency === "ONCE" ? String(formData.get("one_time_date")) : null,
+      expected_amount: Number(formData.get("expected_amount") ?? 0),
+      category_id: String(formData.get("category_id") ?? "") || null,
+      bank_account_id: String(formData.get("bank_account_id") ?? "") || null,
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+
+  if (allocations.length >= 2) {
+    const { error: allocError } = await supabase.from("recurring_schedule_allocations").insert(
+      allocations.map((a) => ({
+        schedule_id: schedule.id,
+        department_id: a.departmentId,
+        amount: a.amount,
+      })),
+    );
+    if (allocError) throw new Error(allocError.message);
+  }
+
   revalidatePath("/settings");
   revalidatePath("/forecast");
 }
