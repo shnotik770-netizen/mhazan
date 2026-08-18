@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { DepartmentReport } from "@/components/department-report";
 import { NewManualEntryButton } from "@/components/manual-entries-client";
-import { LedgerBalancesTable, LedgerOpenEntriesTable } from "@/components/ledger-tables-client";
+import { LedgerBalancesTable } from "@/components/ledger-tables-client";
 
 export default async function LedgerPage({
   searchParams,
@@ -15,16 +15,10 @@ export default async function LedgerPage({
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const supabase = await createClient();
 
-  const [{ data: balances }, { data: departments }, { data: openEntries }, { data: bankAccounts }, { data: grants }] =
+  const [{ data: balances }, { data: departments }, { data: bankAccounts }, { data: grants }] =
     await Promise.all([
       supabase.from("v_inter_department_balances").select("*"),
       supabase.from("departments").select("*").order("name"),
-      supabase
-        .from("inter_department_ledger")
-        .select("*, from_dept:from_department_id(name), to_dept:to_department_id(name)")
-        .eq("status", "OPEN")
-        .order("created_at", { ascending: false })
-        .limit(100),
       supabase.from("bank_accounts").select("*").order("bank_name"),
       supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
     ]);
@@ -33,6 +27,25 @@ export default async function LedgerPage({
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
 
   const deptName = (id: string | null) => departments?.find((d) => d.id === id)?.name ?? "—";
+
+  // The "hub" department — whichever department's own bank account most
+  // other departments use as their home account — is the one everyone
+  // else's balance is effectively measured against. A row where money is
+  // owed TO the hub gets flagged, since that's the account this dashboard
+  // itself belongs to.
+  const hubDepartmentId = (() => {
+    const counts = new Map<string, number>();
+    for (const d of departments ?? []) counts.set(d.home_bank_account_id, (counts.get(d.home_bank_account_id) ?? 0) + 1);
+    let bestAccountId: string | null = null;
+    let bestCount = 0;
+    for (const [accountId, count] of counts) {
+      if (count > bestCount) {
+        bestAccountId = accountId;
+        bestCount = count;
+      }
+    }
+    return (bankAccounts ?? []).find((b) => b.id === bestAccountId)?.department_id ?? null;
+  })();
 
   // Only a department this user is actually granted (or any, if admin) can
   // be selected here — same boundary /reports/[departmentId] enforces via
@@ -90,29 +103,8 @@ export default async function LedgerPage({
                 debtorName: deptName(row.debtor_department_id),
                 creditorName: deptName(row.creditor_department_id),
                 netAmount: Number(row.net_amount),
+                owedToHub: row.creditor_department_id === hubDepartmentId,
               }))}
-            />
-          </div>
-
-          <div className="card p-4 overflow-x-auto mt-4">
-            <h3 className="font-semibold mb-3">תנועות פתוחות (לפני נטו)</h3>
-            <LedgerOpenEntriesTable
-              rows={(openEntries ?? []).map((e) => {
-                const row = e as unknown as {
-                  id: string;
-                  created_at: string;
-                  amount: number;
-                  from_dept: { name: string } | null;
-                  to_dept: { name: string } | null;
-                };
-                return {
-                  id: row.id,
-                  createdAt: row.created_at,
-                  amount: Number(row.amount),
-                  fromName: row.from_dept?.name ?? "—",
-                  toName: row.to_dept?.name ?? "—",
-                };
-              })}
             />
           </div>
         </div>
