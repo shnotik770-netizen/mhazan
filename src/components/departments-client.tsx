@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createDepartment, deleteDepartment, updateDepartment } from "@/app/(app)/settings/actions";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -92,17 +93,13 @@ export function DepartmentRow({
       </td>
       <td className="text-sm">
         {editing ? (
-          <select
+          <SearchableSelect
             value={homeBankAccountId}
-            onChange={(e) => setHomeBankAccountId(e.target.value)}
-            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          >
-            {bankAccounts.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.bank_name} ({b.account_number})
-              </option>
-            ))}
-          </select>
+            onChange={setHomeBankAccountId}
+            options={bankAccounts.map((b) => ({ id: b.id, label: `${b.bank_name} (${b.account_number})` }))}
+            placeholder="חשבון בית..."
+            className="rounded border border-border bg-transparent px-2 py-1 text-sm w-56"
+          />
         ) : homeAccount ? (
           usage.bankAccounts > 0 ? (
             <span className="font-semibold text-primary" title="מחלקה זו מנהלת את חשבון הבנק הזה">
@@ -207,19 +204,13 @@ export function NewDepartmentForm({ bankAccounts }: { bankAccounts: BankAccountO
           placeholder="קוד (למשל PNM)"
           className="rounded border border-border bg-transparent px-2 py-1 text-sm w-32"
         />
-        <select
+        <SearchableSelect
           value={homeBankAccountId}
-          onChange={(e) => setHomeBankAccountId(e.target.value)}
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          title="חשבון הבית שדרכו המחלקה פועלת — בדרך כלל החשבון המרכזי, אלא אם יש לה חשבון פרטי משלה"
-        >
-          <option value="">חשבון בית...</option>
-          {bankAccounts.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.bank_name} ({b.account_number})
-            </option>
-          ))}
-        </select>
+          onChange={setHomeBankAccountId}
+          options={bankAccounts.map((b) => ({ id: b.id, label: `${b.bank_name} (${b.account_number})` }))}
+          placeholder="חשבון בית..."
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm w-56"
+        />
         <button
           disabled={isPending || !name || !code || !homeBankAccountId}
           onClick={submit}
