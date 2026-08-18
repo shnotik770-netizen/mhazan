@@ -104,22 +104,24 @@ export function DepartmentRow({
             ))}
           </select>
         ) : homeAccount ? (
-          <>
-            {homeAccount.bank_name} ({homeAccount.account_number})
-            {usage.bankAccounts > 0 ? (
-              <span className="badge bg-background text-muted mr-1">מנהלת חשבון</span>
-            ) : (
-              homeAccount.departments && (
+          usage.bankAccounts > 0 ? (
+            <span className="font-semibold text-primary" title="מחלקה זו מנהלת את חשבון הבנק הזה">
+              {homeAccount.bank_name} ({homeAccount.account_number})
+            </span>
+          ) : (
+            <>
+              {homeAccount.bank_name} ({homeAccount.account_number})
+              {homeAccount.departments && (
                 <span className="badge bg-background text-muted mr-1">שייך ל{homeAccount.departments.name}</span>
-              )
-            )}
-          </>
+              )}
+            </>
+          )
         ) : (
           "—"
         )}
       </td>
       <td className="text-muted text-sm">
-        {usage.bankAccounts} חשבונות · {usage.categories} קטגוריות
+        {usage.categories} קטגוריות
       </td>
       <td>
         <div className="flex items-center gap-2">
