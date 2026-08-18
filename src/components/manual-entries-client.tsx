@@ -12,11 +12,9 @@ type BankAccount = Tables<"bank_accounts">;
 export function NewManualEntryForm({
   departments,
   bankAccounts,
-  allDepartments,
 }: {
   departments: Department[];
   bankAccounts: BankAccount[];
-  allDepartments: Department[];
 }) {
   const router = useRouter();
   const [departmentId, setDepartmentId] = useState("");
@@ -25,10 +23,25 @@ export function NewManualEntryForm({
   const [entryDate, setEntryDate] = useState("");
   const [notes, setNotes] = useState("");
   const [bankAccountId, setBankAccountId] = useState("");
-  const [counterpartyDepartmentId, setCounterpartyDepartmentId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Picking a department auto-fills its own home bank account — the
+  // routine case — but stays editable: choosing a DIFFERENT account is
+  // exactly what signals a cross-department transaction, and the database
+  // picks that up automatically (no separate "third party" field needed).
+  function handleDepartmentChange(id: string) {
+    setDepartmentId(id);
+    const dept = departments.find((d) => d.id === id);
+    if (dept) setBankAccountId(dept.home_bank_account_id);
+  }
+
+  const selectedBankAccount = bankAccounts.find((b) => b.id === bankAccountId);
+  const selectedDepartment = departments.find((d) => d.id === departmentId);
+  const isCrossDepartment = Boolean(
+    selectedDepartment && selectedBankAccount && selectedBankAccount.department_id !== selectedDepartment.id,
+  );
 
   function submit() {
     setError(null);
@@ -40,18 +53,15 @@ export function NewManualEntryForm({
         amount,
         entryDate,
         notes: notes || null,
-        bankAccountId: bankAccountId || null,
-        counterpartyDepartmentId: counterpartyDepartmentId || null,
+        bankAccountId,
       });
       if (result.error) {
         setError(result.error);
       } else {
-        setMessage(counterpartyDepartmentId ? "נשלחה העברה בין מחלקות לאישור" : "נשלח לאישור");
+        setMessage("נשלח לאישור");
         setAmount(0);
         setEntryDate("");
         setNotes("");
-        setBankAccountId("");
-        setCounterpartyDepartmentId("");
         router.refresh();
       }
     });
@@ -66,7 +76,7 @@ export function NewManualEntryForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
         <select
           value={departmentId}
-          onChange={(e) => setDepartmentId(e.target.value)}
+          onChange={(e) => handleDepartmentChange(e.target.value)}
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         >
           <option value="">בחר מחלקה...</option>
@@ -102,40 +112,24 @@ export function NewManualEntryForm({
           value={bankAccountId}
           onChange={(e) => setBankAccountId(e.target.value)}
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+          title="ברירת המחדל היא חשבון הבית של המחלקה. שינוי לחשבון של מחלקה אחרת נרשם אוטומטית כחוב בין המחלקות."
         >
-          <option value="">חשבון בנק (אופציונלי)</option>
+          <option value="">חשבון בנק...</option>
           {bankAccounts.map((b) => (
             <option key={b.id} value={b.id}>
               {b.bank_name} ({b.account_number})
             </option>
           ))}
         </select>
-        <select
-          value={counterpartyDepartmentId}
-          onChange={(e) => setCounterpartyDepartmentId(e.target.value)}
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          title="לדוגמה: הוצאה שיוצאת ממחלקה זו אך בפועל מיועדת למחלקה אחרת — תירשם הכנסה תואמת אצל הצד השני"
-        >
-          <option value="">צד ג׳ / מחלקה מקבלת (אופציונלי)</option>
-          {allDepartments
-            .filter((d) => d.id !== departmentId)
-            .map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-        </select>
       </div>
-      {counterpartyDepartmentId && (
+      {isCrossDepartment && (
         <p className="text-xs text-muted">
-          תירשם גם רשומה תואמת (
-          {direction === "EXPENSE" ? "הכנסה" : "הוצאה"}) אצל &quot;
-          {allDepartments.find((d) => d.id === counterpartyDepartmentId)?.name}&quot; — שני הצדדים יאושרו יחד.
+          חשבון זה שייך למחלקה אחרת — יירשם אוטומטית חוב בין המחלקות ב&quot;התחשבנות הפנימית&quot;.
         </p>
       )}
       <div className="flex items-center gap-2">
         <button
-          disabled={isPending || !departmentId || amount <= 0 || !entryDate}
+          disabled={isPending || !departmentId || amount <= 0 || !entryDate || !bankAccountId}
           onClick={submit}
           className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
         >
@@ -155,10 +149,7 @@ export function ManualEntryApprovalRow({
   amount,
   entryDate,
   notes,
-  counterpartyDepartmentName = null,
   bankAccountLabel = null,
-  isLinked = false,
-  createdByName = null,
 }: {
   entryId: string;
   departmentName: string;
@@ -166,10 +157,7 @@ export function ManualEntryApprovalRow({
   amount: number;
   entryDate: string | null;
   notes: string | null;
-  counterpartyDepartmentName?: string | null;
   bankAccountLabel?: string | null;
-  isLinked?: boolean;
-  createdByName?: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -184,19 +172,10 @@ export function ManualEntryApprovalRow({
   return (
     <tr>
       <td>{entryDate ?? "—"}</td>
-      <td>
-        {departmentName}
-        {isLinked && <span className="badge bg-background text-muted mr-1">העברה</span>}
-        {isLinked && createdByName && <div className="text-xs text-muted">הוגש ע״י {createdByName}</div>}
-      </td>
+      <td>{departmentName}</td>
       <td>{direction === "INCOME" ? "הכנסה" : "הוצאה"}</td>
       <td>{amount}</td>
-      <td className="text-xs text-muted">
-        {counterpartyDepartmentName ? `↔ ${counterpartyDepartmentName}` : ""}
-        {counterpartyDepartmentName && bankAccountLabel ? " · " : ""}
-        {bankAccountLabel ?? ""}
-        {!counterpartyDepartmentName && !bankAccountLabel ? "—" : ""}
-      </td>
+      <td className="text-xs text-muted">{bankAccountLabel ?? "—"}</td>
       <td>{notes ?? "—"}</td>
       <td>
         <div className="flex items-center gap-2">

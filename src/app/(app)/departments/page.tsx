@@ -9,7 +9,7 @@ export default async function DepartmentsPage() {
 
   const [{ data: departments }, { data: bankAccounts }, { data: categories }] = await Promise.all([
     supabase.from("departments").select("*").order("name"),
-    supabase.from("bank_accounts").select("id, department_id"),
+    supabase.from("bank_accounts").select("id, department_id, bank_name, account_number").order("bank_name"),
     supabase.from("categories").select("id, department_id"),
   ]);
 
@@ -35,17 +35,18 @@ export default async function DepartmentsPage() {
             <tr>
               <th>שם</th>
               <th>קוד</th>
+              <th>חשבון בית</th>
               <th>שימוש</th>
               <th>פעולות</th>
             </tr>
           </thead>
           <tbody>
             {(departments ?? []).map((d) => (
-              <DepartmentRow key={d.id} department={d} usage={usageFor(d.id)} />
+              <DepartmentRow key={d.id} department={d} usage={usageFor(d.id)} bankAccounts={bankAccounts ?? []} />
             ))}
             {(departments ?? []).length === 0 && (
               <tr>
-                <td colSpan={4} className="text-center text-muted py-6">
+                <td colSpan={5} className="text-center text-muted py-6">
                   אין מחלקות מוגדרות עדיין — הוסיפו את המחלקה הראשונה למטה
                 </td>
               </tr>
@@ -53,7 +54,7 @@ export default async function DepartmentsPage() {
           </tbody>
         </table>
         </div>
-        <NewDepartmentForm />
+        <NewDepartmentForm bankAccounts={bankAccounts ?? []} />
       </div>
 
       {(departments ?? []).length > 0 && (

@@ -70,7 +70,7 @@ export default async function LedgerPage({
         <div className="space-y-4">
           <h2 className="text-lg font-bold">דוח — {selectedDepartment.name}</h2>
           <DepartmentReport departmentId={selectedDepartment.id} departmentName={selectedDepartment.name} />
-          <NewManualEntryForm departments={[selectedDepartment]} bankAccounts={bankAccounts ?? []} allDepartments={departments ?? []} />
+          <NewManualEntryForm departments={[selectedDepartment]} bankAccounts={bankAccounts ?? []} />
         </div>
       )}
 

@@ -37,9 +37,7 @@ export async function DepartmentReport({
       .order("due_date", { ascending: false }),
     supabase
       .from("manual_department_entries")
-      .select(
-        "id, entry_date, amount, direction, notes, counterparty:departments!manual_department_entries_counterparty_department_id_fkey(name)",
-      )
+      .select("id, entry_date, amount, direction, notes, bank_accounts(department_id, departments(name))")
       .eq("department_id", departmentId)
       .eq("status", "APPROVED")
       .order("entry_date", { ascending: false }),
@@ -64,11 +62,14 @@ export async function DepartmentReport({
     }));
 
   const manualRows: CombinedRow[] = (manualEntries ?? []).map((e) => {
-    const counterpartyName = (e as unknown as { counterparty: { name: string } | null }).counterparty?.name;
-    const label = counterpartyName
+    const bankAccount = (e as unknown as { bank_accounts: { department_id: string; departments: { name: string } | null } | null })
+      .bank_accounts;
+    const isCrossDepartment = bankAccount && bankAccount.department_id !== departmentId;
+    const otherDeptName = isCrossDepartment ? bankAccount.departments?.name : null;
+    const label = otherDeptName
       ? e.direction === "INCOME"
-        ? `העברה מ-${counterpartyName}`
-        : `העברה ל-${counterpartyName}`
+        ? `העברה מ-${otherDeptName}`
+        : `העברה ל-${otherDeptName}`
       : e.direction === "INCOME"
         ? "רישום ידני — הכנסה"
         : "רישום ידני — הוצאה";

@@ -10,19 +10,23 @@ export async function createDepartment(formData: FormData): Promise<void> {
   const { error } = await supabase.from("departments").insert({
     name: String(formData.get("name") ?? ""),
     code: String(formData.get("code") ?? "").toUpperCase(),
+    home_bank_account_id: String(formData.get("home_bank_account_id") ?? ""),
   });
   if (error) throw new Error(error.message);
   revalidatePath("/settings");
+  revalidatePath("/departments");
 }
 
 export async function updateDepartment(formData: FormData): Promise<void> {
   await requireFinanceAdmin();
   const supabase = await createClient();
+  const homeBankAccountId = String(formData.get("home_bank_account_id") ?? "");
   const { error } = await supabase
     .from("departments")
     .update({
       name: String(formData.get("name") ?? ""),
       code: String(formData.get("code") ?? "").toUpperCase(),
+      ...(homeBankAccountId ? { home_bank_account_id: homeBankAccountId } : {}),
     })
     .eq("id", String(formData.get("id") ?? ""));
   if (error) throw new Error(error.message);
@@ -51,14 +55,23 @@ export async function deleteDepartment(formData: FormData): Promise<void> {
 export async function createBankAccount(formData: FormData): Promise<void> {
   await requireFinanceAdmin();
   const supabase = await createClient();
-  const { error } = await supabase.from("bank_accounts").insert({
-    department_id: String(formData.get("department_id") ?? ""),
-    bank_name: String(formData.get("bank_name") ?? ""),
-    account_number: String(formData.get("account_number") ?? ""),
-    current_balance: Number(formData.get("current_balance") ?? 0),
-  });
+  const departmentId = String(formData.get("department_id") ?? "");
+  const { data, error } = await supabase
+    .from("bank_accounts")
+    .insert({
+      department_id: departmentId,
+      bank_name: String(formData.get("bank_name") ?? ""),
+      account_number: String(formData.get("account_number") ?? ""),
+      current_balance: Number(formData.get("current_balance") ?? 0),
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+  // A department that just got its own bank account should use it as its
+  // home account going forward, instead of whatever it defaulted to before.
+  await supabase.from("departments").update({ home_bank_account_id: data.id }).eq("id", departmentId);
   revalidatePath("/settings");
+  revalidatePath("/departments");
   revalidatePath("/");
 }
 

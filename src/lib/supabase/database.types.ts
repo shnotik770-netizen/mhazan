@@ -352,22 +352,33 @@ export type Database = {
         Row: {
           code: string
           created_at: string
+          home_bank_account_id: string
           id: string
           name: string
         }
         Insert: {
           code: string
           created_at?: string
+          home_bank_account_id: string
           id?: string
           name: string
         }
         Update: {
           code?: string
           created_at?: string
+          home_bank_account_id?: string
           id?: string
           name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "departments_home_bank_account_id_fkey"
+            columns: ["home_bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       expected_incomes: {
         Row: {
@@ -531,6 +542,7 @@ export type Database = {
           from_department_id: string
           id: string
           income_id: string | null
+          manual_entry_id: string | null
           note: string | null
           settled_at: string | null
           settled_by: string | null
@@ -543,6 +555,7 @@ export type Database = {
           from_department_id: string
           id?: string
           income_id?: string | null
+          manual_entry_id?: string | null
           note?: string | null
           settled_at?: string | null
           settled_by?: string | null
@@ -555,6 +568,7 @@ export type Database = {
           from_department_id?: string
           id?: string
           income_id?: string | null
+          manual_entry_id?: string | null
           note?: string | null
           settled_at?: string | null
           settled_by?: string | null
@@ -577,6 +591,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "inter_department_ledger_manual_entry_id_fkey"
+            columns: ["manual_entry_id"]
+            isOneToOne: false
+            referencedRelation: "manual_department_entries"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "inter_department_ledger_to_department_id_fkey"
             columns: ["to_department_id"]
             isOneToOne: false
@@ -590,15 +611,13 @@ export type Database = {
           amount: number
           approved_at: string | null
           approved_by: string | null
-          bank_account_id: string | null
-          counterparty_department_id: string | null
+          bank_account_id: string
           created_at: string
           created_by: string | null
           department_id: string
           direction: string
           entry_date: string | null
           id: string
-          linked_entry_id: string | null
           notes: string | null
           status: string
         }
@@ -606,15 +625,13 @@ export type Database = {
           amount: number
           approved_at?: string | null
           approved_by?: string | null
-          bank_account_id?: string | null
-          counterparty_department_id?: string | null
+          bank_account_id: string
           created_at?: string
           created_by?: string | null
           department_id: string
           direction: string
           entry_date?: string | null
           id?: string
-          linked_entry_id?: string | null
           notes?: string | null
           status?: string
         }
@@ -622,15 +639,13 @@ export type Database = {
           amount?: number
           approved_at?: string | null
           approved_by?: string | null
-          bank_account_id?: string | null
-          counterparty_department_id?: string | null
+          bank_account_id?: string
           created_at?: string
           created_by?: string | null
           department_id?: string
           direction?: string
           entry_date?: string | null
           id?: string
-          linked_entry_id?: string | null
           notes?: string | null
           status?: string
         }
@@ -643,24 +658,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "manual_department_entries_counterparty_department_id_fkey"
-            columns: ["counterparty_department_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "manual_department_entries_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "manual_department_entries_linked_entry_id_fkey"
-            columns: ["linked_entry_id"]
-            isOneToOne: false
-            referencedRelation: "manual_department_entries"
             referencedColumns: ["id"]
           },
         ]
@@ -1367,18 +1368,6 @@ export type Database = {
       }
     }
     Functions: {
-      create_manual_entry_with_counterparty: {
-        Args: {
-          p_amount: number
-          p_bank_account_id: string | null
-          p_counterparty_department_id: string | null
-          p_department_id: string
-          p_direction: string
-          p_entry_date: string
-          p_notes: string | null
-        }
-        Returns: { linked_id: string | null; primary_id: string }[]
-      }
       get_cash_flow_forecast: {
         Args: { p_bank_account_id: string; p_horizon_days?: number }
         Returns: {

@@ -26,25 +26,11 @@ export default async function DashboardPage() {
     isAdmin
       ? supabase
           .from("manual_department_entries")
-          .select(
-            "*, departments!manual_department_entries_department_id_fkey(name), counterparty:departments!manual_department_entries_counterparty_department_id_fkey(name), bank_accounts(bank_name, account_number)",
-          )
+          .select("*, departments(name), bank_accounts(bank_name, account_number)")
           .eq("status", "PENDING")
           .order("created_at")
       : Promise.resolve({ data: null }),
   ]);
-
-  // manual_department_entries.created_by references auth.users, not
-  // user_profiles, so PostgREST can't embed the name in the query above —
-  // fetched separately. Shown on cross-department transfer rows so an
-  // admin approving "Lev Chabad"'s side can see it was actually submitted
-  // by someone in "School", not by Lev Chabad's own manager.
-  const creatorIds = [...new Set((pendingManualEntries ?? []).map((e) => e.created_by).filter((id): id is string => !!id))];
-  const { data: creatorProfiles } =
-    creatorIds.length > 0
-      ? await supabase.from("user_profiles").select("id, full_name").in("id", creatorIds)
-      : { data: [] as { id: string; full_name: string | null }[] };
-  const creatorNameById = new Map((creatorProfiles ?? []).map((p) => [p.id, p.full_name]));
 
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
@@ -127,7 +113,7 @@ export default async function DashboardPage() {
                 <th>מחלקה</th>
                 <th>סוג</th>
                 <th>סכום</th>
-                <th>צד ג׳ / חשבון בנק</th>
+                <th>חשבון בנק</th>
                 <th>הערות</th>
                 <th></th>
               </tr>
@@ -136,9 +122,7 @@ export default async function DashboardPage() {
               {pendingManualEntries!.map((e) => {
                 const row = e as unknown as {
                   departments: { name: string } | null;
-                  counterparty: { name: string } | null;
                   bank_accounts: { bank_name: string; account_number: string } | null;
-                  linked_entry_id: string | null;
                 };
                 return (
                   <ManualEntryApprovalRow
@@ -149,10 +133,7 @@ export default async function DashboardPage() {
                     amount={Number(e.amount)}
                     entryDate={e.entry_date}
                     notes={e.notes}
-                    counterpartyDepartmentName={row.counterparty?.name ?? null}
                     bankAccountLabel={row.bank_accounts ? `${row.bank_accounts.bank_name} (${row.bank_accounts.account_number})` : null}
-                    isLinked={!!row.linked_entry_id}
-                    createdByName={(e.created_by && creatorNameById.get(e.created_by)) || null}
                   />
                 );
               })}
@@ -174,9 +155,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {myDepartments.length > 0 && (
-        <NewManualEntryForm departments={myDepartments} bankAccounts={bankAccounts ?? []} allDepartments={departments ?? []} />
-      )}
+      {myDepartments.length > 0 && <NewManualEntryForm departments={myDepartments} bankAccounts={bankAccounts ?? []} />}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card stat-card p-4 ps-5">
