@@ -203,3 +203,60 @@ export async function updateUserAccess(
 
   revalidatePath("/settings");
 }
+
+export type ScheduleConfirmationAllocation = { departmentId: string; amount: number };
+
+// Confirms one occurrence of an estimated-amount recurring schedule (the
+// real amount, once known) by inserting an ordinary approved manual entry
+// tagged with the schedule/period — reusing the existing department/bank
+// account auto-ledger detection instead of a separate mechanism. Letting
+// the confirmer pick the department(s) fresh (rather than only ever using
+// the schedule's own department) is what makes "assign or split" possible
+// even though the schedule itself is single-department.
+export async function confirmScheduleOccurrence(
+  scheduleId: string,
+  periodDate: string,
+  confirmedDate: string,
+  allocations: ScheduleConfirmationAllocation[],
+): Promise<{ error?: string }> {
+  const admin = await requireFinanceAdmin();
+  if (!confirmedDate) return { error: "יש להזין תאריך" };
+  const valid = allocations.filter((a) => a.departmentId && a.amount > 0);
+  if (valid.length === 0) return { error: "יש להזין סכום ומחלקה לפחות" };
+
+  const supabase = await createClient();
+  const { data: schedule, error: scheduleError } = await supabase
+    .from("recurring_schedules")
+    .select("name, direction, bank_account_id")
+    .eq("id", scheduleId)
+    .single();
+  if (scheduleError || !schedule) return { error: scheduleError?.message ?? "הוראת הקבע לא נמצאה" };
+  if (!schedule.bank_account_id) return { error: "להוראת הקבע הזו אין חשבון בנק מוגדר" };
+
+  const { error } = await supabase.from("manual_department_entries").insert(
+    valid.map((a) => ({
+      department_id: a.departmentId,
+      bank_account_id: schedule.bank_account_id as string,
+      direction: schedule.direction,
+      amount: a.amount,
+      entry_date: confirmedDate,
+      notes: `אישור הוראת קבע: ${schedule.name}`,
+      status: "APPROVED",
+      approved_by: admin.id,
+      approved_at: new Date().toISOString(),
+      created_by: admin.id,
+      recurring_schedule_id: scheduleId,
+      recurring_period_date: periodDate,
+    })),
+  );
+  if (error) {
+    const reason = error.code === "23505" ? "התקופה הזו כבר אושרה עבור אחת המחלקות שנבחרו" : error.message;
+    return { error: reason };
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/forecast");
+  revalidatePath("/ledger");
+  revalidatePath("/");
+  return {};
+}

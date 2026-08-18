@@ -629,6 +629,8 @@ export type Database = {
           entry_date: string | null
           id: string
           notes: string | null
+          recurring_period_date: string | null
+          recurring_schedule_id: string | null
           status: string
         }
         Insert: {
@@ -643,6 +645,8 @@ export type Database = {
           entry_date?: string | null
           id?: string
           notes?: string | null
+          recurring_period_date?: string | null
+          recurring_schedule_id?: string | null
           status?: string
         }
         Update: {
@@ -657,6 +661,8 @@ export type Database = {
           entry_date?: string | null
           id?: string
           notes?: string | null
+          recurring_period_date?: string | null
+          recurring_schedule_id?: string | null
           status?: string
         }
         Relationships: [
@@ -672,6 +678,13 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_department_entries_recurring_schedule_id_fkey"
+            columns: ["recurring_schedule_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_schedules"
             referencedColumns: ["id"]
           },
         ]
@@ -1435,6 +1448,19 @@ export type Database = {
           forecast_date: string
           running_balance: number
           source: string
+        }[]
+      }
+      get_pending_schedule_confirmations: {
+        Args: never
+        Returns: {
+          bank_account_id: string
+          department_id: string
+          department_name: string | null
+          direction: string
+          expected_amount: number
+          period_date: string
+          schedule_id: string
+          schedule_name: string
         }[]
       }
       is_finance_admin: { Args: never; Returns: boolean }
