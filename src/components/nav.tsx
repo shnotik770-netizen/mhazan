@@ -15,7 +15,7 @@ const links = [
   { href: "/incomes", label: "הכנסות" },
   { href: "/checks", label: "צ׳קים והעברות" },
   { href: "/expenses", label: "הוצאות" },
-  { href: "/ledger", label: "התחשבנות פנימית" },
+  { href: "/ledger", label: "דוחות מחלקות" },
   { href: "/forecast", label: "תחזית תזרים" },
   { href: "/settings", label: "הגדרות", adminOnly: true },
 ];
