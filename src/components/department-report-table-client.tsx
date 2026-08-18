@@ -3,7 +3,14 @@
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 
-type Row = { id: string; date: string | null; type: string; description: string; amount: number };
+type Row = {
+  id: string;
+  date: string | null;
+  type: string;
+  description: string;
+  amount: number;
+  spreadTotal?: number | null;
+};
 
 export function DepartmentTransactionsTable({ rows }: { rows: Row[] }) {
   const columns: ColumnDef<Row>[] = [
@@ -36,7 +43,12 @@ export function DepartmentTransactionsTable({ rows }: { rows: Row[] }) {
           <tr key={r.id}>
             <td>{r.date ? formatDate(r.date) : "—"}</td>
             <td>{r.type}</td>
-            <td>{r.description}</td>
+            <td>
+              {r.description}
+              {r.spreadTotal != null && (
+                <span className="badge bg-background text-muted mr-1">פריסה · סה״כ {formatCurrency(r.spreadTotal)}</span>
+              )}
+            </td>
             <td className={r.amount >= 0 ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>
           </tr>
         ))}

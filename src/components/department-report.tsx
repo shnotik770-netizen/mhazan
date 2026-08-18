@@ -8,6 +8,7 @@ type CombinedRow = {
   type: string;
   description: string;
   amount: number;
+  spreadTotal?: number | null;
 };
 
 // Deliberately minimal: a department manager just wants to know how much
@@ -32,7 +33,7 @@ export async function DepartmentReport({
       .order("date", { ascending: false }),
     supabase
       .from("v_check_department_amounts")
-      .select("check_id, due_date, amount, payee, payment_method, skip_department_ledger")
+      .select("check_id, due_date, amount, payee, payment_method, skip_department_ledger, spread_id")
       .eq("department_id", departmentId)
       .neq("status", "CANCELLED")
       .order("due_date", { ascending: false }),
@@ -54,15 +55,31 @@ export async function DepartmentReport({
       amount: Number(r.amount),
     }));
 
-  const expenseRows: CombinedRow[] = (expenses ?? [])
-    .filter((r) => !r.skip_department_ledger)
-    .map((r) => ({
+  const activeExpenses = (expenses ?? []).filter((r) => !r.skip_department_ledger);
+  // Several checks/transfers under one spread_id (a split payment plan,
+  // or several requests merged into one payee's schedule) should read as
+  // one recurring commitment, not unrelated rows — so each row in a spread
+  // carries the group's total, not just its own installment.
+  const spreadTotals = new Map<string, { total: number; count: number }>();
+  for (const r of activeExpenses) {
+    if (!r.spread_id) continue;
+    const g = spreadTotals.get(r.spread_id) ?? { total: 0, count: 0 };
+    g.total += Number(r.amount);
+    g.count += 1;
+    spreadTotals.set(r.spread_id, g);
+  }
+
+  const expenseRows: CombinedRow[] = activeExpenses.map((r) => {
+    const group = r.spread_id ? spreadTotals.get(r.spread_id) : undefined;
+    return {
       id: r.check_id as string,
       date: r.due_date,
       type: r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק",
       description: r.payee ?? "הוצאה",
       amount: -Number(r.amount),
-    }));
+      spreadTotal: group && group.count > 1 ? group.total : null,
+    };
+  });
 
   const manualRows: CombinedRow[] = (manualEntries ?? []).map((e) => {
     const bankAccount = (e as unknown as { bank_accounts: { department_id: string; departments: { name: string } | null } | null })
