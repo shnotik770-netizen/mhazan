@@ -28,7 +28,7 @@ export async function DepartmentReport({
   const [{ data: incomes }, { data: expenses }, { data: manualEntries }] = await Promise.all([
     supabase
       .from("incomes")
-      .select("id, date, amount, donor_name, skip_department_ledger, categories(name)")
+      .select("id, date, amount, donor_name, payment_method, skip_department_ledger, categories(name)")
       .eq("owner_department_id", departmentId)
       .order("date", { ascending: false }),
     supabase
@@ -39,7 +39,9 @@ export async function DepartmentReport({
       .order("due_date", { ascending: false }),
     supabase
       .from("manual_department_entries")
-      .select("id, entry_date, amount, direction, notes, bank_accounts(department_id, departments(name))")
+      .select(
+        "id, entry_date, amount, direction, notes, recurring_schedule_id, bank_accounts(department_id, departments(name))",
+      )
       .eq("department_id", departmentId)
       .eq("status", "APPROVED")
       .order("entry_date", { ascending: false }),
@@ -47,13 +49,16 @@ export async function DepartmentReport({
 
   const incomeRows: CombinedRow[] = (incomes ?? [])
     .filter((r) => !r.skip_department_ledger)
-    .map((r) => ({
-      id: r.id,
-      date: r.date,
-      type: (r as unknown as { categories: { name: string } | null }).categories?.name ?? "הכנסה",
-      description: r.donor_name || "—",
-      amount: Number(r.amount),
-    }));
+    .map((r) => {
+      const category = (r as unknown as { categories: { name: string } | null }).categories?.name;
+      return {
+        id: r.id,
+        date: r.date,
+        type: "הכנסה" + (category ? ` — ${category}` : "") + (r.payment_method ? ` (${r.payment_method})` : ""),
+        description: r.donor_name || "—",
+        amount: Number(r.amount),
+      };
+    });
 
   const activeExpenses = (expenses ?? []).filter((r) => !r.skip_department_ledger);
   // Several checks/transfers under one spread_id (a split payment plan,
@@ -74,7 +79,7 @@ export async function DepartmentReport({
     return {
       id: r.check_id as string,
       date: r.due_date,
-      type: r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק",
+      type: r.payment_method === "TRANSFER" ? "הוצאה — העברה" : "הוצאה — צ׳ק",
       description: r.payee ?? "הוצאה",
       amount: -Number(r.amount),
       spreadTotal: group && group.count > 1 ? group.total : null,
@@ -93,10 +98,12 @@ export async function DepartmentReport({
       : e.direction === "INCOME"
         ? "רישום ידני — הכנסה"
         : "רישום ידני — הוצאה";
+    const directionLabel = e.direction === "INCOME" ? "הכנסה" : "הוצאה";
+    const kindLabel = e.recurring_schedule_id ? "קבוע (אושר)" : "ידני";
     return {
       id: e.id,
       date: e.entry_date,
-      type: e.direction === "INCOME" ? "הכנסה ידנית" : "הוצאה ידנית",
+      type: `${directionLabel} — ${kindLabel}`,
       description: e.notes ? `${label} (${e.notes})` : label,
       amount: e.direction === "INCOME" ? Number(e.amount) : -Number(e.amount),
     };
