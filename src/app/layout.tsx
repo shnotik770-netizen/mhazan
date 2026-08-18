@@ -14,7 +14,7 @@ const frankRuhl = Frank_Ruhl_Libre({
 });
 
 export const metadata: Metadata = {
-  title: "מערכת כספים מוסדית",
+  title: "דשבורד מרכז חב״ד עפולה",
   description: "ניהול פיננסי ומאזן תזרימי מולטי-מחלקתי",
 };
 

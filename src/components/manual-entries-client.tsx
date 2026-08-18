@@ -4,17 +4,53 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createManualEntry, reviewManualEntry } from "@/app/(app)/manual-entries/actions";
 import { DateInput } from "@/components/date-input";
+import { Modal } from "@/components/modal";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
 type BankAccount = Tables<"bank_accounts">;
 
-export function NewManualEntryForm({
+// A top-of-page button that opens the manual-entry form in a modal,
+// instead of the form sitting permanently as its own box under the
+// report — the form is an occasional action, not something that needs
+// to always take up space on the page.
+export function NewManualEntryButton({
   departments,
   bankAccounts,
 }: {
   departments: Department[];
   bankAccounts: BankAccount[];
+}) {
+  const [open, setOpen] = useState(false);
+  if (departments.length === 0) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+      >
+        + הכנסה / הוצאה
+      </button>
+      {open && (
+        <Modal onClose={() => setOpen(false)}>
+          <div className="p-4">
+            <NewManualEntryForm departments={departments} bankAccounts={bankAccounts} onSaved={() => setOpen(false)} />
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+export function NewManualEntryForm({
+  departments,
+  bankAccounts,
+  onSaved,
+}: {
+  departments: Department[];
+  bankAccounts: BankAccount[];
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const [departmentId, setDepartmentId] = useState("");
@@ -63,6 +99,7 @@ export function NewManualEntryForm({
         setEntryDate("");
         setNotes("");
         router.refresh();
+        onSaved?.();
       }
     });
   }

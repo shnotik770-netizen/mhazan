@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 type DayEntry = {
@@ -13,45 +13,18 @@ type DayEntry = {
   runningBalance: number;
 };
 
-// "עד חודש" is cumulative from the current month — picking the next
-// month shows two months of days, the one after that three, and so on —
-// rather than a plain single-month filter, since the point is to let the
-// daily detail grow to match however many months of forecast there are.
+// Always shows every row passed in — the range is already scoped by the
+// page-level "עד חודש" filter, so there's no separate cutoff control here.
 export function ForecastDailyTable({
   rows,
-  months,
   mode,
 }: {
   rows: [string, DayEntry][];
-  months: string[];
   mode: "bank" | "department";
 }) {
-  const [uptoMonth, setUptoMonth] = useState(months[0] ?? "");
-  const filtered = uptoMonth ? rows.filter(([date]) => date.slice(0, 7) <= uptoMonth) : rows;
-
   return (
     <div className="card p-4 overflow-x-auto">
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-        <h2 className="font-semibold">סיכום יומי — כמה כסף אמור לרדת/להיכנס בכל יום</h2>
-        {months.length > 1 && (
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-muted">עד חודש</label>
-            <select
-              value={uptoMonth}
-              onChange={(e) => setUptoMonth(e.target.value)}
-              className="rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm"
-            >
-              {months.map((m) => (
-                <option key={m} value={m}>
-                  {new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(
-                    new Date(`${m}-01T00:00:00`),
-                  )}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
+      <h2 className="font-semibold mb-2">סיכום יומי — כמה כסף אמור לרדת/להיכנס בכל יום</h2>
       <table className="data-table">
         <thead>
           <tr>
@@ -66,9 +39,9 @@ export function ForecastDailyTable({
           </tr>
         </thead>
         <tbody>
-          {filtered.map(([date, d], i) => {
+          {rows.map(([date, d], i) => {
             const month = date.slice(0, 7);
-            const prevMonth = i > 0 ? filtered[i - 1][0].slice(0, 7) : null;
+            const prevMonth = i > 0 ? rows[i - 1][0].slice(0, 7) : null;
             const isNewMonth = prevMonth !== null && month !== prevMonth;
             return (
               <Fragment key={date}>
@@ -98,7 +71,7 @@ export function ForecastDailyTable({
               </Fragment>
             );
           })}
-          {filtered.length === 0 && (
+          {rows.length === 0 && (
             <tr>
               <td colSpan={mode === "bank" ? 8 : 7} className="text-center text-muted py-6">
                 אין תנועות צפויות בטווח שנבחר

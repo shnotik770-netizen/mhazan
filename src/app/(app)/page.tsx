@@ -46,7 +46,7 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold">דשבורד מוסדי מרכזי</h1>
+          <h1 className="text-2xl font-bold">דשבורד מרכז חב״ד עפולה</h1>
           <p className="text-sm text-muted">
             שלום {user.profile.full_name ?? user.email} — סקירה כללית של המצב הפיננסי
           </p>

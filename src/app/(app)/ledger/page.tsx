@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { DepartmentReport } from "@/components/department-report";
-import { NewManualEntryForm } from "@/components/manual-entries-client";
+import { NewManualEntryButton } from "@/components/manual-entries-client";
 import { LedgerBalancesTable, LedgerOpenEntriesTable } from "@/components/ledger-tables-client";
 
 export default async function LedgerPage({
@@ -68,9 +68,11 @@ export default async function LedgerPage({
 
       {selectedDepartment && (
         <div className="space-y-4">
-          <h2 className="text-lg font-bold">דוח — {selectedDepartment.name}</h2>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-lg font-bold">דוח — {selectedDepartment.name}</h2>
+            <NewManualEntryButton departments={[selectedDepartment]} bankAccounts={bankAccounts ?? []} />
+          </div>
           <DepartmentReport departmentId={selectedDepartment.id} departmentName={selectedDepartment.name} />
-          <NewManualEntryForm departments={[selectedDepartment]} bankAccounts={bankAccounts ?? []} />
         </div>
       )}
 

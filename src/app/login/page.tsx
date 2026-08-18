@@ -10,7 +10,7 @@ export default async function LoginPage({
   return (
     <div className="flex-1 flex items-center justify-center p-6">
       <div className="card w-full max-w-sm p-8">
-        <h1 className="text-xl font-bold mb-1">מערכת כספים מוסדית</h1>
+        <h1 className="text-xl font-bold mb-1">דשבורד מרכז חב״ד עפולה</h1>
         <p className="text-sm text-muted mb-6">התחברות למערכת</p>
 
         {error && (

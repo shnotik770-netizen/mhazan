@@ -181,6 +181,11 @@ function PayeeExpensesModal({ payee, onClose }: { payee: string; onClose: () => 
   }, [payee]);
 
   const total = rows.reduce((sum, r) => sum + r.amount, 0);
+  const spreadTotals = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.spread_id) continue;
+    spreadTotals.set(r.spread_id, (spreadTotals.get(r.spread_id) ?? 0) + r.amount);
+  }
 
   return (
     <Modal onClose={onClose}>
@@ -219,7 +224,11 @@ function PayeeExpensesModal({ payee, onClose }: { payee: string; onClose: () => 
                       <td>{r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"}</td>
                       <td>
                         {r.check_number ?? "—"}
-                        {r.spread_id && <span className="badge bg-background text-muted mr-1">פריסה</span>}
+                        {r.spread_id && (
+                          <span className="badge bg-background text-muted mr-1">
+                            פריסה · סה״כ {formatCurrency(spreadTotals.get(r.spread_id) ?? 0)}
+                          </span>
+                        )}
                       </td>
                       <td>{r.departmentName ?? <span className="text-warning">בהמתנה</span>}</td>
                       <td>{r.categoryName ?? "—"}</td>

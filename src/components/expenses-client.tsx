@@ -97,6 +97,14 @@ export function ExpensesTable({
   ];
   const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(filtered, columns);
 
+  // Totalled across every row for that spread_id (not just the currently
+  // filtered/sorted view), so the badge always reflects the real total.
+  const spreadTotals = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.spreadId) continue;
+    spreadTotals.set(r.spreadId, (spreadTotals.get(r.spreadId) ?? 0) + r.amount);
+  }
+
   const selectableIds = new Set(sorted.filter((r) => r.isCheck).map((r) => r.id));
   const allSelectableSelected = selectableIds.size > 0 && [...selectableIds].every((id) => selected.has(id));
 
@@ -278,7 +286,11 @@ export function ExpensesTable({
                   {r.isCheck ? (
                     <>
                       <PayeeLink payee={r.payeeName} />
-                      {r.spreadId && <span className="badge bg-background text-muted mr-1">פריסה</span>}
+                      {r.spreadId && (
+                        <span className="badge bg-background text-muted mr-1">
+                          פריסה · סה״כ {formatCurrency(spreadTotals.get(r.spreadId) ?? 0)}
+                        </span>
+                      )}
                       {r.notes ? ` — ${r.notes}` : ""}
                     </>
                   ) : (

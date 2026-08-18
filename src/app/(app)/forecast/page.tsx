@@ -5,15 +5,46 @@ import { formatCurrency, formatDate, daysAgoLabel } from "@/lib/format";
 import { BankBalancePanel, ExpectedIncomeManager } from "@/components/forecast-client";
 import { ForecastDailyTable } from "@/components/forecast-daily-table-client";
 import { ForecastDayLookup } from "@/components/forecast-day-lookup-client";
+import { ForecastFilterBar } from "@/components/forecast-filter-bar-client";
+
+// Days from today through the last day of the given "YYYY-MM" month —
+// turns the user-facing "עד חודש" choice into the p_horizon_days the
+// forecast RPCs actually take, so there's one control instead of two
+// (a day-count horizon and a separate month cutoff meant the same thing).
+function daysUntilEndOfMonth(monthStr: string): number {
+  const [y, m] = monthStr.split("-").map(Number);
+  const lastDayOfMonth = new Date(y, m, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  lastDayOfMonth.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((lastDayOfMonth.getTime() - today.getTime()) / 86400000);
+  return Math.max(1, diffDays);
+}
+
+function monthKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthLabel(monthStr: string): string {
+  return new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(new Date(`${monthStr}-01T00:00:00`));
+}
 
 export default async function ForecastPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mode?: string; account?: string; department?: string; horizon?: string }>;
+  searchParams: Promise<{ mode?: string; account?: string; department?: string; upto?: string }>;
 }) {
-  const { mode: modeParam, account, department, horizon } = await searchParams;
+  const { mode: modeParam, account, department, upto } = await searchParams;
   const mode = modeParam === "department" ? "department" : "bank";
-  const horizonDays = Number(horizon ?? 30);
+  const currentMonth = monthKey(new Date());
+  const uptoMonthOptions = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + i);
+    return monthKey(d);
+  });
+  const uptoMonth = upto && uptoMonthOptions.includes(upto) ? upto : currentMonth;
+  const horizonDays = daysUntilEndOfMonth(uptoMonth);
 
   const user = await requireUser();
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
@@ -183,61 +214,18 @@ export default async function ForecastPage({
         </Link>
       </div>
 
-      <form className="card p-4 flex flex-wrap items-end gap-4" method="get">
-        <input type="hidden" name="mode" value={mode} />
-        {mode === "bank" ? (
-          <div>
-            <label className="block text-sm font-medium mb-1">חשבון בנק</label>
-            <select
-              name="account"
-              defaultValue={selectedAccountId}
-              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-            >
-              {(bankAccounts ?? []).map((b) => (
-                <option key={b.id} value={b.id}>
-                  {(b as { departments: { name: string } | null }).departments?.name} — {b.bank_name} (
-                  {b.account_number})
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div>
-            <label className="block text-sm font-medium mb-1">מחלקה</label>
-            <select
-              name="department"
-              defaultValue={selectedDepartmentId}
-              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-            >
-              {(departments ?? []).map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-        <div>
-          <label className="block text-sm font-medium mb-1">טווח ימים</label>
-          <select
-            name="horizon"
-            defaultValue={String(horizonDays)}
-            className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-          >
-            <option value="30">30 יום</option>
-            <option value="60">60 יום</option>
-            <option value="90">90 יום</option>
-            <option value="180">180 יום</option>
-            <option value="365">שנה</option>
-          </select>
-        </div>
-        <button
-          type="submit"
-          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
-        >
-          עדכן תחזית
-        </button>
-      </form>
+      <ForecastFilterBar
+        mode={mode}
+        bankAccountOptions={(bankAccounts ?? []).map((b) => ({
+          id: b.id,
+          label: `${(b as { departments: { name: string } | null }).departments?.name ?? ""} — ${b.bank_name} (${b.account_number})`,
+        }))}
+        departmentOptions={(departments ?? []).map((d) => ({ id: d.id, label: d.name }))}
+        selectedAccountId={selectedAccountId}
+        selectedDepartmentId={selectedDepartmentId}
+        uptoMonth={uptoMonth}
+        uptoMonthOptions={uptoMonthOptions.map((m) => ({ value: m, label: monthLabel(m) }))}
+      />
 
       {mode === "bank" && selectedAccount && isAdmin && (
         <BankBalancePanel
@@ -324,7 +312,7 @@ export default async function ForecastPage({
         </div>
       )}
 
-      <ForecastDailyTable rows={dailyBreakdown} months={monthsInHorizon} mode={mode} />
+      <ForecastDailyTable rows={dailyBreakdown} mode={mode} />
 
       <details className="card p-4">
         <summary className="cursor-pointer font-semibold">פירוט מלא לפי פריט</summary>

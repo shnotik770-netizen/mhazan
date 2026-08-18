@@ -34,7 +34,7 @@ export function Nav({ user }: { user: CurrentUser }) {
             className="text-lg font-bold tracking-tight shrink-0"
             style={{ fontFamily: "var(--font-display)", color: "var(--primary)" }}
           >
-            קופה<span style={{ color: "var(--accent)" }}>·</span>מוסד
+            דשבורד מרכז חב״ד עפולה
           </span>
           <nav className="hidden md:flex items-center gap-1">
             {visibleLinks.map((l) => {
