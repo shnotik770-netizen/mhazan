@@ -42,13 +42,26 @@ export function UnifiedCheckForm({
   bankAccounts,
   departments,
   categories,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
 }: {
   bankAccounts: BankAccount[];
   departments: Department[];
   categories: Category[];
+  // Uncontrolled by default (renders its own "+ דרישת תשלום חדשה" button,
+  // as used on the checks page). Passing `open`/`onOpenChange` lets an
+  // external trigger (the quick-actions FAB) drive it instead, with
+  // `hideTrigger` suppressing the built-in button so it doesn't also show
+  // up wherever the controlled instance is mounted.
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [payee, setPayee] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"CHECK" | "TRANSFER">("CHECK");
   const [bankAccountId, setBankAccountId] = useState("");
@@ -182,6 +195,7 @@ export function UnifiedCheckForm({
   }
 
   if (!open) {
+    if (hideTrigger) return null;
     return (
       <button
         onClick={() => setOpen(true)}
