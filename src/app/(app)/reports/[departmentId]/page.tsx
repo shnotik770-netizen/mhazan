@@ -3,18 +3,14 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { PrintButton } from "@/components/print-button";
-import { DepartmentReport, computeReportRange, type ReportRangeKey } from "@/components/department-report";
+import { DepartmentReport } from "@/components/department-report";
 
 export default async function DepartmentReportPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ departmentId: string }>;
-  searchParams: Promise<{ range?: string; start?: string; end?: string }>;
 }) {
   const { departmentId } = await params;
-  const { range: rangeParam, start: startParam, end: endParam } = await searchParams;
-  const range = (["month", "2months", "3months", "custom"].includes(rangeParam ?? "") ? rangeParam : "month") as ReportRangeKey;
 
   const user = await requireUser();
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
@@ -33,8 +29,6 @@ export default async function DepartmentReportPage({
   const { data: department } = await supabase.from("departments").select("*").eq("id", departmentId).single();
   if (!department) redirect("/");
 
-  const { start, end } = computeReportRange(range, startParam, endParam);
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -52,7 +46,7 @@ export default async function DepartmentReportPage({
         </div>
       </div>
 
-      <DepartmentReport departmentId={departmentId} departmentName={department.name} isAdmin={isAdmin} range={range} start={start} end={end} />
+      <DepartmentReport departmentId={departmentId} departmentName={department.name} />
     </div>
   );
 }

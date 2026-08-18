@@ -2,16 +2,15 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { SettleBalancesButton } from "@/components/settle-balances-button";
-import { DepartmentReport, computeReportRange, type ReportRangeKey } from "@/components/department-report";
+import { DepartmentReport } from "@/components/department-report";
 import { NewManualEntryForm } from "@/components/manual-entries-client";
 
 export default async function LedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ department?: string; range?: string; start?: string; end?: string }>;
+  searchParams: Promise<{ department?: string }>;
 }) {
-  const { department: departmentParam, range: rangeParam, start: startParam, end: endParam } = await searchParams;
-  const range = (["month", "2months", "3months", "custom"].includes(rangeParam ?? "") ? rangeParam : "month") as ReportRangeKey;
+  const { department: departmentParam } = await searchParams;
 
   const user = await requireUser();
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
@@ -43,7 +42,6 @@ export default async function LedgerPage({
     departmentParam && myDepartments.some((d) => d.id === departmentParam)
       ? myDepartments.find((d) => d.id === departmentParam)!
       : null;
-  const { start, end } = computeReportRange(range, startParam, endParam);
 
   return (
     <div className="space-y-6">
@@ -72,14 +70,7 @@ export default async function LedgerPage({
       {selectedDepartment && (
         <div className="space-y-4">
           <h2 className="text-lg font-bold">דוח — {selectedDepartment.name}</h2>
-          <DepartmentReport
-            departmentId={selectedDepartment.id}
-            departmentName={selectedDepartment.name}
-            isAdmin={isAdmin}
-            range={range}
-            start={start}
-            end={end}
-          />
+          <DepartmentReport departmentId={selectedDepartment.id} departmentName={selectedDepartment.name} />
           <NewManualEntryForm departments={[selectedDepartment]} bankAccounts={bankAccounts ?? []} allDepartments={departments ?? []} />
         </div>
       )}
