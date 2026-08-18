@@ -7,7 +7,6 @@ import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { MiniCalculator } from "@/components/mini-calculator";
 import { SearchableSelect } from "@/components/searchable-select";
 import { Modal } from "@/components/modal";
-import { toLocalISODate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -24,12 +23,6 @@ type Row = {
 
 function blankRow(): Row {
   return { date: "", amount: 0, checkNumber: "", departmentId: "", allocations: [] };
-}
-
-function addMonths(iso: string, months: number): string {
-  const d = new Date(iso + "T00:00:00");
-  d.setMonth(d.getMonth() + months);
-  return toLocalISODate(d);
 }
 
 // A single button/flow for issuing a check or transfer that covers three
@@ -74,12 +67,8 @@ export function UnifiedCheckForm({
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const [helperOpen, setHelperOpen] = useState(false);
-  const [helperDepartmentIds, setHelperDepartmentIds] = useState<string[]>([]);
-  const [helperTotal, setHelperTotal] = useState(0);
-  const [helperCount, setHelperCount] = useState(1);
-  const [helperFirstDate, setHelperFirstDate] = useState("");
-  const [helperFirstCheckNumber, setHelperFirstCheckNumber] = useState("");
+  const [spreadTotal, setSpreadTotal] = useState(0);
+  const [spreadCount, setSpreadCount] = useState(2);
 
   const isSpread = rows.length > 1;
 
@@ -91,12 +80,8 @@ export function UnifiedCheckForm({
     setIsSplitting(false);
     setRows([blankRow()]);
     setError(null);
-    setHelperOpen(false);
-    setHelperDepartmentIds([]);
-    setHelperTotal(0);
-    setHelperCount(1);
-    setHelperFirstDate("");
-    setHelperFirstCheckNumber("");
+    setSpreadTotal(0);
+    setSpreadCount(2);
   }
 
   function reset() {
@@ -117,27 +102,20 @@ export function UnifiedCheckForm({
     setRows((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
   }
 
-  function toggleHelperDepartment(id: string) {
-    setHelperDepartmentIds((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
-  }
-
-  function generateRowsFromHelper() {
-    const count = Math.max(1, Math.floor(helperCount) || 1);
-    const base = Math.floor((helperTotal / count) * 100) / 100;
-    const remainder = Math.round((helperTotal - base * count) * 100) / 100;
-    const firstCheckNumberNum = Number(helperFirstCheckNumber);
-    const hasSequentialCheckNumber = helperFirstCheckNumber !== "" && !isNaN(firstCheckNumberNum);
-
-    const generated: Row[] = Array.from({ length: count }, (_, i) => ({
-      date: helperFirstDate ? addMonths(helperFirstDate, i) : "",
-      amount: i === count - 1 ? base + remainder : base,
-      checkNumber: hasSequentialCheckNumber ? String(firstCheckNumberNum + i) : "",
-      departmentId: "",
-      allocations: helperDepartmentIds.map((id) => ({ departmentId: id, amount: 0 })),
-    }));
-
-    if (helperDepartmentIds.length > 0) setIsSplitting(true);
-    setRows(generated);
+  // Splits a total amount evenly across N payment rows (the remainder from
+  // rounding goes on the last row) — date, check number, and department
+  // are left for the admin to fill in per row exactly like any other
+  // multi-row spread, rather than trying to also guess those upfront.
+  function generateSpreadRows() {
+    const count = Math.max(2, Math.floor(spreadCount) || 2);
+    const base = Math.floor((spreadTotal / count) * 100) / 100;
+    const remainder = Math.round((spreadTotal - base * count) * 100) / 100;
+    setRows(
+      Array.from({ length: count }, (_, i) => ({
+        ...blankRow(),
+        amount: i === count - 1 ? base + remainder : base,
+      })),
+    );
   }
 
   function submit() {
@@ -373,72 +351,31 @@ export function UnifiedCheckForm({
             <button type="button" onClick={addRow} className="text-sm text-primary underline">
               + הוסף תשלום נוסף לאותו מוטב
             </button>
-            <button type="button" onClick={() => setHelperOpen((v) => !v)} className="text-sm text-primary underline">
-              {helperOpen ? "סגור עזר לפריסה" : "עזר להגדרת פריסה (כמה תשלומים לאותו מוטב)"}
+            <span className="text-xs text-muted">או פריסה אוטומטית של סכום כולל:</span>
+            <input
+              type="number"
+              value={spreadTotal || ""}
+              onChange={(e) => setSpreadTotal(Number(e.target.value) || 0)}
+              placeholder="סה״כ סכום"
+              className="w-32 rounded border border-border bg-transparent px-2 py-1 text-sm"
+            />
+            <input
+              type="number"
+              min={2}
+              value={spreadCount || ""}
+              onChange={(e) => setSpreadCount(Number(e.target.value) || 2)}
+              placeholder="למספר תשלומים"
+              className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm"
+            />
+            <button
+              type="button"
+              disabled={spreadTotal <= 0 || spreadCount < 2}
+              onClick={generateSpreadRows}
+              className="rounded bg-primary text-primary-foreground text-xs px-3 py-1.5 disabled:opacity-50"
+            >
+              פריסה
             </button>
           </div>
-
-          {helperOpen && (
-            <div className="card p-3 space-y-2">
-              <div>
-                <p className="text-xs text-muted mb-1">מחלקות מעורבות בפריסה</p>
-                <div className="flex flex-wrap gap-2">
-                  {departments.map((d) => (
-                    <label key={d.id} className="flex items-center gap-1 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={helperDepartmentIds.includes(d.id)}
-                        onChange={() => toggleHelperDepartment(d.id)}
-                      />
-                      {d.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
-                <input
-                  type="number"
-                  value={helperTotal || ""}
-                  onChange={(e) => setHelperTotal(Number(e.target.value) || 0)}
-                  placeholder="סה״כ סכום מתוכנן"
-                  className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-                />
-                <input
-                  type="number"
-                  min={1}
-                  value={helperCount || ""}
-                  onChange={(e) => setHelperCount(Number(e.target.value) || 1)}
-                  placeholder="למספר צ׳קים/העברות לפרוס"
-                  className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-                />
-                <input
-                  type="date"
-                  value={helperFirstDate}
-                  onChange={(e) => setHelperFirstDate(e.target.value)}
-                  title="תאריך הצ׳ק הראשון (אופציונלי)"
-                  className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-                />
-                <input
-                  value={helperFirstCheckNumber}
-                  onChange={(e) => setHelperFirstCheckNumber(e.target.value)}
-                  placeholder="מספר הצ׳ק הראשון (אופציונלי)"
-                  className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-                />
-              </div>
-              <p className="text-xs text-muted">
-                {helperCount > 0 && helperTotal > 0
-                  ? `כל תשלום: ${(Math.floor((helperTotal / Math.max(1, helperCount)) * 100) / 100).toLocaleString()}`
-                  : "הזן סכום כולל ומספר תשלומים כדי לראות חישוב"}
-              </p>
-              <button
-                type="button"
-                onClick={generateRowsFromHelper}
-                className="rounded bg-primary text-primary-foreground text-xs px-3 py-1.5"
-              >
-                צור שורות תשלום
-              </button>
-            </div>
-          )}
         </section>
 
         <div className="flex items-center gap-2 border-t border-border pt-3">
