@@ -7,14 +7,25 @@ import { DateInput } from "@/components/date-input";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
+type BankAccount = Tables<"bank_accounts">;
 
-export function NewManualEntryForm({ departments }: { departments: Department[] }) {
+export function NewManualEntryForm({
+  departments,
+  bankAccounts,
+  allDepartments,
+}: {
+  departments: Department[];
+  bankAccounts: BankAccount[];
+  allDepartments: Department[];
+}) {
   const router = useRouter();
-  const [departmentId, setDepartmentId] = useState(departments[0]?.id ?? "");
+  const [departmentId, setDepartmentId] = useState("");
   const [direction, setDirection] = useState<"INCOME" | "EXPENSE">("EXPENSE");
   const [amount, setAmount] = useState(0);
   const [entryDate, setEntryDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [bankAccountId, setBankAccountId] = useState("");
+  const [counterpartyDepartmentId, setCounterpartyDepartmentId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -23,14 +34,24 @@ export function NewManualEntryForm({ departments }: { departments: Department[] 
     setError(null);
     setMessage(null);
     startTransition(async () => {
-      const result = await createManualEntry({ departmentId, direction, amount, entryDate, notes: notes || null });
+      const result = await createManualEntry({
+        departmentId,
+        direction,
+        amount,
+        entryDate,
+        notes: notes || null,
+        bankAccountId: bankAccountId || null,
+        counterpartyDepartmentId: counterpartyDepartmentId || null,
+      });
       if (result.error) {
         setError(result.error);
       } else {
-        setMessage("נשלח לאישור");
+        setMessage(counterpartyDepartmentId ? "נשלחה העברה בין מחלקות לאישור" : "נשלח לאישור");
         setAmount(0);
         setEntryDate("");
         setNotes("");
+        setBankAccountId("");
+        setCounterpartyDepartmentId("");
         router.refresh();
       }
     });
@@ -48,6 +69,7 @@ export function NewManualEntryForm({ departments }: { departments: Department[] 
           onChange={(e) => setDepartmentId(e.target.value)}
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         >
+          <option value="">בחר מחלקה...</option>
           {departments.map((d) => (
             <option key={d.id} value={d.id}>
               {d.name}
@@ -76,7 +98,41 @@ export function NewManualEntryForm({ departments }: { departments: Department[] 
           placeholder="הערות ופירוט"
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         />
+        <select
+          value={bankAccountId}
+          onChange={(e) => setBankAccountId(e.target.value)}
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+        >
+          <option value="">חשבון בנק (אופציונלי)</option>
+          {bankAccounts.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.bank_name} ({b.account_number})
+            </option>
+          ))}
+        </select>
+        <select
+          value={counterpartyDepartmentId}
+          onChange={(e) => setCounterpartyDepartmentId(e.target.value)}
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+          title="לדוגמה: הוצאה שיוצאת ממחלקה זו אך בפועל מיועדת למחלקה אחרת — תירשם הכנסה תואמת אצל הצד השני"
+        >
+          <option value="">צד ג׳ / מחלקה מקבלת (אופציונלי)</option>
+          {allDepartments
+            .filter((d) => d.id !== departmentId)
+            .map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+        </select>
       </div>
+      {counterpartyDepartmentId && (
+        <p className="text-xs text-muted">
+          תירשם גם רשומה תואמת (
+          {direction === "EXPENSE" ? "הכנסה" : "הוצאה"}) אצל &quot;
+          {allDepartments.find((d) => d.id === counterpartyDepartmentId)?.name}&quot; — שני הצדדים יאושרו יחד.
+        </p>
+      )}
       <div className="flex items-center gap-2">
         <button
           disabled={isPending || !departmentId || amount <= 0 || !entryDate}
@@ -99,6 +155,9 @@ export function ManualEntryApprovalRow({
   amount,
   entryDate,
   notes,
+  counterpartyDepartmentName = null,
+  bankAccountLabel = null,
+  isLinked = false,
 }: {
   entryId: string;
   departmentName: string;
@@ -106,6 +165,9 @@ export function ManualEntryApprovalRow({
   amount: number;
   entryDate: string | null;
   notes: string | null;
+  counterpartyDepartmentName?: string | null;
+  bankAccountLabel?: string | null;
+  isLinked?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -120,9 +182,18 @@ export function ManualEntryApprovalRow({
   return (
     <tr>
       <td>{entryDate ?? "—"}</td>
-      <td>{departmentName}</td>
+      <td>
+        {departmentName}
+        {isLinked && <span className="badge bg-background text-muted mr-1">העברה</span>}
+      </td>
       <td>{direction === "INCOME" ? "הכנסה" : "הוצאה"}</td>
       <td>{amount}</td>
+      <td className="text-xs text-muted">
+        {counterpartyDepartmentName ? `↔ ${counterpartyDepartmentName}` : ""}
+        {counterpartyDepartmentName && bankAccountLabel ? " · " : ""}
+        {bankAccountLabel ?? ""}
+        {!counterpartyDepartmentName && !bankAccountLabel ? "—" : ""}
+      </td>
       <td>{notes ?? "—"}</td>
       <td>
         <div className="flex items-center gap-2">

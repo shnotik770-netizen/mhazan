@@ -26,7 +26,9 @@ export default async function DashboardPage() {
     isAdmin
       ? supabase
           .from("manual_department_entries")
-          .select("*, departments(name)")
+          .select(
+            "*, departments!manual_department_entries_department_id_fkey(name), counterparty:departments!manual_department_entries_counterparty_department_id_fkey(name), bank_accounts(bank_name, account_number)",
+          )
           .eq("status", "PENDING")
           .order("created_at")
       : Promise.resolve({ data: null }),
@@ -113,22 +115,34 @@ export default async function DashboardPage() {
                 <th>מחלקה</th>
                 <th>סוג</th>
                 <th>סכום</th>
+                <th>צד ג׳ / חשבון בנק</th>
                 <th>הערות</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {pendingManualEntries!.map((e) => (
-                <ManualEntryApprovalRow
-                  key={e.id}
-                  entryId={e.id}
-                  departmentName={(e as { departments: { name: string } | null }).departments?.name ?? "—"}
-                  direction={e.direction}
-                  amount={Number(e.amount)}
-                  entryDate={e.entry_date}
-                  notes={e.notes}
-                />
-              ))}
+              {pendingManualEntries!.map((e) => {
+                const row = e as unknown as {
+                  departments: { name: string } | null;
+                  counterparty: { name: string } | null;
+                  bank_accounts: { bank_name: string; account_number: string } | null;
+                  linked_entry_id: string | null;
+                };
+                return (
+                  <ManualEntryApprovalRow
+                    key={e.id}
+                    entryId={e.id}
+                    departmentName={row.departments?.name ?? "—"}
+                    direction={e.direction}
+                    amount={Number(e.amount)}
+                    entryDate={e.entry_date}
+                    notes={e.notes}
+                    counterpartyDepartmentName={row.counterparty?.name ?? null}
+                    bankAccountLabel={row.bank_accounts ? `${row.bank_accounts.bank_name} (${row.bank_accounts.account_number})` : null}
+                    isLinked={!!row.linked_entry_id}
+                  />
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -147,7 +161,9 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {myDepartments.length > 0 && <NewManualEntryForm departments={myDepartments} />}
+      {myDepartments.length > 0 && (
+        <NewManualEntryForm departments={myDepartments} bankAccounts={bankAccounts ?? []} allDepartments={departments ?? []} />
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card stat-card p-4 ps-5">
