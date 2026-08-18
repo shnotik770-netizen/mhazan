@@ -34,6 +34,18 @@ export default async function DashboardPage() {
       : Promise.resolve({ data: null }),
   ]);
 
+  // manual_department_entries.created_by references auth.users, not
+  // user_profiles, so PostgREST can't embed the name in the query above —
+  // fetched separately. Shown on cross-department transfer rows so an
+  // admin approving "Lev Chabad"'s side can see it was actually submitted
+  // by someone in "School", not by Lev Chabad's own manager.
+  const creatorIds = [...new Set((pendingManualEntries ?? []).map((e) => e.created_by).filter((id): id is string => !!id))];
+  const { data: creatorProfiles } =
+    creatorIds.length > 0
+      ? await supabase.from("user_profiles").select("id, full_name").in("id", creatorIds)
+      : { data: [] as { id: string; full_name: string | null }[] };
+  const creatorNameById = new Map((creatorProfiles ?? []).map((p) => [p.id, p.full_name]));
+
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
 
@@ -140,6 +152,7 @@ export default async function DashboardPage() {
                     counterpartyDepartmentName={row.counterparty?.name ?? null}
                     bankAccountLabel={row.bank_accounts ? `${row.bank_accounts.bank_name} (${row.bank_accounts.account_number})` : null}
                     isLinked={!!row.linked_entry_id}
+                    createdByName={(e.created_by && creatorNameById.get(e.created_by)) || null}
                   />
                 );
               })}

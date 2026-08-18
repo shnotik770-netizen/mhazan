@@ -158,6 +158,7 @@ export function ManualEntryApprovalRow({
   counterpartyDepartmentName = null,
   bankAccountLabel = null,
   isLinked = false,
+  createdByName = null,
 }: {
   entryId: string;
   departmentName: string;
@@ -168,6 +169,7 @@ export function ManualEntryApprovalRow({
   counterpartyDepartmentName?: string | null;
   bankAccountLabel?: string | null;
   isLinked?: boolean;
+  createdByName?: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -185,6 +187,7 @@ export function ManualEntryApprovalRow({
       <td>
         {departmentName}
         {isLinked && <span className="badge bg-background text-muted mr-1">העברה</span>}
+        {isLinked && createdByName && <div className="text-xs text-muted">הוגש ע״י {createdByName}</div>}
       </td>
       <td>{direction === "INCOME" ? "הכנסה" : "הוצאה"}</td>
       <td>{amount}</td>
