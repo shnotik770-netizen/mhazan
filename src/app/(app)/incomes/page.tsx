@@ -25,10 +25,56 @@ export default async function IncomesPage({
     .order("created_at", { ascending: false })
     .limit(200);
   if (q) incomesQuery = incomesQuery.or(`donor_name.ilike.%${q}%,notes.ilike.%${q}%,order_ref.ilike.%${q}%`);
-  const [{ data: incomes }, { data: departments }] = await Promise.all([
+
+  // Every income row that belongs to a standing order (order_ref set),
+  // most recent first — grouped below into one row per order showing how
+  // many installments are left, per the admin's request to see this at a
+  // glance instead of reading each payment's raw "סוג" text.
+  const standingOrdersQuery = supabase
+    .from("incomes")
+    .select("order_ref, date, amount, donor_name, installment_current, installment_total, categories(name)")
+    .not("order_ref", "is", null)
+    .order("date", { ascending: false });
+
+  const [{ data: incomes }, { data: departments }, { data: standingOrderRows }] = await Promise.all([
     incomesQuery,
     isAdmin ? supabase.from("departments").select("*").order("name") : Promise.resolve({ data: [] }),
+    standingOrdersQuery,
   ]);
+
+  // One card per standing-order number: the most recent payment (rows are
+  // already newest-first) gives the current installment count, from which
+  // the remaining payments are derived when the total is known.
+  const standingOrders = (() => {
+    const byRef = new Map<
+      string,
+      { orderRef: string; donorName: string | null; categoryName: string | null; amount: number; date: string; current: number | null; total: number | null }
+    >();
+    for (const r of (standingOrderRows ?? []) as unknown as {
+      order_ref: string;
+      date: string;
+      amount: number;
+      donor_name: string | null;
+      installment_current: number | null;
+      installment_total: number | null;
+      categories: { name: string } | null;
+    }[]) {
+      if (byRef.has(r.order_ref)) continue;
+      byRef.set(r.order_ref, {
+        orderRef: r.order_ref,
+        donorName: r.donor_name,
+        categoryName: r.categories?.name ?? null,
+        amount: Number(r.amount),
+        date: r.date,
+        current: r.installment_current,
+        total: r.installment_total,
+      });
+    }
+    // standingOrderRows is already sorted newest-first, and each order_ref's
+    // first occurrence in that order is its latest payment — so Map
+    // insertion order already reflects the right group ordering.
+    return [...byRef.values()];
+  })();
 
   return (
     <div className="space-y-4">
@@ -61,6 +107,53 @@ export default async function IncomesPage({
         )}
       </form>
 
+      {standingOrders.length > 0 && (
+        <div className="card p-4 overflow-x-auto">
+          <h2 className="font-semibold mb-1">הוראות קבע — תשלומים שנותרו</h2>
+          <p className="text-xs text-muted mb-2">
+            לפי מספר ההוראה ועמודת &quot;סוג&quot; (X מתוך Y) בהדבקת ההכנסה האחרונה של כל הוראה.
+          </p>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>מס׳ הוראה</th>
+                <th>שם תורם</th>
+                <th>קטגוריה</th>
+                <th>סכום אחרון</th>
+                <th>תשלום אחרון</th>
+                <th>תשלומים שנותרו</th>
+              </tr>
+            </thead>
+            <tbody>
+              {standingOrders.map((o) => {
+                const remaining = o.current != null && o.total != null ? o.total - o.current : null;
+                return (
+                  <tr key={o.orderRef}>
+                    <td>{o.orderRef}</td>
+                    <td>{o.donorName ?? "—"}</td>
+                    <td>{o.categoryName ?? "—"}</td>
+                    <td>{formatCurrency(o.amount)}</td>
+                    <td>
+                      {formatDate(o.date)}
+                      {o.current != null && o.total != null ? ` (${o.current}/${o.total})` : ""}
+                    </td>
+                    <td>
+                      {remaining == null ? (
+                        <span className="text-muted">לא ידוע</span>
+                      ) : remaining <= 1 ? (
+                        <span className="badge bg-warning-bg text-warning">{remaining} — עומדת להסתיים</span>
+                      ) : (
+                        remaining
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="card p-4 overflow-x-auto">
         <table className="data-table">
           <thead>
@@ -69,6 +162,8 @@ export default async function IncomesPage({
               <th>קטגוריה</th>
               <th>שם תורם</th>
               <th>סכום</th>
+              <th>מקור</th>
+              <th>סוג</th>
               <th>חשבון בנק</th>
               <th>מחלקה בעלים</th>
               <th>מחלקה מנפיקה</th>
@@ -87,6 +182,9 @@ export default async function IncomesPage({
                 donor_name: string | null;
                 receipt_number: string | null;
                 order_ref: string | null;
+                payment_method: string | null;
+                installment_current: number | null;
+                installment_total: number | null;
                 requires_inter_settlement: boolean;
                 owner_department_id: string | null;
                 categories: { name: string } | null;
@@ -100,6 +198,12 @@ export default async function IncomesPage({
                   <td>{row.categories?.name}</td>
                   <td>{row.donor_name ?? "—"}</td>
                   <td>{formatCurrency(Number(row.amount))}</td>
+                  <td>{row.payment_method ?? "—"}</td>
+                  <td>
+                    {row.installment_current && row.installment_total
+                      ? `${row.installment_current}/${row.installment_total}`
+                      : "—"}
+                  </td>
                   <td>
                     {row.bank_accounts?.bank_name} ({row.bank_accounts?.account_number})
                   </td>
@@ -136,7 +240,7 @@ export default async function IncomesPage({
             })}
             {(incomes ?? []).length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 11 : 10} className="text-center text-muted py-6">
+                <td colSpan={isAdmin ? 13 : 12} className="text-center text-muted py-6">
                   אין הכנסות רשומות עדיין
                 </td>
               </tr>

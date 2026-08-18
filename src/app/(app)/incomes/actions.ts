@@ -16,6 +16,9 @@ export type IncomeBatchRow = {
   receiptNumber: string;
   transactionRef: string;
   orderRef: string;
+  paymentMethod: string;
+  installmentCurrent: number | null;
+  installmentTotal: number | null;
   notes: string;
   splitAllocations: SplitAllocation[];
   rawPasteData?: Record<string, string>;
@@ -84,6 +87,9 @@ export async function submitIncomeBatch(
       receipt_number: r.receiptNumber || null,
       transaction_ref: r.transactionRef || null,
       order_ref: r.orderRef || null,
+      payment_method: r.paymentMethod || null,
+      installment_current: r.installmentCurrent,
+      installment_total: r.installmentTotal,
       raw_paste_data: r.rawPasteData ?? null,
       notes: r.notes || null,
       created_by: user?.id ?? null,

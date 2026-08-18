@@ -419,10 +419,13 @@ export type Database = {
           donor_id_number: string | null
           donor_name: string | null
           id: string
+          installment_current: number | null
+          installment_total: number | null
           issuing_department_id: string
           notes: string | null
           order_ref: string | null
           owner_department_id: string
+          payment_method: string | null
           raw_paste_data: Json | null
           receipt_number: string | null
           requires_inter_settlement: boolean
@@ -441,10 +444,13 @@ export type Database = {
           donor_id_number?: string | null
           donor_name?: string | null
           id?: string
+          installment_current?: number | null
+          installment_total?: number | null
           issuing_department_id: string
           notes?: string | null
           order_ref?: string | null
           owner_department_id: string
+          payment_method?: string | null
           raw_paste_data?: Json | null
           receipt_number?: string | null
           requires_inter_settlement?: boolean
@@ -463,10 +469,13 @@ export type Database = {
           donor_id_number?: string | null
           donor_name?: string | null
           id?: string
+          installment_current?: number | null
+          installment_total?: number | null
           issuing_department_id?: string
           notes?: string | null
           order_ref?: string | null
           owner_department_id?: string
+          payment_method?: string | null
           raw_paste_data?: Json | null
           receipt_number?: string | null
           requires_inter_settlement?: boolean

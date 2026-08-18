@@ -41,7 +41,21 @@ const HEADER_FIELD_MAP: Record<string, string> = {
   סטטוס: "status",
   מספרעסקה: "transactionRef",
   מספרהוראה: "orderRef",
+  מקור: "paymentMethod",
+  סוג: "installmentText",
 };
+
+// "סוג" often carries the installment count for a credit-card standing
+// payment ("תשלום 4 מתוך 12", "4/12" — both seen in real exports). Parsed
+// out so a department/forecast report can rely on how many payments are
+// left, instead of every admin having to read the free text themselves.
+function parseInstallment(text: string): { current: number | null; total: number | null } {
+  const trimmed = text.trim();
+  if (!trimmed) return { current: null, total: null };
+  const match = trimmed.match(/(\d+)\s*(?:\/|מתוך)\s*(\d+)/);
+  if (!match) return { current: null, total: null };
+  return { current: Number(match[1]), total: Number(match[2]) };
+}
 const REQUIRED_HEADER_KEYS = ["date", "category", "amount"];
 
 function normalizeHeaderText(text: string): string {
@@ -190,6 +204,8 @@ export function PasteIncomeForm({
         if (val) rawPasteData[key] = val;
       });
 
+      const installment = parseInstallment(getField(cols, "installmentText"));
+
       return {
         raw: cols.join(" | "),
         categoryText,
@@ -201,6 +217,9 @@ export function PasteIncomeForm({
         receiptNumber: getField(cols, "receiptNumber"),
         transactionRef: getField(cols, "transactionRef"),
         orderRef: getField(cols, "orderRef"),
+        paymentMethod: getField(cols, "paymentMethod"),
+        installmentCurrent: installment.current,
+        installmentTotal: installment.total,
         notes: getField(cols, "notes"),
         isCancelled: isCancelledStatus(getField(cols, "status")),
         splitAllocations: [],
@@ -351,6 +370,13 @@ export function PasteIncomeForm({
 
   return (
     <div className="space-y-4">
+      <datalist id="income-payment-methods">
+        <option value="חד פעמי" />
+        <option value="הוראת קבע" />
+        <option value="אשראי" />
+        <option value="העברה" />
+        <option value="אחר" />
+      </datalist>
       <div className="card p-4">
         <label className="block text-sm font-medium mb-1">
           לאיזה חשבון בנק / מחלקה נכנס הכסף בפועל?
@@ -418,6 +444,8 @@ export function PasteIncomeForm({
                 <th>קטגוריה</th>
                 <th>שם תורם</th>
                 <th>סכום</th>
+                <th>מקור</th>
+                <th>סוג</th>
                 <th>מס׳ קבלה</th>
                 <th>מס׳ הוראה</th>
                 <th>הערות</th>
@@ -499,6 +527,36 @@ export function PasteIncomeForm({
                         value={row.amount || ""}
                         onChange={(e) => updateRow(i, { amount: Number(e.target.value) || 0 })}
                       />
+                    </td>
+                    <td>
+                      <input
+                        className="w-24 bg-transparent border-b border-border text-sm"
+                        list="income-payment-methods"
+                        value={row.paymentMethod}
+                        onChange={(e) => updateRow(i, { paymentMethod: e.target.value })}
+                        placeholder="אשראי / העברה..."
+                      />
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-0.5">
+                        <input
+                          className="w-10 bg-transparent border-b border-border text-sm"
+                          type="number"
+                          value={row.installmentCurrent ?? ""}
+                          onChange={(e) => updateRow(i, { installmentCurrent: e.target.value ? Number(e.target.value) : null })}
+                          placeholder="תשלום"
+                          title="תשלום מספר"
+                        />
+                        <span className="text-muted text-xs">/</span>
+                        <input
+                          className="w-10 bg-transparent border-b border-border text-sm"
+                          type="number"
+                          value={row.installmentTotal ?? ""}
+                          onChange={(e) => updateRow(i, { installmentTotal: e.target.value ? Number(e.target.value) : null })}
+                          placeholder="סה״כ"
+                          title="סה״כ תשלומים"
+                        />
+                      </div>
                     </td>
                     <td>
                       <input

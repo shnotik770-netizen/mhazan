@@ -13,6 +13,18 @@ function revalidateCheckPaths() {
   revalidatePath("/expenses");
 }
 
+// idx_checks_unique_number_per_bank enforces one check number per bank
+// account at the DB level (a physical check number can only ever be used
+// once, cancelled ones included) — this turns that raw unique-violation
+// into a message an admin can actually act on.
+function friendlyCheckError(error: { message: string; code?: string } | null, checkNumber?: string | null): string | undefined {
+  if (!error) return undefined;
+  if (error.code === "23505" && error.message.includes("idx_checks_unique_number_per_bank")) {
+    return checkNumber ? `מספר צ׳ק ${checkNumber} כבר קיים בחשבון הבנק הזה` : "מספר צ׳ק זה כבר קיים בחשבון הבנק הזה";
+  }
+  return error.message;
+}
+
 // Grows the suppliers list automatically as new payees are used, so admins
 // don't have to separately remember to register them.
 async function ensureSupplier(
@@ -90,7 +102,7 @@ export async function createCheck(input: {
     .select("id")
     .single();
 
-  if (error) return { error: error.message };
+  if (error) return { error: friendlyCheckError(error, input.checkNumber) };
 
   if (isSplit) {
     const allocError = await insertAllocations(supabase, created.id, input.allocations);
@@ -173,7 +185,7 @@ export async function issueCheck(
       approved_by: user?.id ?? null,
     })
     .eq("id", checkId);
-  if (error) return { error: error.message };
+  if (error) return { error: friendlyCheckError(error, input.checkNumber) };
 
   if (isSplit) {
     await supabase.from("check_allocations").delete().eq("check_id", checkId);
@@ -307,7 +319,7 @@ export async function createPaymentSpread(input: {
       })
       .select("id")
       .single();
-    if (error) return { error: error.message };
+    if (error) return { error: friendlyCheckError(error, row.checkNumber) };
     if (isSplit) {
       const allocError = await insertAllocations(supabase, created.id, row.allocations);
       if (allocError) return { error: allocError };
@@ -343,6 +355,13 @@ export async function pasteExistingChecks(
   const validRows = rows.filter((r) => r.payee && r.amount > 0);
   if (validRows.length === 0) return { error: "אין שורות תקינות לייבוא" };
 
+  const seenNumbers = new Set<string>();
+  for (const r of validRows) {
+    if (!r.checkNumber) continue;
+    if (seenNumbers.has(r.checkNumber)) return { error: `מספר צ׳ק ${r.checkNumber} מופיע יותר מפעם אחת ברשימה שהודבקה` };
+    seenNumbers.add(r.checkNumber);
+  }
+
   const { error, count } = await supabase.from("checks").insert(
     validRows.map((r) => ({
       payment_method: "CHECK" as const,
@@ -362,7 +381,7 @@ export async function pasteExistingChecks(
     { count: "exact" },
   );
 
-  if (error) return { error: error.message };
+  if (error) return { error: friendlyCheckError(error) };
   revalidateCheckPaths();
   return { count: count ?? validRows.length };
 }
@@ -514,7 +533,7 @@ export async function bulkAssignCheckNumbers(
       .from("checks")
       .update({ check_number: checkNumber, issued_at: new Date().toISOString() })
       .eq("id", a.checkId);
-    outcomes.push({ checkId: a.checkId, success: !error, reason: error?.message });
+    outcomes.push({ checkId: a.checkId, success: !error, reason: friendlyCheckError(error, checkNumber) });
   }
 
   revalidateCheckPaths();
@@ -557,7 +576,7 @@ export async function recordCancelledCheckNumber(
   });
 
   revalidateCheckPaths();
-  return { error: error?.message };
+  return { error: friendlyCheckError(error, trimmed) };
 }
 
 // Lightweight single-field update for setting a due date directly on the
@@ -812,6 +831,7 @@ export async function createCheckBatch(rows: BulkCheckRow[]): Promise<{ outcomes
       amount: row.amount,
       due_date: row.dueDate || null,
       check_number: row.checkNumber || null,
+      issued_at: row.checkNumber ? new Date().toISOString() : null,
       department_id: row.departmentId || null,
       notes: row.notes,
       created_by: user?.id ?? null,
@@ -819,7 +839,7 @@ export async function createCheckBatch(rows: BulkCheckRow[]): Promise<{ outcomes
       approved_by: user?.id ?? null,
     });
     if (error) {
-      outcomes.push({ success: false, reason: error.message });
+      outcomes.push({ success: false, reason: friendlyCheckError(error, row.checkNumber) });
     } else {
       outcomes.push({ success: true });
       await ensureSupplier(supabase, row.payee, user?.id ?? null);
@@ -1072,7 +1092,7 @@ export async function updateCheck(
     .eq("id", checkId);
   if (error) {
     revalidateCheckPaths();
-    return { error: error.message };
+    return { error: friendlyCheckError(error, input.checkNumber) };
   }
 
   if (input.allocations !== undefined) {

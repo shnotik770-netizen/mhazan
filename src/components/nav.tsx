@@ -13,7 +13,7 @@ const links = [
   { href: "/", label: "דשבורד" },
   { href: "/transactions", label: "כל התנועות" },
   { href: "/incomes", label: "הכנסות" },
-  { href: "/checks", label: "צ׳קים" },
+  { href: "/checks", label: "צ׳קים והעברות" },
   { href: "/expenses", label: "הוצאות" },
   { href: "/ledger", label: "התחשבנות פנימית" },
   { href: "/forecast", label: "תחזית תזרים" },
