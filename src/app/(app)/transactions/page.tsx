@@ -1,22 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { MultiSelectFilter } from "@/components/multi-select-filter";
-
-type UnifiedRow = {
-  id: string;
-  date: string | null;
-  direction: "INCOME" | "EXPENSE";
-  description: string;
-  amount: number;
-  departmentId: string | null;
-  departmentName: string | null;
-  categoryId: string | null;
-  categoryName: string | null;
-  sourceKey: "INCOME" | "CHECK" | "TRANSFER" | "MANUAL";
-  source: string;
-  status: string | null;
-};
+import { TransactionsTable, type UnifiedRow } from "@/components/transactions-table-client";
 
 function toArray(value: string | string[] | undefined): string[] {
   if (!value) return [];
@@ -325,47 +311,7 @@ export default async function TransactionsPage({
       </div>
 
       <div className="card p-4 overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>תאריך</th>
-              <th>סוג</th>
-              <th>מקור</th>
-              <th>תיאור</th>
-              <th>קטגוריה</th>
-              <th>מחלקה</th>
-              <th>סטטוס</th>
-              <th>סכום</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r) => (
-              <tr key={r.id}>
-                <td>{r.date ? formatDate(r.date) : <span className="text-muted">ללא תאריך</span>}</td>
-                <td>
-                  <span className={r.direction === "INCOME" ? "text-success" : "text-danger"}>
-                    {r.direction === "INCOME" ? "הכנסה" : "הוצאה"}
-                  </span>
-                </td>
-                <td>{r.source}</td>
-                <td>{r.description}</td>
-                <td>{r.categoryName ?? "—"}</td>
-                <td>{r.departmentName ?? "—"}</td>
-                <td>{r.status ?? "—"}</td>
-                <td className={r.direction === "INCOME" ? "text-success" : "text-danger"}>
-                  {formatCurrency(r.amount)}
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={8} className="text-center text-muted py-6">
-                  אין תנועות התואמות את הסינון
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <TransactionsTable rows={filtered} />
         <p className="text-xs text-muted mt-2">
           מוצגות עד 300 תנועות אחרונות מכל סוג (הכנסות / צ׳קים-העברות / רישומים ידניים) — לצמצום התוצאות יש להשתמש
           בסינון למעלה.

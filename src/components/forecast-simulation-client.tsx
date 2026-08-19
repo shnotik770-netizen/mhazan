@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState } from "react";
+import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 export type MonthlyCard = {
@@ -180,6 +181,12 @@ export function ForecastSimulationPanel({ monthlyCards }: { monthlyCards: Monthl
     return map;
   }, [items]);
 
+  // heldAdjustment is parallel to `items` in its original chronological
+  // order (the running balance was computed in that order) — so once the
+  // table below is sortable, each row's adjustment must be looked up by id
+  // rather than by its position in the (possibly reordered) display list.
+  const indexById = useMemo(() => new Map(items.map((item, i) => [item.id, i])), [items]);
+
   return (
     <div className="space-y-4">
       {monthlyCards.length > 0 && (
@@ -231,46 +238,82 @@ export function ForecastSimulationPanel({ monthlyCards }: { monthlyCards: Monthl
           נתון אמיתי.
         </p>
         <div className="overflow-x-auto mt-3">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>תאריך</th>
-                <th>מקור</th>
-                <th>שינוי צפוי</th>
-                <th>יתרה חזויה</th>
-                {hasSimulation && <th>יתרה בסימולציה</th>}
-                <th>לא יוצא (סימולציה)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, i) => {
-                const isHeld = held.has(item.id);
-                return (
-                  <tr key={item.id} className={isHeld ? "opacity-50" : undefined}>
-                    <td className={isHeld ? "line-through" : undefined}>{formatDate(item.date)}</td>
-                    <td className={isHeld ? "line-through" : undefined}>{item.source}</td>
-                    <td className={item.change < 0 ? "text-danger" : "text-success"}>{formatCurrency(item.change)}</td>
-                    <td className="font-semibold">{formatCurrency(item.runningBalance)}</td>
-                    {hasSimulation && (
-                      <td className="font-semibold text-primary">{formatCurrency(item.runningBalance - heldAdjustment[i])}</td>
-                    )}
-                    <td>
-                      <input type="checkbox" checked={isHeld} onChange={() => toggle(item.id)} />
-                    </td>
-                  </tr>
-                );
-              })}
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan={hasSimulation ? 6 : 5} className="text-center text-muted py-6">
-                    אין תנועות צפויות בטווח שנבחר
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <ForecastItemsTable items={items} held={held} heldAdjustment={heldAdjustment} indexById={indexById} hasSimulation={hasSimulation} toggle={toggle} />
         </div>
       </details>
     </div>
+  );
+}
+
+function ForecastItemsTable({
+  items,
+  held,
+  heldAdjustment,
+  indexById,
+  hasSimulation,
+  toggle,
+}: {
+  items: ForecastItemRow[];
+  held: Set<string>;
+  heldAdjustment: number[];
+  indexById: Map<string, number>;
+  hasSimulation: boolean;
+  toggle: (id: string) => void;
+}) {
+  const columns: ColumnDef<ForecastItemRow>[] = [
+    { key: "date", label: "תאריך", sortValue: (item) => item.date },
+    { key: "source", label: "מקור", sortValue: (item) => item.source, filterValue: (item) => item.source },
+    { key: "change", label: "שינוי צפוי", sortValue: (item) => item.change },
+    { key: "balance", label: "יתרה חזויה", sortValue: (item) => item.runningBalance },
+  ];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(items, columns);
+
+  return (
+    <table className="data-table">
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <SortFilterTh
+              key={col.key}
+              col={col}
+              allRows={items}
+              sort={sort}
+              toggleSort={toggleSort}
+              activeFilter={filters[col.key]}
+              setColumnFilter={setColumnFilter}
+            />
+          ))}
+          {hasSimulation && <th>יתרה בסימולציה</th>}
+          <th>לא יוצא (סימולציה)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((item) => {
+          const isHeld = held.has(item.id);
+          const i = indexById.get(item.id) ?? 0;
+          return (
+            <tr key={item.id} className={isHeld ? "opacity-50" : undefined}>
+              <td className={isHeld ? "line-through" : undefined}>{formatDate(item.date)}</td>
+              <td className={isHeld ? "line-through" : undefined}>{item.source}</td>
+              <td className={item.change < 0 ? "text-danger" : "text-success"}>{formatCurrency(item.change)}</td>
+              <td className="font-semibold">{formatCurrency(item.runningBalance)}</td>
+              {hasSimulation && (
+                <td className="font-semibold text-primary">{formatCurrency(item.runningBalance - heldAdjustment[i])}</td>
+              )}
+              <td>
+                <input type="checkbox" checked={isHeld} onChange={() => toggle(item.id)} />
+              </td>
+            </tr>
+          );
+        })}
+        {sorted.length === 0 && (
+          <tr>
+            <td colSpan={hasSimulation ? 6 : 5} className="text-center text-muted py-6">
+              {items.length === 0 ? "אין תנועות צפויות בטווח שנבחר" : "אין תוצאות"}
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
   );
 }

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { requireFinanceAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatCurrency, daysAgoLabel } from "@/lib/format";
-import { NewUserForm, UserAccessRow } from "@/components/user-access-client";
+import { NewUserForm, UsersTable } from "@/components/user-access-client";
+import { BankAccountsTable } from "@/components/dashboard-tables-client";
 import { createBankAccount } from "./actions";
 
 export default async function SettingsPage() {
@@ -48,29 +48,16 @@ export default async function SettingsPage() {
       <section className="card p-4 space-y-3">
         <h2 className="font-semibold">חשבונות בנק</h2>
         <div className="overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>מחלקה</th>
-              <th>בנק</th>
-              <th>מספר חשבון</th>
-              <th>יתרה</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(bankAccounts ?? []).map((b) => (
-              <tr key={b.id}>
-                <td>{(b as { departments: { name: string } | null }).departments?.name}</td>
-                <td>{b.bank_name}</td>
-                <td>{b.account_number}</td>
-                <td>
-                  {formatCurrency(Number(b.current_balance))}
-                  <div className="text-xs text-muted">{daysAgoLabel(b.balance_as_of)}</div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          <BankAccountsTable
+            accounts={(bankAccounts ?? []).map((b) => ({
+              id: b.id,
+              departmentName: (b as { departments: { name: string } | null }).departments?.name ?? null,
+              bank_name: b.bank_name,
+              account_number: b.account_number,
+              current_balance: Number(b.current_balance),
+              balance_as_of: b.balance_as_of,
+            }))}
+          />
         </div>
         <form action={createBankAccount} className="flex flex-wrap gap-2 pt-2">
           <select name="department_id" required className="rounded border border-border bg-transparent px-2 py-1 text-sm">
@@ -144,37 +131,16 @@ export default async function SettingsPage() {
           את המחלקות הספציפיות שהוא רשאי לצפות בהן.
         </p>
         <div className="overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>שם</th>
-              <th>הרשאה</th>
-              <th>מחלקות מאושרות</th>
-              <th>תאריך בבקשות</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {(profiles ?? []).map((p) => (
-              <UserAccessRow
-                key={p.id}
-                userId={p.id}
-                fullName={p.full_name ?? p.id.slice(0, 8)}
-                role={p.role}
-                grantedDepartmentIds={grantsFor(p.id)}
-                canSetCheckDates={p.can_set_check_dates}
-                departments={departments ?? []}
-              />
-            ))}
-            {(profiles ?? []).length === 0 && (
-              <tr>
-                <td colSpan={5} className="text-center text-muted py-6">
-                  אין משתמשים רשומים עדיין
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+          <UsersTable
+            users={(profiles ?? []).map((p) => ({
+              userId: p.id,
+              fullName: p.full_name ?? p.id.slice(0, 8),
+              role: p.role,
+              grantedDepartmentIds: grantsFor(p.id),
+              canSetCheckDates: p.can_set_check_dates,
+            }))}
+            departments={departments ?? []}
+          />
         </div>
       </section>
     </div>

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
-import { formatCurrency, daysAgoLabel } from "@/lib/format";
-import { ManualEntryApprovalRow, NewManualEntryButton } from "@/components/manual-entries-client";
+import { formatCurrency } from "@/lib/format";
+import { NewManualEntryButton, PendingManualEntriesTable } from "@/components/manual-entries-client";
 import { QuickActionsPanel } from "@/components/quick-actions-fab";
+import { BankAccountsTable, LedgerBalancesTable } from "@/components/dashboard-tables-client";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -106,39 +107,23 @@ export default async function DashboardPage() {
           <h2 className="font-semibold mb-1">
             ⚠ {pendingManualEntries!.length} רישומים ידניים ממתינים לאישור
           </h2>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>תאריך</th>
-                <th>מחלקה</th>
-                <th>סוג</th>
-                <th>סכום</th>
-                <th>חשבון בנק</th>
-                <th>הערות</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {pendingManualEntries!.map((e) => {
-                const row = e as unknown as {
-                  departments: { name: string } | null;
-                  bank_accounts: { bank_name: string; account_number: string } | null;
-                };
-                return (
-                  <ManualEntryApprovalRow
-                    key={e.id}
-                    entryId={e.id}
-                    departmentName={row.departments?.name ?? "—"}
-                    direction={e.direction}
-                    amount={Number(e.amount)}
-                    entryDate={e.entry_date}
-                    notes={e.notes}
-                    bankAccountLabel={row.bank_accounts ? `${row.bank_accounts.bank_name} (${row.bank_accounts.account_number})` : null}
-                  />
-                );
-              })}
-            </tbody>
-          </table>
+          <PendingManualEntriesTable
+            entries={pendingManualEntries!.map((e) => {
+              const row = e as unknown as {
+                departments: { name: string } | null;
+                bank_accounts: { bank_name: string; account_number: string } | null;
+              };
+              return {
+                id: e.id,
+                departmentName: row.departments?.name ?? "—",
+                direction: e.direction,
+                amount: Number(e.amount),
+                entryDate: e.entry_date,
+                notes: e.notes,
+                bankAccountLabel: row.bank_accounts ? `${row.bank_accounts.bank_name} (${row.bank_accounts.account_number})` : null,
+              };
+            })}
+          />
         </div>
       )}
 
@@ -190,39 +175,16 @@ export default async function DashboardPage() {
               תחזית תזרים ←
             </Link>
           </div>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>מחלקה</th>
-                <th>בנק</th>
-                <th>מספר חשבון</th>
-                <th>יתרה</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(bankAccounts ?? []).map((b) => (
-                <tr key={b.id}>
-                  <td>{(b as { departments: { name: string } | null }).departments?.name}</td>
-                  <td>{b.bank_name}</td>
-                  <td>{b.account_number}</td>
-                  <td className={Number(b.current_balance) < 0 ? "text-danger" : ""}>
-                    {formatCurrency(Number(b.current_balance))}
-                    <div className="text-xs text-muted font-normal">{daysAgoLabel(b.balance_as_of)}</div>
-                  </td>
-                </tr>
-              ))}
-              {(bankAccounts ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={4} className="text-center text-muted py-6">
-                    אין חשבונות בנק מוגדרים.{" "}
-                    <Link href="/settings" className="text-primary">
-                      הגדרת חשבון ראשון
-                    </Link>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <BankAccountsTable
+            accounts={(bankAccounts ?? []).map((b) => ({
+              id: b.id,
+              departmentName: (b as { departments: { name: string } | null }).departments?.name ?? null,
+              bank_name: b.bank_name,
+              account_number: b.account_number,
+              current_balance: Number(b.current_balance),
+              balance_as_of: b.balance_as_of,
+            }))}
+          />
         </div>
 
         <div className="card p-4 overflow-x-auto">
@@ -232,31 +194,14 @@ export default async function DashboardPage() {
               לדוח המלא ←
             </Link>
           </div>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>חייב</th>
-                <th>זכאי</th>
-                <th>סכום</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(ledgerBalances ?? []).map((row, i) => (
-                <tr key={i}>
-                  <td>{deptName(row.debtor_department_id)}</td>
-                  <td>{deptName(row.creditor_department_id)}</td>
-                  <td>{formatCurrency(Number(row.net_amount))}</td>
-                </tr>
-              ))}
-              {(ledgerBalances ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={3} className="text-center text-muted py-6">
-                    אין חובות פנימיים פתוחים
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <LedgerBalancesTable
+            rows={(ledgerBalances ?? []).map((row, i) => ({
+              key: String(i),
+              debtorName: deptName(row.debtor_department_id),
+              creditorName: deptName(row.creditor_department_id),
+              amount: Number(row.net_amount),
+            }))}
+          />
         </div>
       </div>
     </div>

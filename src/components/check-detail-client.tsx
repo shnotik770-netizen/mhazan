@@ -6,10 +6,12 @@ import {
   getExpensesByPayee,
   type CheckAllocationInput,
   type CheckSpreadDetail,
+  type CheckSpreadRow,
   type PayeeExpenseRow,
 } from "@/app/(app)/checks/actions";
 import { EditDeleteCheckRow } from "@/components/checks-client";
 import { Modal } from "@/components/modal";
+import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -138,46 +140,75 @@ function CheckDetailModal({ checkId, onClose }: { checkId: string; onClose: () =
                   <p className="text-sm font-semibold mb-1">פירוט לפי צ׳ק</p>
                 </>
               )}
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>מס׳ צ׳ק</th>
-                    <th>סכום</th>
-                    <th>תאריך</th>
-                    <th>סטטוס</th>
-                    {!isSpread && <th>מחלקה</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {detail.spreadRows.map((r) => (
-                    <tr key={r.id} className={r.id === checkId ? "bg-primary/5" : ""}>
-                      <td>{r.check_number ?? "—"}</td>
-                      <td>{formatCurrency(r.amount)}</td>
-                      <td>{r.due_date ? formatDate(r.due_date) : "—"}</td>
-                      <td>{statusLabel(r.status)}</td>
-                      {!isSpread && (
-                        <td>
-                          {r.departmentName ? (
-                            r.departmentName
-                          ) : r.allocations.length > 0 ? (
-                            <span className="text-xs">
-                              מפוצל:{" "}
-                              {r.allocations.map((a) => `${a.departmentName ?? "?"} (${formatCurrency(a.amount)})`).join(", ")}
-                            </span>
-                          ) : (
-                            <span className="text-warning">בהמתנה</span>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <SpreadRowsTable rows={detail.spreadRows} highlightId={checkId} isSpread={isSpread} />
             </>
           )}
         </div>
       </div>
     </Modal>
+  );
+}
+
+function SpreadRowsTable({ rows, highlightId, isSpread }: { rows: CheckSpreadRow[]; highlightId: string; isSpread: boolean }) {
+  const columns: ColumnDef<CheckSpreadRow>[] = [
+    { key: "check_number", label: "מס׳ צ׳ק", sortValue: (r) => r.check_number ?? "" },
+    { key: "amount", label: "סכום", sortValue: (r) => r.amount },
+    { key: "due_date", label: "תאריך", sortValue: (r) => r.due_date ?? "" },
+    { key: "status", label: "סטטוס", sortValue: (r) => statusLabel(r.status), filterValue: (r) => statusLabel(r.status) },
+    ...(!isSpread
+      ? [
+          {
+            key: "department",
+            label: "מחלקה",
+            sortValue: (r: CheckSpreadRow) => r.departmentName ?? "",
+            filterValue: (r: CheckSpreadRow) => r.departmentName ?? "—",
+          } satisfies ColumnDef<CheckSpreadRow>,
+        ]
+      : []),
+  ];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(rows, columns);
+
+  return (
+    <table className="data-table">
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <SortFilterTh
+              key={col.key}
+              col={col}
+              allRows={rows}
+              sort={sort}
+              toggleSort={toggleSort}
+              activeFilter={filters[col.key]}
+              setColumnFilter={setColumnFilter}
+            />
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((r) => (
+          <tr key={r.id} className={r.id === highlightId ? "bg-primary/5" : ""}>
+            <td>{r.check_number ?? "—"}</td>
+            <td>{formatCurrency(r.amount)}</td>
+            <td>{r.due_date ? formatDate(r.due_date) : "—"}</td>
+            <td>{statusLabel(r.status)}</td>
+            {!isSpread && (
+              <td>
+                {r.departmentName ? (
+                  r.departmentName
+                ) : r.allocations.length > 0 ? (
+                  <span className="text-xs">
+                    מפוצל: {r.allocations.map((a) => `${a.departmentName ?? "?"} (${formatCurrency(a.amount)})`).join(", ")}
+                  </span>
+                ) : (
+                  <span className="text-warning">בהמתנה</span>
+                )}
+              </td>
+            )}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -246,66 +277,110 @@ function PayeeExpensesModal({ payee, onClose }: { payee: string; onClose: () => 
               <p className="text-sm text-muted">
                 {rows.length} הוצאות — סה״כ {formatCurrency(total)}
               </p>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>תאריך</th>
-                    <th>סכום</th>
-                    <th>אמצעי</th>
-                    <th>מס׳ צ׳ק</th>
-                    <th>מחלקה</th>
-                    <th>קטגוריה</th>
-                    <th>סטטוס</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.id}>
-                      <td>{r.due_date ? formatDate(r.due_date) : "—"}</td>
-                      <td>{formatCurrency(r.amount)}</td>
-                      <td>{r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"}</td>
-                      <td>
-                        {r.check_number ?? "—"}
-                        {r.spread_id && (
-                          <span className="badge bg-background text-muted mr-1">
-                            פריסה · סה״כ {formatCurrency(spreadTotals.get(r.spread_id) ?? 0)}
-                          </span>
-                        )}
-                      </td>
-                      <td>{r.departmentName ?? <span className="text-warning">בהמתנה</span>}</td>
-                      <td>{r.categoryName ?? "—"}</td>
-                      <td>{statusLabel(r.status)}</td>
-                      <td className="flex items-center gap-2">
-                        <CheckDetailLink checkId={r.id} />
-                        <EditDeleteCheckRow
-                          checkId={r.id}
-                          payee={payee}
-                          amount={r.amount}
-                          dueDate={r.due_date}
-                          checkNumber={r.check_number}
-                          departmentId={r.department_id}
-                          notes={r.notes}
-                          paymentMethod={r.payment_method}
-                          existingAllocations={allocationsByCheck[r.id] ?? []}
-                          departments={departments}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                  {rows.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="text-center text-muted py-4">
-                        אין הוצאות
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              <PayeeExpensesTable
+                rows={rows}
+                payee={payee}
+                spreadTotals={spreadTotals}
+                departments={departments}
+                allocationsByCheck={allocationsByCheck}
+              />
             </>
           )}
         </div>
       </div>
     </Modal>
+  );
+}
+
+function PayeeExpensesTable({
+  rows,
+  payee,
+  spreadTotals,
+  departments,
+  allocationsByCheck,
+}: {
+  rows: PayeeExpenseRow[];
+  payee: string;
+  spreadTotals: Map<string, number>;
+  departments: Tables<"departments">[];
+  allocationsByCheck: Record<string, CheckAllocationInput[]>;
+}) {
+  const columns: ColumnDef<PayeeExpenseRow>[] = [
+    { key: "due_date", label: "תאריך", sortValue: (r) => r.due_date ?? "" },
+    { key: "amount", label: "סכום", sortValue: (r) => r.amount },
+    {
+      key: "payment_method",
+      label: "אמצעי",
+      sortValue: (r) => r.payment_method,
+      filterValue: (r) => (r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"),
+    },
+    { key: "check_number", label: "מס׳ צ׳ק", sortValue: (r) => r.check_number ?? "" },
+    { key: "department", label: "מחלקה", sortValue: (r) => r.departmentName ?? "", filterValue: (r) => r.departmentName ?? "בהמתנה" },
+    { key: "category", label: "קטגוריה", sortValue: (r) => r.categoryName ?? "", filterValue: (r) => r.categoryName ?? "—" },
+    { key: "status", label: "סטטוס", sortValue: (r) => statusLabel(r.status), filterValue: (r) => statusLabel(r.status) },
+  ];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(rows, columns);
+
+  return (
+    <table className="data-table">
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <SortFilterTh
+              key={col.key}
+              col={col}
+              allRows={rows}
+              sort={sort}
+              toggleSort={toggleSort}
+              activeFilter={filters[col.key]}
+              setColumnFilter={setColumnFilter}
+            />
+          ))}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((r) => (
+          <tr key={r.id}>
+            <td>{r.due_date ? formatDate(r.due_date) : "—"}</td>
+            <td>{formatCurrency(r.amount)}</td>
+            <td>{r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"}</td>
+            <td>
+              {r.check_number ?? "—"}
+              {r.spread_id && (
+                <span className="badge bg-background text-muted mr-1">
+                  פריסה · סה״כ {formatCurrency(spreadTotals.get(r.spread_id) ?? 0)}
+                </span>
+              )}
+            </td>
+            <td>{r.departmentName ?? <span className="text-warning">בהמתנה</span>}</td>
+            <td>{r.categoryName ?? "—"}</td>
+            <td>{statusLabel(r.status)}</td>
+            <td className="flex items-center gap-2">
+              <CheckDetailLink checkId={r.id} />
+              <EditDeleteCheckRow
+                checkId={r.id}
+                payee={payee}
+                amount={r.amount}
+                dueDate={r.due_date}
+                checkNumber={r.check_number}
+                departmentId={r.department_id}
+                notes={r.notes}
+                paymentMethod={r.payment_method}
+                existingAllocations={allocationsByCheck[r.id] ?? []}
+                departments={departments}
+              />
+            </td>
+          </tr>
+        ))}
+        {sorted.length === 0 && (
+          <tr>
+            <td colSpan={8} className="text-center text-muted py-4">
+              {rows.length === 0 ? "אין הוצאות" : "אין תוצאות"}
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
   );
 }

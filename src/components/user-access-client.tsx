@@ -3,9 +3,86 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createUser, updateUserAccess } from "@/app/(app)/settings/actions";
+import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
+
+export type UserAccessRowData = {
+  userId: string;
+  fullName: string;
+  role: string;
+  grantedDepartmentIds: string[];
+  canSetCheckDates: boolean;
+};
+
+export function UsersTable({ users, departments }: { users: UserAccessRowData[]; departments: Department[] }) {
+  const roleLabel = (role: string) => (role === "FINANCE_ADMIN" ? "מנהל כספים — גישה מלאה" : "צפייה בלבד — מחלקות נבחרות");
+  const columns: ColumnDef<UserAccessRowData>[] = [
+    { key: "name", label: "שם", sortValue: (u) => u.fullName, filterValue: (u) => u.fullName },
+    { key: "role", label: "הרשאה", sortValue: (u) => roleLabel(u.role), filterValue: (u) => roleLabel(u.role) },
+    {
+      key: "departments",
+      label: "מחלקות מאושרות",
+      sortValue: (u) => u.grantedDepartmentIds.length,
+      filterValue: (u) =>
+        u.role === "FINANCE_ADMIN"
+          ? "כל המחלקות"
+          : departments
+              .filter((d) => u.grantedDepartmentIds.includes(d.id))
+              .map((d) => d.name)
+              .join(", ") || "אין",
+    },
+    {
+      key: "check_dates",
+      label: "תאריך בבקשות",
+      sortValue: (u) => (u.canSetCheckDates ? 1 : 0),
+      filterValue: (u) => (u.canSetCheckDates ? "רשאי" : "לא רשאי"),
+    },
+  ];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(users, columns);
+
+  return (
+    <table className="data-table">
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <SortFilterTh
+              key={col.key}
+              col={col}
+              allRows={users}
+              sort={sort}
+              toggleSort={toggleSort}
+              activeFilter={filters[col.key]}
+              setColumnFilter={setColumnFilter}
+            />
+          ))}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((u) => (
+          <UserAccessRow
+            key={u.userId}
+            userId={u.userId}
+            fullName={u.fullName}
+            role={u.role}
+            grantedDepartmentIds={u.grantedDepartmentIds}
+            canSetCheckDates={u.canSetCheckDates}
+            departments={departments}
+          />
+        ))}
+        {sorted.length === 0 && (
+          <tr>
+            <td colSpan={5} className="text-center text-muted py-6">
+              {users.length === 0 ? "אין משתמשים רשומים עדיין" : "אין תוצאות"}
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
 
 function randomPassword(): string {
   return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6).toUpperCase();

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createManualEntry, reviewManualEntry } from "@/app/(app)/manual-entries/actions";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
+import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -176,6 +177,68 @@ export function NewManualEntryForm({
         {message && <span className="text-sm text-success">{message}</span>}
       </div>
     </div>
+  );
+}
+
+export type PendingManualEntry = {
+  id: string;
+  departmentName: string;
+  direction: string;
+  amount: number;
+  entryDate: string | null;
+  notes: string | null;
+  bankAccountLabel: string | null;
+};
+
+export function PendingManualEntriesTable({ entries }: { entries: PendingManualEntry[] }) {
+  const columns: ColumnDef<PendingManualEntry>[] = [
+    { key: "date", label: "תאריך", sortValue: (e) => e.entryDate ?? "" },
+    { key: "department", label: "מחלקה", sortValue: (e) => e.departmentName, filterValue: (e) => e.departmentName },
+    {
+      key: "direction",
+      label: "סוג",
+      sortValue: (e) => (e.direction === "INCOME" ? 0 : 1),
+      filterValue: (e) => (e.direction === "INCOME" ? "הכנסה" : "הוצאה"),
+    },
+    { key: "amount", label: "סכום", sortValue: (e) => e.amount },
+    { key: "bank", label: "חשבון בנק", sortValue: (e) => e.bankAccountLabel ?? "" },
+    { key: "notes", label: "הערות", sortValue: (e) => e.notes ?? "" },
+  ];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(entries, columns);
+
+  return (
+    <table className="data-table">
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <SortFilterTh
+              key={col.key}
+              col={col}
+              allRows={entries}
+              sort={sort}
+              toggleSort={toggleSort}
+              activeFilter={filters[col.key]}
+              setColumnFilter={setColumnFilter}
+            />
+          ))}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((e) => (
+          <ManualEntryApprovalRow
+            key={e.id}
+            entryId={e.id}
+            departmentName={e.departmentName}
+            direction={e.direction}
+            amount={e.amount}
+            entryDate={e.entryDate}
+            notes={e.notes}
+            bankAccountLabel={e.bankAccountLabel}
+          />
+        ))}
+      </tbody>
+    </table>
   );
 }
 

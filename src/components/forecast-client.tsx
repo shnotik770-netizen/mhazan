@@ -11,6 +11,7 @@ import {
 } from "@/app/(app)/forecast/actions";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
+import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate, todayIso, daysAgoLabel } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -132,26 +133,53 @@ export function ExpectedIncomeManager({
 
       {pending.length > 0 && (
         <div className="overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>תאריך</th>
-              <th>תיאור</th>
-              <th>סכום</th>
-              <th>סטטוס</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {pending.map((e) => (
-              <ExpectedIncomeRow key={e.id} income={e} bankAccounts={bankAccounts} />
-            ))}
-          </tbody>
-        </table>
+          <PendingExpectedIncomesTable pending={pending} bankAccounts={bankAccounts} />
         </div>
       )}
       {pending.length === 0 && <p className="text-sm text-muted">אין הכנסות צפויות ממתינות כרגע.</p>}
     </div>
+  );
+}
+
+function PendingExpectedIncomesTable({
+  pending,
+  bankAccounts,
+}: {
+  pending: ExpectedIncome[];
+  bankAccounts: BankAccountOption[];
+}) {
+  const columns: ColumnDef<ExpectedIncome>[] = [
+    { key: "date", label: "תאריך", sortValue: (e) => e.expected_date },
+    { key: "description", label: "תיאור", sortValue: (e) => e.description ?? "", filterValue: (e) => e.description ?? "—" },
+    { key: "amount", label: "סכום", sortValue: (e) => Number(e.amount) },
+  ];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(pending, columns);
+
+  return (
+    <table className="data-table">
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <SortFilterTh
+              key={col.key}
+              col={col}
+              allRows={pending}
+              sort={sort}
+              toggleSort={toggleSort}
+              activeFilter={filters[col.key]}
+              setColumnFilter={setColumnFilter}
+            />
+          ))}
+          <th>סטטוס</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((e) => (
+          <ExpectedIncomeRow key={e.id} income={e} bankAccounts={bankAccounts} />
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -177,27 +205,60 @@ function ArchivedExpectedIncomesButton({ archived }: { archived: ExpectedIncome[
             </div>
             <p className="text-xs text-muted">היסטוריית הכנסות צפויות שכבר סומנו כהתקבלו או שלא התקבלו.</p>
             <div className="overflow-x-auto">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>תאריך</th>
-                    <th>תיאור</th>
-                    <th>סכום</th>
-                    <th>סטטוס</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {archived.map((e) => (
-                    <ArchivedIncomeRow key={e.id} income={e} />
-                  ))}
-                </tbody>
-              </table>
+              <ArchivedExpectedIncomesTable archived={archived} />
             </div>
           </div>
         </Modal>
       )}
     </>
+  );
+}
+
+function ArchivedExpectedIncomesTable({ archived }: { archived: ExpectedIncome[] }) {
+  const columns: ColumnDef<ExpectedIncome>[] = [
+    { key: "date", label: "תאריך", sortValue: (e) => e.expected_date },
+    { key: "description", label: "תיאור", sortValue: (e) => e.description ?? "", filterValue: (e) => e.description ?? "—" },
+    { key: "amount", label: "סכום", sortValue: (e) => Number(e.amount) },
+    {
+      key: "status",
+      label: "סטטוס",
+      sortValue: (e) => e.status,
+      filterValue: (e) => (e.status === "CONFIRMED" ? "התקבל" : "לא התקבל"),
+    },
+  ];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(archived, columns);
+
+  return (
+    <table className="data-table">
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <SortFilterTh
+              key={col.key}
+              col={col}
+              allRows={archived}
+              sort={sort}
+              toggleSort={toggleSort}
+              activeFilter={filters[col.key]}
+              setColumnFilter={setColumnFilter}
+            />
+          ))}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((e) => (
+          <ArchivedIncomeRow key={e.id} income={e} />
+        ))}
+        {sorted.length === 0 && (
+          <tr>
+            <td colSpan={5} className="text-center text-muted py-4">
+              אין תוצאות
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
   );
 }
 
