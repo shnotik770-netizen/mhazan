@@ -12,7 +12,6 @@ type BankAccountOption = {
   department_id: string;
   bank_name: string;
   account_number: string;
-  departments: { name: string } | null;
 };
 
 export function DepartmentRow({
@@ -102,15 +101,15 @@ export function DepartmentRow({
           />
         ) : homeAccount ? (
           usage.bankAccounts > 0 ? (
-            <span className="font-semibold text-primary" title="מחלקה זו מנהלת את חשבון הבנק הזה">
-              {homeAccount.bank_name} ({homeAccount.account_number})
-            </span>
+            <>
+              <span className="font-semibold text-primary">
+                {homeAccount.bank_name} ({homeAccount.account_number})
+              </span>
+              <span className="badge bg-background text-muted mr-1">מנהלת את החשבון</span>
+            </>
           ) : (
             <>
               {homeAccount.bank_name} ({homeAccount.account_number})
-              {homeAccount.departments && (
-                <span className="badge bg-background text-muted mr-1">שייך ל{homeAccount.departments.name}</span>
-              )}
             </>
           )
         ) : (

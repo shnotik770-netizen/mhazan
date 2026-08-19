@@ -9,10 +9,7 @@ export default async function DepartmentsPage() {
 
   const [{ data: departments }, { data: bankAccounts }, { data: categories }] = await Promise.all([
     supabase.from("departments").select("*").order("name"),
-    supabase
-      .from("bank_accounts")
-      .select("id, department_id, bank_name, account_number, departments!bank_accounts_department_id_fkey(name)")
-      .order("bank_name"),
+    supabase.from("bank_accounts").select("id, department_id, bank_name, account_number").order("bank_name"),
     supabase.from("categories").select("id, department_id"),
   ]);
 
