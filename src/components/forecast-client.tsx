@@ -83,32 +83,44 @@ export function BankBalancePanel({
 
 export function ExpectedIncomeManager({
   bankAccountId,
+  bankAccounts,
   expectedIncomes,
 }: {
   bankAccountId: string;
+  bankAccounts: { id: string; bank_name: string; account_number: string }[];
   expectedIncomes: ExpectedIncome[];
 }) {
   const router = useRouter();
+  const [targetAccountId, setTargetAccountId] = useState(bankAccountId);
   const [amount, setAmount] = useState(0);
   const [expectedDate, setExpectedDate] = useState("");
   const [description, setDescription] = useState("");
+  const [repeats, setRepeats] = useState(false);
+  const [repeatMonths, setRepeatMonths] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function submit() {
     setError(null);
+    if (repeats && (!repeatMonths || Number(repeatMonths) < 2)) {
+      setError("יש להזין מספר חודשים תקין (2 ומעלה), או לבטל את הישנות ההכנסה");
+      return;
+    }
     startTransition(async () => {
       const result = await createExpectedIncome({
-        bankAccountId,
+        bankAccountId: targetAccountId,
         amount,
         expectedDate,
         description: description || null,
+        repeatMonths: repeats ? Number(repeatMonths) : 1,
       });
       if (result.error) setError(result.error);
       else {
         setAmount(0);
         setExpectedDate("");
         setDescription("");
+        setRepeats(false);
+        setRepeatMonths("");
         router.refresh();
       }
     });
@@ -136,6 +148,18 @@ export function ExpectedIncomeManager({
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+        <select
+          value={targetAccountId}
+          onChange={(e) => setTargetAccountId(e.target.value)}
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+        >
+          <option value="">חשבון בנק...</option>
+          {bankAccounts.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.bank_name} ({b.account_number})
+            </option>
+          ))}
+        </select>
         <input
           type="number"
           value={amount || ""}
@@ -150,10 +174,33 @@ export function ExpectedIncomeManager({
           placeholder="תיאור / מקור"
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         />
+      </div>
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
+          <input
+            type="checkbox"
+            checked={repeats}
+            onChange={(e) => {
+              setRepeats(e.target.checked);
+              if (!e.target.checked) setRepeatMonths("");
+            }}
+          />
+          חוזר כל חודש (לא הכנסה חד-פעמית)
+        </label>
+        {repeats && (
+          <input
+            type="number"
+            min="2"
+            value={repeatMonths}
+            onChange={(e) => setRepeatMonths(e.target.value)}
+            placeholder="כמה חודשים"
+            className="rounded border border-border bg-transparent px-2 py-1 text-sm w-28"
+          />
+        )}
         <button
-          disabled={isPending || amount <= 0 || !expectedDate}
+          disabled={isPending || amount <= 0 || !expectedDate || !targetAccountId}
           onClick={submit}
-          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50 mr-auto"
         >
           הוספה
         </button>

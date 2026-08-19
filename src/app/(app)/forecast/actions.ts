@@ -21,22 +21,34 @@ export async function updateBankBalance(bankAccountId: string, newBalance: numbe
   return {};
 }
 
+// A repeated expected income (repeatMonths > 1) isn't a real recurring
+// schedule — it has no department/category and never posts to the ledger —
+// so instead of a schedule row it's simply materialized up front as one
+// expected_incomes row per month, each independently confirmable/deletable.
 export async function createExpectedIncome(input: {
   bankAccountId: string;
   amount: number;
   expectedDate: string;
   description: string | null;
+  repeatMonths?: number;
 }): Promise<{ error?: string }> {
   const admin = await requireFinanceAdmin();
+  if (!input.bankAccountId) return { error: "יש לבחור חשבון בנק" };
   if (!input.expectedDate) return { error: "יש להזין תאריך" };
   const supabase = await createClient();
-  const { error } = await supabase.from("expected_incomes").insert({
-    bank_account_id: input.bankAccountId,
-    amount: input.amount,
-    expected_date: input.expectedDate,
-    description: input.description,
-    created_by: admin.id,
+  const months = Math.max(1, Math.floor(input.repeatMonths ?? 1));
+  const [y, m, d] = input.expectedDate.split("-").map(Number);
+  const rows = Array.from({ length: months }, (_, i) => {
+    const date = new Date(y, m - 1 + i, d);
+    return {
+      bank_account_id: input.bankAccountId,
+      amount: input.amount,
+      expected_date: date.toISOString().slice(0, 10),
+      description: input.description,
+      created_by: admin.id,
+    };
   });
+  const { error } = await supabase.from("expected_incomes").insert(rows);
   if (error) return { error: error.message };
   revalidateForecastPaths();
   return {};

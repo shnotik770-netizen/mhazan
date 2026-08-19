@@ -243,7 +243,11 @@ export default async function ForecastPage({
       )}
 
       {mode === "bank" && selectedAccount && isAdmin && (
-        <ExpectedIncomeManager bankAccountId={selectedAccount.id} expectedIncomes={expectedIncomes} />
+        <ExpectedIncomeManager
+          bankAccountId={selectedAccount.id}
+          bankAccounts={(bankAccounts ?? []).map((b) => ({ id: b.id, bank_name: b.bank_name, account_number: b.account_number }))}
+          expectedIncomes={expectedIncomes}
+        />
       )}
 
       {mode === "department" && selectedDepartment && (
