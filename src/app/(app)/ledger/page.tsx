@@ -57,9 +57,12 @@ export default async function LedgerPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold">דוחות מחלקות</h1>
-        <p className="text-sm text-muted">בחרו מחלקה כדי לראות את הדוח שלה, ולהוסיף לה הכנסה/הוצאה ידנית ישירות.</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold">דוחות מחלקות</h1>
+          <p className="text-sm text-muted">בחרו מחלקה כדי לראות את הדוח שלה. ניתן להוסיף הכנסה/הוצאה ידנית לכל מחלקה, לא רק לזו שפתוחה כרגע.</p>
+        </div>
+        <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} />
       </div>
 
       <form className="card p-4 flex flex-wrap items-end gap-3 no-print" method="get">
@@ -81,10 +84,7 @@ export default async function LedgerPage({
 
       {selectedDepartment && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <h2 className="text-lg font-bold">דוח — {selectedDepartment.name}</h2>
-            <NewManualEntryButton departments={[selectedDepartment]} bankAccounts={bankAccounts ?? []} />
-          </div>
+          <h2 className="text-lg font-bold">דוח — {selectedDepartment.name}</h2>
           <DepartmentReport departmentId={selectedDepartment.id} departmentName={selectedDepartment.name} />
         </div>
       )}

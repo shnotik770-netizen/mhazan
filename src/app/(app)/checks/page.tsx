@@ -1,9 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
-import {
-  ClassifyCheckRow,
-  DeptExpenseRequestForm,
-} from "@/components/checks-client";
+import { DeptExpenseRequestForm } from "@/components/checks-client";
 import { PasteExistingChecksForm } from "@/components/checks-paste-client";
 import { UnifiedCheckForm } from "@/components/unified-check-form";
 import { BulkExpenseRequestFormMulti } from "@/components/bulk-checks-client";
@@ -11,25 +8,21 @@ import { IssuanceQueueTable } from "@/components/issuance-queue-client";
 import { BankReconciliationPanel } from "@/components/bank-reconciliation-client";
 import { ChecksFilterBar } from "@/components/checks-filter-bar";
 import {
-  AllChecksTable,
   CollapsibleSection,
-  IssuedChecksTable,
   OverdueChecksTable,
   OverdueTransfersTable,
   PendingApprovalTable,
 } from "@/components/checks-sections-client";
 import { ScheduleConfirmationsList, type PendingConfirmation } from "@/components/schedule-confirmations-client";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { RecurringSchedulesButton, type ScheduleRow } from "@/components/recurring-schedules-manager-client";
 
 export default async function ChecksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ asOf?: string; pm?: string; st?: string; dept?: string; bank?: string }>;
+  searchParams: Promise<{ asOf?: string; dept?: string; bank?: string }>;
 }) {
-  const { asOf: asOfParam, pm: pmParam, st: stParam, dept: deptParam, bank: bankParam } = await searchParams;
+  const { asOf: asOfParam, dept: deptParam, bank: bankParam } = await searchParams;
   const asOf = asOfParam || new Date().toISOString().slice(0, 10);
-  const pmFilter = pmParam === "CHECK" || pmParam === "TRANSFER" ? pmParam : "ALL";
-  const stFilter = ["UNPAID", "CLEARED", "CANCELLED"].includes(stParam ?? "") ? stParam! : "ALL";
   const deptFilter = deptParam ?? "";
   const bankFilter = bankParam ?? "";
 
@@ -39,7 +32,6 @@ export default async function ChecksPage({
 
   let pendingApprovalQuery = supabase.from("v_checks_pending_approval").select("*").order("created_at");
   let needingIssuanceQuery = supabase.from("v_checks_needing_issuance").select("*").order("created_at");
-  let issuedQuery = supabase.from("v_checks_issued").select("*").order("due_date");
   let overdueQuery = supabase
     .from("checks")
     .select("*, bank_accounts(bank_name, account_number), departments(name)")
@@ -47,29 +39,17 @@ export default async function ChecksPage({
     .not("due_date", "is", null)
     .lte("due_date", asOf)
     .order("due_date");
-  let allChecksQuery = supabase
-    .from("checks")
-    .select("*, bank_accounts(bank_name, account_number), departments(name)")
-    .order("due_date", { ascending: false })
-    .limit(200);
 
-  if (pmFilter !== "ALL") allChecksQuery = allChecksQuery.eq("payment_method", pmFilter);
-  if (stFilter !== "ALL") allChecksQuery = allChecksQuery.eq("status", stFilter);
   if (bankFilter) {
     pendingApprovalQuery = pendingApprovalQuery.eq("bank_account_id", bankFilter);
     needingIssuanceQuery = needingIssuanceQuery.eq("bank_account_id", bankFilter);
-    issuedQuery = issuedQuery.eq("bank_account_id", bankFilter);
     overdueQuery = overdueQuery.eq("bank_account_id", bankFilter);
-    allChecksQuery = allChecksQuery.eq("bank_account_id", bankFilter);
   }
 
   const [
-    { data: pendingChecks },
     { data: pendingApproval },
     { data: needingIssuance },
-    { data: issuedChecks },
     { data: overdueByAsOf },
-    { data: checks },
     { data: departments },
     { data: categories },
     { data: bankAccounts },
@@ -77,13 +57,11 @@ export default async function ChecksPage({
     { data: suppliers },
     { data: checkAllocations },
     { data: pendingConfirmations },
+    { data: schedules },
   ] = await Promise.all([
-    supabase.from("v_pending_checks").select("*").order("due_date"),
     pendingApprovalQuery,
     needingIssuanceQuery,
-    issuedQuery,
     overdueQuery,
-    allChecksQuery,
     supabase.from("departments").select("*").order("name"),
     supabase.from("categories").select("*").order("name"),
     supabase.from("bank_accounts").select("*, departments!bank_accounts_department_id_fkey(name)").order("bank_name"),
@@ -91,8 +69,52 @@ export default async function ChecksPage({
     supabase.from("suppliers").select("name").order("name"),
     supabase.from("check_allocations").select("check_id, department_id, amount, departments(name)"),
     isAdmin ? supabase.rpc("get_pending_schedule_confirmations") : Promise.resolve({ data: [] as never[] }),
+    isAdmin
+      ? supabase
+          .from("recurring_schedules")
+          .select("*, departments(name), recurring_schedule_allocations(amount, departments(name))")
+          .order("name")
+      : Promise.resolve({ data: [] as never[] }),
   ]);
   const supplierNames = (suppliers ?? []).map((s) => s.name);
+
+  const scheduleRows: ScheduleRow[] = (schedules ?? []).map((s) => {
+    const row = s as unknown as {
+      id: string;
+      name: string;
+      direction: string;
+      frequency: string;
+      type: string;
+      day_of_month: number | null;
+      day_of_week: number | null;
+      one_time_date: string | null;
+      expected_amount: number;
+      is_active: boolean;
+      end_date: string | null;
+      early_by_days: number;
+      departments: { name: string } | null;
+      recurring_schedule_allocations: { amount: number; departments: { name: string } | null }[];
+    };
+    return {
+      id: row.id,
+      name: row.name,
+      direction: row.direction,
+      frequency: row.frequency,
+      type: row.type,
+      day_of_month: row.day_of_month,
+      day_of_week: row.day_of_week,
+      one_time_date: row.one_time_date,
+      expected_amount: Number(row.expected_amount),
+      is_active: row.is_active,
+      end_date: row.end_date,
+      earlyByDays: Number(row.early_by_days ?? 0),
+      departmentName: row.departments?.name ?? null,
+      allocations: row.recurring_schedule_allocations.map((a) => ({
+        amount: Number(a.amount),
+        departmentName: a.departments?.name ?? null,
+      })),
+    };
+  });
 
   const allocationsByCheck = new Map<
     string,
@@ -120,8 +142,6 @@ export default async function ChecksPage({
 
   const filteredPendingApproval = (pendingApproval ?? []).filter(matchesDeptFilter);
   const filteredNeedingIssuance = (needingIssuance ?? []).filter(matchesDeptFilter);
-  const filteredIssued = (issuedChecks ?? []).filter(matchesDeptFilter);
-  const filteredChecks = (checks ?? []).filter(matchesDeptFilter);
   const filteredOverdue = (overdueByAsOf ?? []).filter(matchesDeptFilter);
   const overdueTransfers = filteredOverdue.filter((c) => c.payment_method === "TRANSFER");
   const overdueChecks = filteredOverdue.filter((c) => c.payment_method !== "TRANSFER");
@@ -173,6 +193,12 @@ export default async function ChecksPage({
             <UnifiedCheckForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} categories={categories ?? []} />
             <PasteExistingChecksForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <BankReconciliationPanel bankAccounts={bankAccounts ?? []} />
+            <RecurringSchedulesButton
+              schedules={scheduleRows}
+              departments={departments ?? []}
+              bankAccounts={bankAccounts ?? []}
+              categories={categories ?? []}
+            />
           </div>
         )}
       </div>
@@ -181,8 +207,6 @@ export default async function ChecksPage({
         deptFilter={deptFilter}
         bankFilter={bankFilter}
         asOf={asOf}
-        pmFilter={pmFilter}
-        stFilter={stFilter}
         departments={departments ?? []}
         bankAccounts={bankAccounts ?? []}
       />
@@ -307,108 +331,6 @@ export default async function ChecksPage({
         </div>
       )}
 
-      {filteredIssued.length > 0 && isAdmin && (
-        <div className="card p-4">
-          <CollapsibleSection title={<h2 className="font-semibold">צ׳קים שהונפקו — עם מספר לתאריך</h2>}>
-            <IssuedChecksTable rows={filteredIssued} departments={departments ?? []} allocationsByCheck={allocationsByCheck} />
-          </CollapsibleSection>
-        </div>
-      )}
-
-      {(pendingChecks ?? []).length > 0 && isAdmin && (
-        <div className="card p-4 border-warning/40">
-          <CollapsibleSection
-            title={<h2 className="font-semibold">⚠ ישנם {pendingChecks!.length} צ׳קים הדורשים סיווג מחלקה</h2>}
-          >
-            <p className="text-sm text-muted mb-3">
-              עד לסיווג, צ׳קים אלו מחושבים במאזן הכללי תחת &quot;הוצאות כלליות / לא מסווגות&quot;.
-            </p>
-            <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>מס׳ צ׳ק</th>
-                  <th>מוטב</th>
-                  <th>סכום</th>
-                  <th>תאריך פירעון</th>
-                  <th>חשבון</th>
-                  <th>סיווג</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingChecks!.map((c) => (
-                  <tr key={c.id!}>
-                    <td>{c.check_number}</td>
-                    <td>{c.payee}</td>
-                    <td>{formatCurrency(Number(c.amount))}</td>
-                    <td>{c.due_date ? formatDate(c.due_date) : "—"}</td>
-                    <td>
-                      {c.bank_name} ({c.account_number})
-                    </td>
-                    <td>
-                      <ClassifyCheckRow checkId={c.id!} departments={departments ?? []} categories={categories ?? []} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
-          </CollapsibleSection>
-        </div>
-      )}
-
-      <div className="card p-4 overflow-x-auto">
-        <CollapsibleSection
-          title={
-            <div className="flex items-center justify-between flex-wrap gap-2 w-full">
-              <h2 className="font-semibold">כל הצ׳קים וההעברות</h2>
-              <form className="flex items-center gap-2" method="get">
-                <input type="hidden" name="asOf" value={asOf} />
-                <input type="hidden" name="dept" value={deptFilter} />
-                <input type="hidden" name="bank" value={bankFilter} />
-                <select name="pm" defaultValue={pmFilter} className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm">
-                  <option value="ALL">צ׳קים והעברות</option>
-                  <option value="CHECK">צ׳קים בלבד</option>
-                  <option value="TRANSFER">העברות בלבד</option>
-                </select>
-                <select name="st" defaultValue={stFilter} className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm">
-                  <option value="ALL">כל הסטטוסים</option>
-                  <option value="UNPAID">לא נפרע</option>
-                  <option value="CLEARED">נפרע</option>
-                  <option value="CANCELLED">בוטל</option>
-                </select>
-                <button type="submit" className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold">
-                  סנן
-                </button>
-              </form>
-            </div>
-          }
-        >
-          <AllChecksTable
-            rows={
-              filteredChecks as unknown as {
-                id: string;
-                check_number: string | null;
-                payee: string;
-                amount: number;
-                due_date: string | null;
-                status: string;
-                payment_method: string;
-                department_id: string | null;
-                notes: string | null;
-                skip_department_ledger: boolean;
-                spread_id: string | null;
-                internal_beneficiary: string | null;
-                bank_accounts: { bank_name: string; account_number: string } | null;
-                departments: { name: string } | null;
-              }[]
-            }
-            isAdmin={isAdmin}
-            departments={departments ?? []}
-            allocationsByCheck={allocationsByCheck}
-          />
-        </CollapsibleSection>
-      </div>
     </div>
   );
 }

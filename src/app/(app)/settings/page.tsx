@@ -3,24 +3,7 @@ import { requireFinanceAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, daysAgoLabel } from "@/lib/format";
 import { NewUserForm, UserAccessRow } from "@/components/user-access-client";
-import { NewRecurringScheduleForm } from "@/components/recurring-schedule-form-client";
 import { createBankAccount } from "./actions";
-
-const WEEKDAY_LABELS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
-
-function frequencyLabel(frequency: string) {
-  if (frequency === "MONTHLY") return "חודשי";
-  if (frequency === "WEEKLY") return "שבועי";
-  if (frequency === "YEARLY") return "שנתי";
-  return "חד פעמי";
-}
-
-function scheduleDateLabel(s: { frequency: string; day_of_month: number | null; day_of_week: number | null; one_time_date: string | null }) {
-  if (s.frequency === "WEEKLY" && s.day_of_week !== null) return `יום ${WEEKDAY_LABELS[s.day_of_week] ?? s.day_of_week}`;
-  if ((s.frequency === "MONTHLY" || s.frequency === "YEARLY") && s.day_of_month !== null) return `${s.day_of_month} לחודש`;
-  if (s.frequency === "ONCE" && s.one_time_date) return s.one_time_date;
-  return "—";
-}
 
 export default async function SettingsPage() {
   await requireFinanceAdmin();
@@ -30,17 +13,12 @@ export default async function SettingsPage() {
     { data: departments },
     { data: bankAccounts },
     { data: categories },
-    { data: schedules },
     { data: profiles },
     { data: accessGrants },
   ] = await Promise.all([
     supabase.from("departments").select("*").order("name"),
     supabase.from("bank_accounts").select("*, departments!bank_accounts_department_id_fkey(name)").order("bank_name"),
     supabase.from("categories").select("*, departments(name)").order("name"),
-    supabase
-      .from("recurring_schedules")
-      .select("*, departments(name), recurring_schedule_allocations(amount, departments(name))")
-      .order("name"),
     supabase.from("user_profiles").select("*").order("full_name"),
     supabase.from("user_department_access").select("user_id, department_id"),
   ]);
@@ -141,63 +119,19 @@ export default async function SettingsPage() {
         </Link>
       </section>
 
-      <section id="recurring-schedules" className="card p-4 space-y-3">
-        <h2 className="font-semibold">הוראות קבע (מנוע תחזית)</h2>
-        <p className="text-xs text-muted -mt-2">
-          אישור סכומים בפועל להוראות עם סכום משוער עבר לדף &quot;ניהול צ׳קים והעברות&quot;, יחד עם צ׳קים והעברות שלא נפרעו.
-        </p>
-        <div className="overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>שם</th>
-              <th>מחלקה</th>
-              <th>תדירות</th>
-              <th>תאריך</th>
-              <th>סכום צפוי</th>
-              <th>פעיל</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(schedules ?? []).map((s) => {
-              const row = s as unknown as {
-                departments: { name: string } | null;
-                recurring_schedule_allocations: { amount: number; departments: { name: string } | null }[];
-              };
-              return (
-              <tr key={s.id}>
-                <td>{s.name}</td>
-                <td>
-                  {row.departments?.name ?? (
-                    <span title={row.recurring_schedule_allocations.map((a) => `${a.departments?.name}: ${formatCurrency(Number(a.amount))}`).join(", ")}>
-                      מפוצל ({row.recurring_schedule_allocations.length} מחלקות)
-                    </span>
-                  )}
-                </td>
-                <td>{frequencyLabel(s.frequency)}</td>
-                <td>
-                  {s.type === "VARIABLE_DATE_ESTIMATED_AMOUNT" ? (
-                    <span className="badge bg-background text-muted">תאריך לא קבוע</span>
-                  ) : (
-                    scheduleDateLabel(s)
-                  )}
-                </td>
-                <td>
-                  {formatCurrency(Number(s.expected_amount))}
-                  {s.type !== "FIXED_DATE_FIXED_AMOUNT" && <span className="badge bg-background text-muted mr-1">משוער</span>}
-                </td>
-                <td>{s.is_active ? "כן" : "לא"}</td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <section className="card p-4 flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold">הוראות קבע (מנוע תחזית)</h2>
+          <p className="text-sm text-muted">
+            הוספה, עריכה, הפעלה/השבתה ואישור סכומים בפועל מתבצעים בדף &quot;ניהול צ׳קים והעברות&quot;.
+          </p>
         </div>
-        <NewRecurringScheduleForm
-          departments={departments ?? []}
-          bankAccounts={bankAccounts ?? []}
-          categories={categories ?? []}
-        />
+        <Link
+          href="/checks"
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold whitespace-nowrap"
+        >
+          ניהול צ׳קים והעברות
+        </Link>
       </section>
 
       <section className="card p-4 space-y-3">

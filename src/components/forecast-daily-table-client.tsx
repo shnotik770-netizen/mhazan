@@ -2,6 +2,7 @@
 
 import { Fragment } from "react";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { SortFilterTh, useSortFilter, type ColumnDef } from "@/components/sortable-table";
 
 type DayEntry = {
   checks: number;
@@ -13,6 +14,12 @@ type DayEntry = {
   runningBalance: number;
 };
 
+type Row = { date: string; entry: DayEntry };
+
+function monthLabel(month: string) {
+  return new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(new Date(`${month}-01T00:00:00`));
+}
+
 // Always shows every row passed in — the range is already scoped by the
 // page-level "עד חודש" filter, so there's no separate cutoff control here.
 export function ForecastDailyTable({
@@ -22,35 +29,70 @@ export function ForecastDailyTable({
   rows: [string, DayEntry][];
   mode: "bank" | "department";
 }) {
+  const allRows: Row[] = rows.map(([date, entry]) => ({ date, entry }));
+
+  const columns: ColumnDef<Row>[] = [
+    { key: "date", label: "תאריך", sortValue: (r) => r.date, filterValue: (r) => monthLabel(r.date.slice(0, 7)) },
+    { key: "checks", label: "צ׳קים", sortValue: (r) => r.entry.checks },
+    { key: "transfers", label: "העברות", sortValue: (r) => r.entry.transfers },
+    { key: "recurring", label: "הוראות קבע", sortValue: (r) => r.entry.recurring },
+    ...(mode === "bank" ? [{ key: "income", label: "צפי הכנסה", sortValue: (r: Row) => r.entry.income } as ColumnDef<Row>] : []),
+    { key: "overdue", label: "פיגורים (ישנים)", sortValue: (r) => r.entry.overdue },
+    { key: "total", label: "סה״כ שינוי יומי", sortValue: (r) => r.entry.total },
+    {
+      key: "runningBalance",
+      label: mode === "bank" ? "יתרה בסוף היום" : "יתרה מצטברת בסוף היום",
+      sortValue: (r) => r.entry.runningBalance,
+    },
+  ];
+
+  const { rows: processedRows, sort, toggleSort, filters, setColumnFilter, hasActiveFilters, clearAll } = useSortFilter(
+    allRows,
+    columns,
+  );
+  const colSpan = mode === "bank" ? 8 : 7;
+  // Month separators only make sense in natural chronological order —
+  // once the table is sorted by anything else, a flat list is what
+  // actually matches what the user asked to see.
+  const showMonthSeparators = sort === null;
+
   return (
     <div className="card p-4 overflow-x-auto">
-      <h2 className="font-semibold mb-2">סיכום יומי — כמה כסף אמור לרדת/להיכנס בכל יום</h2>
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <h2 className="font-semibold">סיכום יומי — כמה כסף אמור לרדת/להיכנס בכל יום</h2>
+        {hasActiveFilters && (
+          <button type="button" onClick={clearAll} className="text-xs text-primary underline">
+            נקה מיון וסינון
+          </button>
+        )}
+      </div>
       <table className="data-table">
         <thead>
           <tr>
-            <th>תאריך</th>
-            <th>צ׳קים</th>
-            <th>העברות</th>
-            <th>הוראות קבע</th>
-            {mode === "bank" && <th>צפי הכנסה</th>}
-            <th>פיגורים (ישנים)</th>
-            <th>סה״כ שינוי יומי</th>
-            <th>{mode === "bank" ? "יתרה בסוף היום" : "יתרה מצטברת בסוף היום"}</th>
+            {columns.map((col) => (
+              <SortFilterTh
+                key={col.key}
+                col={col}
+                allRows={allRows}
+                sort={sort}
+                toggleSort={toggleSort}
+                activeFilter={filters[col.key]}
+                setColumnFilter={setColumnFilter}
+              />
+            ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map(([date, d], i) => {
+          {processedRows.map(({ date, entry: d }, i) => {
             const month = date.slice(0, 7);
-            const prevMonth = i > 0 ? rows[i - 1][0].slice(0, 7) : null;
-            const isNewMonth = prevMonth !== null && month !== prevMonth;
+            const prevMonth = i > 0 ? processedRows[i - 1].date.slice(0, 7) : null;
+            const isNewMonth = showMonthSeparators && prevMonth !== null && month !== prevMonth;
             return (
               <Fragment key={date}>
                 {isNewMonth && (
                   <tr key={`sep-${month}`}>
-                    <td colSpan={mode === "bank" ? 8 : 7} className="border-t-2 border-border py-1 text-xs font-semibold text-muted">
-                      {new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(
-                        new Date(`${month}-01T00:00:00`),
-                      )}
+                    <td colSpan={colSpan} className="border-t-2 border-border py-1 text-xs font-semibold text-muted">
+                      {monthLabel(month)}
                     </td>
                   </tr>
                 )}
@@ -71,9 +113,9 @@ export function ForecastDailyTable({
               </Fragment>
             );
           })}
-          {rows.length === 0 && (
+          {processedRows.length === 0 && (
             <tr>
-              <td colSpan={mode === "bank" ? 8 : 7} className="text-center text-muted py-6">
+              <td colSpan={colSpan} className="text-center text-muted py-6">
                 אין תנועות צפויות בטווח שנבחר
               </td>
             </tr>

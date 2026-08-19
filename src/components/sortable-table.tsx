@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 // Shared "Excel-style" column header behavior: click to sort (asc → desc →
 // none), and an optional dropdown with a checkbox list of the column's
@@ -89,17 +89,32 @@ export function SortFilterTh<T>({
   setColumnFilter: (key: string, values: Set<string> | null) => void;
   }) {
   const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const options = useMemo(() => {
     if (!col.filterValue) return [];
     return Array.from(new Set(allRows.map((r) => col.filterValue!(r)))).sort((a, b) => a.localeCompare(b, "he"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allRows]);
 
+  // A table wrapped in overflow-x-auto (every data table on this site is)
+  // implicitly clips overflow-y too — a dropdown positioned absolute
+  // relative to its <th> gets cut off or garbled on narrow screens where
+  // the table scrolls. Anchoring it as position:fixed from the trigger
+  // button's actual screen coordinates escapes that clipping entirely.
+  useEffect(() => {
+    if (!open || !buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const panelWidth = 208; // matches w-52 below
+    const left = Math.min(Math.max(8, rect.left), window.innerWidth - panelWidth - 8);
+    setCoords({ top: rect.bottom + 4, left });
+  }, [open]);
+
   const isSorted = sort?.key === col.key;
   const isFiltered = Boolean(activeFilter && activeFilter.size > 0);
 
   return (
-    <th className="relative select-none">
+    <th className="select-none">
       <div className="flex items-center gap-1">
         {col.sortValue ? (
           <button
@@ -118,6 +133,7 @@ export function SortFilterTh<T>({
         )}
         {col.filterValue && (
           <button
+            ref={buttonRef}
             type="button"
             onClick={() => setOpen((o) => !o)}
             className={`text-xs ${isFiltered ? "text-primary" : "text-muted/50"} hover:text-foreground`}
@@ -127,13 +143,14 @@ export function SortFilterTh<T>({
           </button>
         )}
       </div>
-      {open && col.filterValue && (
+      {open && col.filterValue && coords && (
         <>
           {/* Invisible full-screen catcher so clicking anywhere outside the
               dropdown closes it, without needing a global click listener. */}
-          <div className="fixed inset-0 z-0" onClick={() => setOpen(false)} />
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
-            className="absolute z-10 top-full mt-1 w-48 rounded-lg border border-border bg-surface p-2 shadow-lg text-right font-normal"
+            className="fixed z-50 w-52 rounded-lg border border-border bg-surface p-2 shadow-lg text-right font-normal"
+            style={{ top: coords.top, left: coords.left }}
             onClick={(e) => e.stopPropagation()}
           >
           <div className="flex items-center justify-between mb-1 text-xs">

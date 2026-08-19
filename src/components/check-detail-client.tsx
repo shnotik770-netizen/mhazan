@@ -59,6 +59,25 @@ function CheckDetailModal({ checkId, onClose }: { checkId: string; onClose: () =
   const isSpread = (detail?.spreadRows.length ?? 0) > 1;
   const total = detail?.spreadRows.reduce((sum, r) => sum + r.amount, 0) ?? 0;
 
+  // For a spread, what matters is how much each department gets across the
+  // whole spread — not the (usually identical) per-check split repeated on
+  // every row — so it's aggregated once here instead of read off each row.
+  const totalsByDepartment = new Map<string, number>();
+  if (isSpread) {
+    for (const r of detail?.spreadRows ?? []) {
+      if (r.departmentName) {
+        totalsByDepartment.set(r.departmentName, (totalsByDepartment.get(r.departmentName) ?? 0) + r.amount);
+      } else if (r.allocations.length > 0) {
+        for (const a of r.allocations) {
+          const name = a.departmentName ?? "?";
+          totalsByDepartment.set(name, (totalsByDepartment.get(name) ?? 0) + a.amount);
+        }
+      } else {
+        totalsByDepartment.set("בהמתנה לסיווג", (totalsByDepartment.get("בהמתנה לסיווג") ?? 0) + r.amount);
+      }
+    }
+  }
+
   return (
     <Modal onClose={onClose}>
       <div className="card p-4 space-y-3">
@@ -93,9 +112,31 @@ function CheckDetailModal({ checkId, onClose }: { checkId: string; onClose: () =
                 )}
               </div>
               {isSpread && (
-                <p className="text-xs text-muted">
-                  פריסה של {detail.spreadRows.length} תשלומים לספק זה — סה״כ {formatCurrency(total)}
-                </p>
+                <>
+                  <p className="text-xs text-muted">
+                    פריסה של {detail.spreadRows.length} תשלומים לספק זה — סה״כ {formatCurrency(total)}
+                  </p>
+                  <div>
+                    <p className="text-sm font-semibold mb-1">סיכום לפי מחלקה — כל הפריסה</p>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>מחלקה</th>
+                          <th>סה״כ בפריסה</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...totalsByDepartment.entries()].map(([name, sum]) => (
+                          <tr key={name}>
+                            <td className={name === "בהמתנה לסיווג" ? "text-warning" : undefined}>{name}</td>
+                            <td className="font-semibold">{formatCurrency(sum)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-sm font-semibold mb-1">פירוט לפי צ׳ק</p>
+                </>
               )}
               <table className="data-table">
                 <thead>
@@ -104,7 +145,7 @@ function CheckDetailModal({ checkId, onClose }: { checkId: string; onClose: () =
                     <th>סכום</th>
                     <th>תאריך</th>
                     <th>סטטוס</th>
-                    <th>מחלקה</th>
+                    {!isSpread && <th>מחלקה</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -114,18 +155,20 @@ function CheckDetailModal({ checkId, onClose }: { checkId: string; onClose: () =
                       <td>{formatCurrency(r.amount)}</td>
                       <td>{r.due_date ? formatDate(r.due_date) : "—"}</td>
                       <td>{statusLabel(r.status)}</td>
-                      <td>
-                        {r.departmentName ? (
-                          r.departmentName
-                        ) : r.allocations.length > 0 ? (
-                          <span className="text-xs">
-                            מפוצל:{" "}
-                            {r.allocations.map((a) => `${a.departmentName ?? "?"} (${formatCurrency(a.amount)})`).join(", ")}
-                          </span>
-                        ) : (
-                          <span className="text-warning">בהמתנה</span>
-                        )}
-                      </td>
+                      {!isSpread && (
+                        <td>
+                          {r.departmentName ? (
+                            r.departmentName
+                          ) : r.allocations.length > 0 ? (
+                            <span className="text-xs">
+                              מפוצל:{" "}
+                              {r.allocations.map((a) => `${a.departmentName ?? "?"} (${formatCurrency(a.amount)})`).join(", ")}
+                            </span>
+                          ) : (
+                            <span className="text-warning">בהמתנה</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

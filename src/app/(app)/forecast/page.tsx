@@ -74,6 +74,44 @@ export default async function ForecastPage({
       : null;
   const expectedIncomes = expectedIncomesResult?.data ?? [];
 
+  // Checks/transfers and manual entries not yet approved by an admin don't
+  // belong in the forecast math itself (nothing is committed yet — no date,
+  // sometimes not even a confirmed amount), but a department still wants to
+  // see what's sitting in that queue, since it will hit their balance the
+  // moment it's approved.
+  const pendingApprovalTotals =
+    mode === "department" && selectedDepartmentId
+      ? await (async () => {
+          const [{ data: directChecks }, { data: splitChecks }, { data: pendingManual }] = await Promise.all([
+            supabase
+              .from("checks")
+              .select("amount")
+              .eq("department_id", selectedDepartmentId)
+              .is("approved_at", null)
+              .neq("status", "CANCELLED"),
+            supabase
+              .from("check_allocations")
+              .select("amount, checks!inner(approved_at, status)")
+              .eq("department_id", selectedDepartmentId)
+              .is("checks.approved_at", null)
+              .neq("checks.status", "CANCELLED"),
+            supabase
+              .from("manual_department_entries")
+              .select("amount, direction")
+              .eq("department_id", selectedDepartmentId)
+              .eq("status", "PENDING"),
+          ]);
+          const pendingExpense =
+            (directChecks ?? []).reduce((sum, c) => sum + Number(c.amount), 0) +
+            (splitChecks ?? []).reduce((sum, a) => sum + Number(a.amount), 0) +
+            (pendingManual ?? []).filter((m) => m.direction === "EXPENSE").reduce((sum, m) => sum + Number(m.amount), 0);
+          const pendingIncome = (pendingManual ?? [])
+            .filter((m) => m.direction === "INCOME")
+            .reduce((sum, m) => sum + Number(m.amount), 0);
+          return { pendingExpense, pendingIncome };
+        })()
+      : null;
+
   const { data: forecast, error } =
     mode === "bank"
       ? selectedAccountId
@@ -238,6 +276,27 @@ export default async function ForecastPage({
           <p className="text-2xl font-bold">{selectedDepartment.name}</p>
         </div>
       )}
+
+      {mode === "department" &&
+        pendingApprovalTotals &&
+        (pendingApprovalTotals.pendingExpense !== 0 || pendingApprovalTotals.pendingIncome !== 0) && (
+          <div className="card p-4 bg-warning-bg border-warning/40">
+            <p className="text-sm font-medium text-warning mb-1">⚠ ממתין לאישור מנהל (לא נכלל בתחזית למטה)</p>
+            <div className="flex flex-wrap gap-4 text-sm">
+              {pendingApprovalTotals.pendingExpense !== 0 && (
+                <p>
+                  הוצאות ממתינות: <span className="font-semibold text-danger">{formatCurrency(pendingApprovalTotals.pendingExpense)}</span>
+                </p>
+              )}
+              {pendingApprovalTotals.pendingIncome !== 0 && (
+                <p>
+                  הכנסות ממתינות: <span className="font-semibold text-success">{formatCurrency(pendingApprovalTotals.pendingIncome)}</span>
+                </p>
+              )}
+            </div>
+            <p className="text-xs text-muted mt-1">ברגע שיאושרו על ידי מנהל כספים, הן ייכנסו לחישוב.</p>
+          </div>
+        )}
 
       {error && <div className="card p-4 bg-danger-bg text-danger text-sm">{error.message}</div>}
 

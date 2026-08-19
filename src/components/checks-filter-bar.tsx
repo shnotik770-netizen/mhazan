@@ -11,16 +11,12 @@ export function ChecksFilterBar({
   deptFilter,
   bankFilter,
   asOf,
-  pmFilter,
-  stFilter,
   departments,
   bankAccounts,
 }: {
   deptFilter: string;
   bankFilter: string;
   asOf: string;
-  pmFilter: string;
-  stFilter: string;
   departments: Department[];
   bankAccounts: BankAccount[];
 }) {
@@ -30,8 +26,6 @@ export function ChecksFilterBar({
   return (
     <form className="flex items-center gap-2 flex-wrap" method="get">
       <input type="hidden" name="asOf" value={asOf} />
-      <input type="hidden" name="pm" value={pmFilter} />
-      <input type="hidden" name="st" value={stFilter} />
       <input type="hidden" name="dept" value={dept} />
       <SearchableSelect
         value={dept}

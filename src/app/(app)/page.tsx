@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { formatCurrency, daysAgoLabel } from "@/lib/format";
-import { ManualEntryApprovalRow, NewManualEntryForm } from "@/components/manual-entries-client";
+import { ManualEntryApprovalRow, NewManualEntryButton } from "@/components/manual-entries-client";
 import { QuickActionsPanel } from "@/components/quick-actions-fab";
 
 export default async function DashboardPage() {
@@ -61,7 +61,7 @@ export default async function DashboardPage() {
           {user.profile.role === "FINANCE_ADMIN" && (
             <>
               <Link
-                href="/settings#recurring-schedules"
+                href="/checks"
                 className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
               >
                 + הוראת קבע חדשה
@@ -83,7 +83,7 @@ export default async function DashboardPage() {
         <div className="space-y-2">
           {pendingCountFor("CHECK") + pendingCountFor("BANK_TRANSACTION") > 0 && (
             <Link
-              href="/checks"
+              href="/expenses"
               className="block card px-4 py-3 bg-warning-bg border-warning/30 text-sm font-medium"
             >
               ⚠ ישנם {pendingCountFor("CHECK") + pendingCountFor("BANK_TRANSACTION")} צ׳קים / תנועות בנק
@@ -155,7 +155,11 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {myDepartments.length > 0 && <NewManualEntryForm departments={myDepartments} bankAccounts={bankAccounts ?? []} />}
+      {myDepartments.length > 0 && (
+        <div>
+          <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card stat-card p-4 ps-5">

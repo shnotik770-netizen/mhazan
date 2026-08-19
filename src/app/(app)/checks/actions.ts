@@ -411,17 +411,6 @@ export async function lookupDepartmentsByPayee(payees: string[]): Promise<Record
   return map;
 }
 
-export async function classifyCheck(checkId: string, departmentId: string, categoryId: string | null) {
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("checks")
-    .update({ department_id: departmentId, category_id: categoryId })
-    .eq("id", checkId);
-
-  revalidateCheckPaths();
-  return { error: error?.message };
-}
-
 // Bulk-assigns one department to several checks/transfers at once — e.g.
 // clearing a backlog of unclassified expenses from the /expenses screen.
 // Clears any existing per-department split first since a bulk single-

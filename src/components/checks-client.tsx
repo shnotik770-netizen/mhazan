@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  classifyCheck,
   convertPendingCheckToSpread,
   createDeptExpenseRequest,
   deleteCheck,
@@ -19,62 +18,8 @@ import { formatCurrency, toLocalISODate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
-type Category = Tables<"categories">;
 type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | null };
 
-export function ClassifyCheckRow({
-  checkId,
-  departments,
-  categories,
-}: {
-  checkId: string;
-  departments: Department[];
-  categories: Category[];
-}) {
-  const router = useRouter();
-  const [departmentId, setDepartmentId] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [isPending, startTransition] = useTransition();
-
-  return (
-    <div className="flex items-center gap-2">
-      <SearchableSelect
-        value={departmentId}
-        onChange={(id) => {
-          setDepartmentId(id);
-          setCategoryId("");
-        }}
-        options={departments.map((d) => ({ id: d.id, label: d.name }))}
-        placeholder="בחר מחלקה..."
-        className="rounded border border-border bg-transparent text-sm px-2 py-1"
-      />
-      <select
-        className="rounded border border-border bg-transparent text-sm px-2 py-1"
-        value={categoryId}
-        onChange={(e) => setCategoryId(e.target.value)}
-      >
-        <option value="">קטגוריה (אופציונלי)</option>
-        {categories.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
-      <button
-        disabled={!departmentId || isPending}
-        onClick={() =>
-          startTransition(async () => {
-            await classifyCheck(checkId, departmentId, categoryId || null);
-            router.refresh();
-          })
-        }
-        className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
-      >
-        סווג
-      </button>
-    </div>
-  );
-}
 
 export function CheckStatusControls({
   checkId,
