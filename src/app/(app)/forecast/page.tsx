@@ -6,7 +6,11 @@ import { BankBalancePanel, ExpectedIncomeManager } from "@/components/forecast-c
 import { ForecastDailyTable } from "@/components/forecast-daily-table-client";
 import { ForecastDayLookup } from "@/components/forecast-day-lookup-client";
 import { ForecastFilterBar } from "@/components/forecast-filter-bar-client";
-import { ForecastSimulation } from "@/components/forecast-simulation-client";
+import {
+  ForecastSimulationBanner,
+  ForecastSimulationPanel,
+  ForecastSimulationProvider,
+} from "@/components/forecast-simulation-client";
 
 // Days from today through the last day of the given "YYYY-MM" month —
 // turns the user-facing "עד חודש" choice into the p_horizon_days the
@@ -228,29 +232,6 @@ export default async function ForecastPage({
         uptoMonthOptions={uptoMonthOptions.map((m) => ({ value: m, label: monthLabel(m) }))}
       />
 
-      {mode === "bank" && selectedAccount && isAdmin && (
-        <BankBalancePanel
-          bankAccountId={selectedAccount.id}
-          currentBalance={Number(selectedAccount.current_balance)}
-          balanceAsOf={selectedAccount.balance_as_of}
-        />
-      )}
-      {mode === "bank" && selectedAccount && !isAdmin && (
-        <div className="card p-4">
-          <p className="text-sm text-muted mb-1">יתרת פתיחה נוכחית</p>
-          <p className="text-2xl font-bold">{formatCurrency(Number(selectedAccount.current_balance))}</p>
-          <p className="text-xs text-muted">{daysAgoLabel(selectedAccount.balance_as_of)}</p>
-        </div>
-      )}
-
-      {mode === "bank" && selectedAccount && isAdmin && (
-        <ExpectedIncomeManager
-          bankAccountId={selectedAccount.id}
-          bankAccounts={(bankAccounts ?? []).map((b) => ({ id: b.id, bank_name: b.bank_name, account_number: b.account_number }))}
-          expectedIncomes={expectedIncomes}
-        />
-      )}
-
       {mode === "department" && selectedDepartment && (
         <div className="card p-4">
           <p className="text-sm text-muted mb-1">מחלקה</p>
@@ -260,39 +241,11 @@ export default async function ForecastPage({
 
       {error && <div className="card p-4 bg-danger-bg text-danger text-sm">{error.message}</div>}
 
-      {mode === "bank" && selectedAccount && (
-        <ForecastDayLookup rows={dailyBreakdown} startingBalance={Number(selectedAccount.current_balance)} />
-      )}
-
-      {mode === "bank" && monthlyIncomeRows.length > 0 && (
-        <div className="card p-4 overflow-x-auto">
-          <h2 className="font-semibold mb-2">הכנסות בפועל לפי חודש (12 חודשים אחרונים)</h2>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>חודש</th>
-                <th>סה״כ הכנסות</th>
-              </tr>
-            </thead>
-            <tbody>
-              {monthlyIncomeRows.map(([month, total]) => (
-                <tr key={month}>
-                  <td>{month}</td>
-                  <td className="font-semibold text-success">{formatCurrency(total)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <ForecastDailyTable rows={dailyBreakdown} mode={mode} />
-
       {mode === "bank" && selectedAccount ? (
-        <ForecastSimulation
+        <ForecastSimulationProvider
           key={selectedAccount.id}
           bankAccountId={selectedAccount.id}
-          monthlyCards={monthlyCards}
+          startingBalance={Number(selectedAccount.current_balance)}
           items={(forecast ?? []).map((row, i) => ({
             id: `${row.category}|${row.source}|${row.forecast_date}|${i}`,
             date: row.forecast_date!,
@@ -300,42 +253,95 @@ export default async function ForecastPage({
             change: Number(row.expected_change),
             runningBalance: Number(row.running_balance),
           }))}
-        />
-      ) : (
-        <details className="card p-4">
-          <summary className="cursor-pointer font-semibold">פירוט מלא לפי פריט</summary>
-          <div className="overflow-x-auto mt-3">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>תאריך</th>
-                  <th>מקור</th>
-                  <th>שינוי צפוי</th>
-                  <th>שינוי נטו מצטבר</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(forecast ?? []).map((row, i) => (
-                  <tr key={i}>
-                    <td>{formatDate(row.forecast_date!)}</td>
-                    <td>{row.source}</td>
-                    <td className={Number(row.expected_change) < 0 ? "text-danger" : "text-success"}>
-                      {formatCurrency(Number(row.expected_change))}
-                    </td>
-                    <td className="font-semibold">{formatCurrency(Number(row.running_balance))}</td>
-                  </tr>
-                ))}
-                {(forecast ?? []).length === 0 && (
+        >
+          {isAdmin ? (
+            <BankBalancePanel
+              bankAccountId={selectedAccount.id}
+              currentBalance={Number(selectedAccount.current_balance)}
+              balanceAsOf={selectedAccount.balance_as_of}
+            />
+          ) : (
+            <div className="card p-4">
+              <p className="text-sm text-muted mb-1">יתרת פתיחה נוכחית</p>
+              <p className="text-2xl font-bold">{formatCurrency(Number(selectedAccount.current_balance))}</p>
+              <p className="text-xs text-muted">{daysAgoLabel(selectedAccount.balance_as_of)}</p>
+            </div>
+          )}
+
+          {isAdmin && (
+            <ExpectedIncomeManager
+              bankAccountId={selectedAccount.id}
+              bankAccounts={(bankAccounts ?? []).map((b) => ({ id: b.id, bank_name: b.bank_name, account_number: b.account_number }))}
+              expectedIncomes={expectedIncomes}
+            />
+          )}
+
+          <ForecastSimulationBanner />
+          <ForecastDayLookup />
+
+          {monthlyIncomeRows.length > 0 && (
+            <div className="card p-4 overflow-x-auto">
+              <h2 className="font-semibold mb-2">הכנסות בפועל לפי חודש (12 חודשים אחרונים)</h2>
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <td colSpan={4} className="text-center text-muted py-6">
-                      אין תנועות צפויות בטווח שנבחר
-                    </td>
+                    <th>חודש</th>
+                    <th>סה״כ הכנסות</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </details>
+                </thead>
+                <tbody>
+                  {monthlyIncomeRows.map(([month, total]) => (
+                    <tr key={month}>
+                      <td>{month}</td>
+                      <td className="font-semibold text-success">{formatCurrency(total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <ForecastDailyTable rows={dailyBreakdown} mode={mode} />
+          <ForecastSimulationPanel monthlyCards={monthlyCards} />
+        </ForecastSimulationProvider>
+      ) : (
+        <>
+          <ForecastDailyTable rows={dailyBreakdown} mode={mode} />
+          <details className="card p-4">
+            <summary className="cursor-pointer font-semibold">פירוט מלא לפי פריט</summary>
+            <div className="overflow-x-auto mt-3">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>תאריך</th>
+                    <th>מקור</th>
+                    <th>שינוי צפוי</th>
+                    <th>שינוי נטו מצטבר</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(forecast ?? []).map((row, i) => (
+                    <tr key={i}>
+                      <td>{formatDate(row.forecast_date!)}</td>
+                      <td>{row.source}</td>
+                      <td className={Number(row.expected_change) < 0 ? "text-danger" : "text-success"}>
+                        {formatCurrency(Number(row.expected_change))}
+                      </td>
+                      <td className="font-semibold">{formatCurrency(Number(row.running_balance))}</td>
+                    </tr>
+                  ))}
+                  {(forecast ?? []).length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="text-center text-muted py-6">
+                        אין תנועות צפויות בטווח שנבחר
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 export type MonthlyCard = {
@@ -20,8 +20,28 @@ export type ForecastItemRow = {
   runningBalance: number;
 };
 
-function monthCardLabel(month: string) {
-  return new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(new Date(`${month}-01T00:00:00`));
+type SimulationState = {
+  items: ForecastItemRow[];
+  startingBalance: number;
+  held: Set<string>;
+  heldAdjustment: number[]; // parallel to items — cumulative held effect up to and including that row
+  hasSimulation: boolean;
+  toggle: (id: string) => void;
+  saved: boolean;
+  saveSimulation: () => void;
+  clearSimulation: () => void;
+};
+
+const SimulationContext = createContext<SimulationState | null>(null);
+
+// Every consumer (the day-lookup widget, the monthly cards, the item table)
+// shares one held-rows state through this context instead of each keeping
+// its own — otherwise marking a row "not going out" at the bottom of the
+// page wouldn't be reflected in the balance-lookup widget near the top.
+export function useSimulation(): SimulationState {
+  const ctx = useContext(SimulationContext);
+  if (!ctx) throw new Error("useSimulation must be used within ForecastSimulationProvider");
+  return ctx;
 }
 
 function storageKey(bankAccountId: string) {
@@ -34,19 +54,21 @@ function storageKey(bankAccountId: string) {
 // forecast rows, never touching any stored data. Held rows can optionally be
 // saved to localStorage so the simulation survives a reload, but it's
 // explicitly local/per-browser and never treated as real forecast data.
-export function ForecastSimulation({
+export function ForecastSimulationProvider({
   bankAccountId,
-  monthlyCards,
+  startingBalance,
   items,
+  children,
 }: {
   bankAccountId: string;
-  monthlyCards: MonthlyCard[];
+  startingBalance: number;
   items: ForecastItemRow[];
+  children: React.ReactNode;
 }) {
   // Read once from localStorage as the initial value (rather than in an
   // effect) so there's no cascading render — the page passes
-  // key={bankAccountId} on this component, so switching accounts remounts
-  // it and re-runs this initializer instead of leaving stale state behind.
+  // key={bankAccountId} on this provider, so switching accounts remounts it
+  // and re-runs this initializer instead of leaving stale state behind.
   const [held, setHeld] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
     try {
@@ -80,9 +102,9 @@ export function ForecastSimulation({
   }
 
   // Cumulative held adjustment per row, in the same order the running
-  // balance was originally computed — lets each row's adjusted balance be
-  // derived from the original without redoing the categorization the SQL
-  // function already did.
+  // balance was originally computed — lets each row's (or date's) adjusted
+  // balance be derived from the original without redoing the categorization
+  // the SQL function already did.
   const heldAdjustment = useMemo(
     () =>
       items.reduce<{ list: number[]; running: number }>(
@@ -94,6 +116,53 @@ export function ForecastSimulation({
       ).list,
     [items, held],
   );
+
+  const value: SimulationState = {
+    items,
+    startingBalance,
+    held,
+    heldAdjustment,
+    hasSimulation: held.size > 0,
+    toggle,
+    saved,
+    saveSimulation,
+    clearSimulation,
+  };
+
+  return <SimulationContext.Provider value={value}>{children}</SimulationContext.Provider>;
+}
+
+function monthCardLabel(month: string) {
+  return new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(new Date(`${month}-01T00:00:00`));
+}
+
+export function ForecastSimulationBanner() {
+  const { hasSimulation, held, saved, saveSimulation, clearSimulation } = useSimulation();
+  if (!hasSimulation) return null;
+  return (
+    <div className="card p-3 bg-warning-bg border-warning/40 flex items-center justify-between flex-wrap gap-2">
+      <p className="text-sm font-medium text-warning">
+        🧪 סימולציה פעילה — {held.size} פריטים מסומנים כ״לא יוצא״. זו הגדרה זמנית לבדיקה בלבד, לא משנה שום נתון אמיתי
+        במערכת.
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={saveSimulation}
+          disabled={saved}
+          className="rounded-lg border border-warning/50 px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+        >
+          {saved ? "נשמר בדפדפן זה" : "שמור סימולציה"}
+        </button>
+        <button onClick={clearSimulation} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold">
+          נקה סימולציה
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function ForecastSimulationPanel({ monthlyCards }: { monthlyCards: MonthlyCard[] }) {
+  const { items, held, heldAdjustment, hasSimulation, toggle } = useSimulation();
 
   const heldByMonth = useMemo(() => {
     const map = new Map<string, number>();
@@ -111,31 +180,8 @@ export function ForecastSimulation({
     return map;
   }, [items]);
 
-  const hasSimulation = held.size > 0;
-
   return (
     <div className="space-y-4">
-      {hasSimulation && (
-        <div className="card p-3 bg-warning-bg border-warning/40 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-sm font-medium text-warning">
-            🧪 סימולציה פעילה — {held.size} פריטים מסומנים כ״לא יוצא״. זו הגדרה זמנית לבדיקה בלבד, לא משנה שום נתון
-            אמיתי במערכת.
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={saveSimulation}
-              disabled={saved}
-              className="rounded-lg border border-warning/50 px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
-            >
-              {saved ? "נשמר בדפדפן זה" : "שמור סימולציה"}
-            </button>
-            <button onClick={clearSimulation} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold">
-              נקה סימולציה
-            </button>
-          </div>
-        </div>
-      )}
-
       {monthlyCards.length > 0 && (
         <div>
           <h2 className="font-semibold mb-2">מצב חזוי לפי חודשים</h2>
@@ -188,12 +234,12 @@ export function ForecastSimulation({
           <table className="data-table">
             <thead>
               <tr>
-                <th>לא יוצא (סימולציה)</th>
                 <th>תאריך</th>
                 <th>מקור</th>
                 <th>שינוי צפוי</th>
                 <th>יתרה חזויה</th>
                 {hasSimulation && <th>יתרה בסימולציה</th>}
+                <th>לא יוצא (סימולציה)</th>
               </tr>
             </thead>
             <tbody>
@@ -201,9 +247,6 @@ export function ForecastSimulation({
                 const isHeld = held.has(item.id);
                 return (
                   <tr key={item.id} className={isHeld ? "opacity-50" : undefined}>
-                    <td>
-                      <input type="checkbox" checked={isHeld} onChange={() => toggle(item.id)} />
-                    </td>
                     <td className={isHeld ? "line-through" : undefined}>{formatDate(item.date)}</td>
                     <td className={isHeld ? "line-through" : undefined}>{item.source}</td>
                     <td className={item.change < 0 ? "text-danger" : "text-success"}>{formatCurrency(item.change)}</td>
@@ -211,6 +254,9 @@ export function ForecastSimulation({
                     {hasSimulation && (
                       <td className="font-semibold text-primary">{formatCurrency(item.runningBalance - heldAdjustment[i])}</td>
                     )}
+                    <td>
+                      <input type="checkbox" checked={isHeld} onChange={() => toggle(item.id)} />
+                    </td>
                   </tr>
                 );
               })}

@@ -321,8 +321,9 @@ function ExpectedIncomeRow({ income, bankAccounts }: { income: ExpectedIncome; b
   const isPast = dueDateIso(income) <= todayIso();
 
   function setStatus(status: "PENDING" | "CONFIRMED" | "NOT_RECEIVED") {
+    const updateBalance = status === "CONFIRMED" && confirm("ההכנסה סומנה כהתקבלה. האם לעדכן בהתאם את יתרת חשבון הבנק?");
     startTransition(async () => {
-      await updateExpectedIncomeStatus(income.id, status);
+      await updateExpectedIncomeStatus(income.id, status, updateBalance);
       router.refresh();
     });
   }
