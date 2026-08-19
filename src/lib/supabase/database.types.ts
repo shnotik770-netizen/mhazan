@@ -387,7 +387,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
-          early_by_days: number
           expected_date: string
           id: string
           status: string
@@ -398,7 +397,6 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
-          early_by_days?: number
           expected_date: string
           id?: string
           status?: string
@@ -409,7 +407,6 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
-          early_by_days?: number
           expected_date?: string
           id?: string
           status?: string

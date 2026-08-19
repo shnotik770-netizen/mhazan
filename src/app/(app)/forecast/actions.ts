@@ -32,21 +32,18 @@ export async function createExpectedIncome(input: {
   expectedDate: string;
   description: string | null;
   repeatMonths?: number;
-  earlyByDays?: number;
 }): Promise<{ error?: string }> {
   const admin = await requireFinanceAdmin();
   if (!input.bankAccountId) return { error: "יש לבחור חשבון בנק" };
   if (!input.expectedDate) return { error: "יש להזין תאריך" };
   const supabase = await createClient();
   const months = Math.max(1, Math.floor(input.repeatMonths ?? 1));
-  const earlyByDays = Math.max(0, Math.floor(input.earlyByDays ?? 0));
   const [y, m, d] = input.expectedDate.split("-").map(Number);
   const rows = Array.from({ length: months }, (_, i) => ({
     bank_account_id: input.bankAccountId,
     amount: input.amount,
     expected_date: toLocalISODate(new Date(y, m - 1 + i, d)),
     description: input.description,
-    early_by_days: earlyByDays,
     created_by: admin.id,
   }));
   const { error } = await supabase.from("expected_incomes").insert(rows);
@@ -62,7 +59,6 @@ export async function updateExpectedIncome(
     amount: number;
     expectedDate: string;
     description: string | null;
-    earlyByDays: number;
   },
 ): Promise<{ error?: string }> {
   await requireFinanceAdmin();
@@ -76,7 +72,6 @@ export async function updateExpectedIncome(
       amount: input.amount,
       expected_date: input.expectedDate,
       description: input.description,
-      early_by_days: Math.max(0, Math.floor(input.earlyByDays)),
     })
     .eq("id", id);
   if (error) return { error: error.message };

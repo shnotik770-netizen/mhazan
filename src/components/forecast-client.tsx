@@ -17,13 +17,13 @@ import type { Tables } from "@/lib/supabase/database.types";
 type ExpectedIncome = Tables<"expected_incomes">;
 type BankAccountOption = { id: string; bank_name: string; account_number: string };
 
-// When early_by_days is set, the money is known to typically land that many
-// days before expected_date — so "needs confirmation" should open that much
-// earlier too, instead of waiting for the nominal date itself to pass.
-function dueDateIso(income: Pick<ExpectedIncome, "expected_date" | "early_by_days">): string {
-  if (!income.early_by_days) return income.expected_date;
-  const d = new Date(`${income.expected_date}T00:00:00`);
-  d.setDate(d.getDate() - income.early_by_days);
+// Every expected income becomes confirmable this many days before its
+// nominal date, uniformly — not something set per entry.
+const CONFIRMATION_WINDOW_DAYS = 3;
+
+function dueDateIso(expectedDate: string): string {
+  const d = new Date(`${expectedDate}T00:00:00`);
+  d.setDate(d.getDate() - CONFIRMATION_WINDOW_DAYS);
   return d.toISOString().slice(0, 10);
 }
 
@@ -103,9 +103,9 @@ export function ExpectedIncomeManager({
   bankAccounts: BankAccountOption[];
   expectedIncomes: ExpectedIncome[];
 }) {
-  const needsConfirmationCount = expectedIncomes.filter(
-    (e) => e.status === "PENDING" && dueDateIso(e) <= todayIso(),
-  ).length;
+  const pending = expectedIncomes.filter((e) => e.status === "PENDING");
+  const archived = expectedIncomes.filter((e) => e.status !== "PENDING");
+  const needsConfirmationCount = pending.filter((e) => dueDateIso(e.expected_date) <= todayIso()).length;
 
   return (
     <div className="card p-4 space-y-3">
@@ -114,20 +114,23 @@ export function ExpectedIncomeManager({
           <h2 className="font-semibold">הכנסות עתידיות צפויות (הערכה, לא מדוייקת)</h2>
           <p className="text-xs text-muted">
             לדוגמה: סיכומי חברת אשראי או מקורות אחרים שידוע כי יגיעו בתאריך משוער. מופיע בתחזית בלבד — לא משפיע על
-            היתרה או ההכנסות בפועל, עד שמסמנים שאכן התקבל. כל עוד לא סומן, ההכנסה נשארת בתחזית גם אחרי שהתאריך עבר.
+            היתרה או ההכנסות בפועל, עד שמסמנים שאכן התקבל. אפשר לסמן כבר {CONFIRMATION_WINDOW_DAYS} ימים לפני התאריך.
+            הכנסות שסומנו (התקבלו / לא התקבלו) עוברות לארכיון ונעלמות מכאן.
           </p>
         </div>
-        <AddExpectedIncomeButton bankAccountId={bankAccountId} bankAccounts={bankAccounts} />
+        <div className="flex items-center gap-2">
+          {archived.length > 0 && <ArchivedExpectedIncomesButton archived={archived} />}
+          <AddExpectedIncomeButton bankAccountId={bankAccountId} bankAccounts={bankAccounts} />
+        </div>
       </div>
 
       {needsConfirmationCount > 0 && (
         <p className="text-sm font-medium text-warning bg-warning-bg rounded-lg px-3 py-2">
-          ⚠ {needsConfirmationCount} הכנסות צפויות עברו את התאריך שלהן וטרם סומנו — האם התקבלו בפועל? (ראו שורות
-          מסומנות למטה)
+          ⚠ {needsConfirmationCount} הכנסות צפויות ניתנות לאישור — האם התקבלו בפועל? (ראו שורות מסומנות למטה)
         </p>
       )}
 
-      {expectedIncomes.length > 0 && (
+      {pending.length > 0 && (
         <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
@@ -140,14 +143,92 @@ export function ExpectedIncomeManager({
             </tr>
           </thead>
           <tbody>
-            {expectedIncomes.map((e) => (
+            {pending.map((e) => (
               <ExpectedIncomeRow key={e.id} income={e} bankAccounts={bankAccounts} />
             ))}
           </tbody>
         </table>
         </div>
       )}
+      {pending.length === 0 && <p className="text-sm text-muted">אין הכנסות צפויות ממתינות כרגע.</p>}
     </div>
+  );
+}
+
+function ArchivedExpectedIncomesButton({ archived }: { archived: ExpectedIncome[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-lg border border-border px-4 py-2 text-sm font-semibold whitespace-nowrap"
+      >
+        ארכיון ({archived.length})
+      </button>
+      {open && (
+        <Modal onClose={() => setOpen(false)}>
+          <div className="card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">ארכיון הכנסות צפויות</h2>
+              <button type="button" onClick={() => setOpen(false)} className="text-sm text-muted">
+                סגור
+              </button>
+            </div>
+            <p className="text-xs text-muted">היסטוריית הכנסות צפויות שכבר סומנו כהתקבלו או שלא התקבלו.</p>
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>תאריך</th>
+                    <th>תיאור</th>
+                    <th>סכום</th>
+                    <th>סטטוס</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {archived.map((e) => (
+                    <ArchivedIncomeRow key={e.id} income={e} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+function ArchivedIncomeRow({ income }: { income: ExpectedIncome }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  function remove() {
+    if (!confirm("למחוק לצמיתות את הרשומה מהארכיון?")) return;
+    startTransition(async () => {
+      await deleteExpectedIncome(income.id);
+      router.refresh();
+    });
+  }
+
+  return (
+    <tr>
+      <td>{formatDate(income.expected_date)}</td>
+      <td>{income.description ?? "—"}</td>
+      <td>{formatCurrency(Number(income.amount))}</td>
+      <td>
+        <span className={`badge ${income.status === "CONFIRMED" ? "bg-success-bg text-success" : "bg-danger-bg text-danger"}`}>
+          {income.status === "CONFIRMED" ? "התקבל" : "לא התקבל"}
+        </span>
+      </td>
+      <td>
+        <button disabled={isPending} onClick={remove} className="text-xs text-muted underline">
+          מחיקה
+        </button>
+      </td>
+    </tr>
   );
 }
 
@@ -205,7 +286,6 @@ function ExpectedIncomeForm({
   const [description, setDescription] = useState("");
   const [repeats, setRepeats] = useState(false);
   const [repeatMonths, setRepeatMonths] = useState("");
-  const [earlyByDays, setEarlyByDays] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -222,7 +302,6 @@ function ExpectedIncomeForm({
         expectedDate,
         description: description || null,
         repeatMonths: repeats ? Number(repeatMonths) : 1,
-        earlyByDays: earlyByDays ? Number(earlyByDays) : 0,
       });
       if (result.error) setError(result.error);
       else {
@@ -262,40 +341,27 @@ function ExpectedIncomeForm({
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         />
       </div>
-      <div className="flex items-center gap-2 flex-wrap">
-        <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
-          <input
-            type="checkbox"
-            checked={repeats}
-            onChange={(e) => {
-              setRepeats(e.target.checked);
-              if (!e.target.checked) setRepeatMonths("");
-            }}
-          />
-          חוזר כל חודש (לא הכנסה חד-פעמית)
-        </label>
-        {repeats && (
-          <input
-            type="number"
-            min="2"
-            value={repeatMonths}
-            onChange={(e) => setRepeatMonths(e.target.value)}
-            placeholder="כמה חודשים"
-            className="rounded border border-border bg-transparent px-2 py-1 text-sm w-28"
-          />
-        )}
-      </div>
-      <div className="flex items-center gap-1">
+      <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
+        <input
+          type="checkbox"
+          checked={repeats}
+          onChange={(e) => {
+            setRepeats(e.target.checked);
+            if (!e.target.checked) setRepeatMonths("");
+          }}
+        />
+        חוזר כל חודש (לא הכנסה חד-פעמית)
+      </label>
+      {repeats && (
         <input
           type="number"
-          min="0"
-          value={earlyByDays}
-          onChange={(e) => setEarlyByDays(e.target.value)}
-          placeholder="0"
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm w-16"
+          min="2"
+          value={repeatMonths}
+          onChange={(e) => setRepeatMonths(e.target.value)}
+          placeholder="כמה חודשים"
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm w-28"
         />
-        <label className="text-xs text-muted whitespace-nowrap">ימים לפני התאריך זה בדרך כלל כבר קורה</label>
-      </div>
+      )}
       {error && <p className="text-xs text-danger">{error}</p>}
       <button
         disabled={isPending || amount <= 0 || !expectedDate || !targetAccountId}
@@ -316,11 +382,10 @@ function ExpectedIncomeRow({ income, bankAccounts }: { income: ExpectedIncome; b
   const [amount, setAmount] = useState(String(income.amount));
   const [expectedDate, setExpectedDate] = useState(income.expected_date);
   const [description, setDescription] = useState(income.description ?? "");
-  const [earlyByDays, setEarlyByDays] = useState(String(income.early_by_days));
   const [error, setError] = useState<string | null>(null);
-  const isPast = dueDateIso(income) <= todayIso();
+  const isConfirmable = dueDateIso(income.expected_date) <= todayIso();
 
-  function setStatus(status: "PENDING" | "CONFIRMED" | "NOT_RECEIVED") {
+  function setStatus(status: "CONFIRMED" | "NOT_RECEIVED") {
     const updateBalance = status === "CONFIRMED" && confirm("ההכנסה סומנה כהתקבלה. האם לעדכן בהתאם את יתרת חשבון הבנק?");
     startTransition(async () => {
       await updateExpectedIncomeStatus(income.id, status, updateBalance);
@@ -344,7 +409,6 @@ function ExpectedIncomeRow({ income, bankAccounts }: { income: ExpectedIncome; b
         amount: Number(amount) || 0,
         expectedDate,
         description: description || null,
-        earlyByDays: Number(earlyByDays) || 0,
       });
       if (result.error) setError(result.error);
       else {
@@ -353,8 +417,6 @@ function ExpectedIncomeRow({ income, bankAccounts }: { income: ExpectedIncome; b
       }
     });
   }
-
-  const needsConfirmation = isPast && income.status === "PENDING";
 
   if (editing) {
     return (
@@ -385,16 +447,6 @@ function ExpectedIncomeRow({ income, bankAccounts }: { income: ExpectedIncome; b
               placeholder="תיאור / מקור"
               className="rounded border border-border bg-transparent px-2 py-1 text-sm"
             />
-            <div className="flex items-center gap-1">
-              <input
-                type="number"
-                min="0"
-                value={earlyByDays}
-                onChange={(e) => setEarlyByDays(e.target.value)}
-                className="rounded border border-border bg-transparent px-2 py-1 text-sm w-16"
-              />
-              <label className="text-xs text-muted whitespace-nowrap">ימים מראש</label>
-            </div>
             <button disabled={isPending} onClick={save} className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50">
               שמור
             </button>
@@ -409,29 +461,16 @@ function ExpectedIncomeRow({ income, bankAccounts }: { income: ExpectedIncome; b
   }
 
   return (
-    <tr className={needsConfirmation ? "bg-warning-bg/40" : undefined}>
-      <td>
-        {formatDate(income.expected_date)}
-        {income.early_by_days > 0 && <div className="text-xs text-muted">מגיע כ-{income.early_by_days} ימים לפני</div>}
-      </td>
+    <tr className={isConfirmable ? "bg-warning-bg/40" : undefined}>
+      <td>{formatDate(income.expected_date)}</td>
       <td>{income.description ?? "—"}</td>
       <td>{formatCurrency(Number(income.amount))}</td>
       <td>
-        <span
-          className={`badge ${
-            income.status === "CONFIRMED"
-              ? "bg-success-bg text-success"
-              : income.status === "NOT_RECEIVED"
-                ? "bg-danger-bg text-danger"
-                : "bg-warning-bg text-warning"
-          }`}
-        >
-          {income.status === "CONFIRMED" ? "התקבל" : income.status === "NOT_RECEIVED" ? "לא התקבל" : "ממתין"}
-        </span>
+        <span className="badge bg-warning-bg text-warning">ממתין</span>
       </td>
       <td>
         <div className="flex items-center gap-2">
-          {isPast && income.status === "PENDING" && (
+          {isConfirmable && (
             <>
               <button disabled={isPending} onClick={() => setStatus("CONFIRMED")} className="text-xs text-success underline">
                 סמן כהתקבל
