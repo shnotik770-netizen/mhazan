@@ -791,7 +791,6 @@ export type Database = {
           day_of_week: number | null
           department_id: string | null
           direction: string
-          early_by_days: number
           end_date: string | null
           expected_amount: number
           frequency: string
@@ -809,7 +808,6 @@ export type Database = {
           day_of_week?: number | null
           department_id?: string | null
           direction: string
-          early_by_days?: number
           end_date?: string | null
           expected_amount: number
           frequency: string
@@ -827,7 +825,6 @@ export type Database = {
           day_of_week?: number | null
           department_id?: string | null
           direction?: string
-          early_by_days?: number
           end_date?: string | null
           expected_amount?: number
           frequency?: string

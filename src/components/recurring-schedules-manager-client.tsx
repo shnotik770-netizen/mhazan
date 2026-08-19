@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { deleteRecurringSchedule, setRecurringScheduleActive } from "@/app/(app)/settings/actions";
 import { NewRecurringScheduleForm } from "@/components/recurring-schedule-form-client";
 import { Modal } from "@/components/modal";
+import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -40,16 +41,18 @@ export type ScheduleRow = {
   expected_amount: number;
   is_active: boolean;
   end_date: string | null;
-  earlyByDays: number;
   departmentName: string | null;
   allocations: { amount: number; departmentName: string | null }[];
 };
 
-// Recurring-schedule creation and management as an in-page modal — reused
-// from the expenses report so managing them doesn't require a trip to
-// settings, matching how other occasional-action forms in the app (manual
-// entry, spread setup) are handled.
-export function RecurringSchedulesButton({
+function departmentLabel(s: ScheduleRow) {
+  return s.departmentName ?? `מפוצל (${s.allocations.length} מחלקות)`;
+}
+
+// Recurring-schedule creation and management, inline on the checks page —
+// not tucked behind a modal, since this is meant to be the one place this
+// gets managed from (no longer duplicated into /expenses or /settings).
+export function RecurringSchedulesSection({
   schedules,
   departments,
   bankAccounts,
@@ -60,61 +63,81 @@ export function RecurringSchedulesButton({
   bankAccounts: BankAccountOption[];
   categories: CategoryOption[];
 }) {
-  const [open, setOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+
+  const columns: ColumnDef<ScheduleRow>[] = [
+    { key: "name", label: "שם", sortValue: (s) => s.name, filterValue: (s) => s.name },
+    { key: "department", label: "מחלקה", sortValue: (s) => departmentLabel(s), filterValue: (s) => departmentLabel(s) },
+    { key: "frequency", label: "תדירות", sortValue: (s) => s.frequency, filterValue: (s) => frequencyLabel(s.frequency) },
+    {
+      key: "date",
+      label: "תאריך",
+      sortValue: (s) => (s.type === "VARIABLE_DATE_ESTIMATED_AMOUNT" ? "" : scheduleDateLabel(s)),
+    },
+    { key: "amount", label: "סכום צפוי", sortValue: (s) => s.expected_amount },
+    { key: "end_date", label: "משך", sortValue: (s) => s.end_date ?? "" },
+    { key: "active", label: "פעיל", sortValue: (s) => (s.is_active ? 1 : 0), filterValue: (s) => (s.is_active ? "פעיל" : "לא פעיל") },
+  ];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(schedules, columns);
+
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
-      >
-        הוראות קבע
-      </button>
-      {open && (
-        <Modal onClose={() => setOpen(false)}>
-          <div className="card p-4 space-y-4">
+    <div className="card p-4 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="font-semibold">הוראות קבע</h2>
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+        >
+          + הוראת קבע חדשה
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="data-table">
+          <thead>
+            <tr>
+              {columns.map((col) => (
+                <SortFilterTh
+                  key={col.key}
+                  col={col}
+                  allRows={schedules}
+                  sort={sort}
+                  toggleSort={toggleSort}
+                  activeFilter={filters[col.key]}
+                  setColumnFilter={setColumnFilter}
+                />
+              ))}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((s) => (
+              <ScheduleRowItem key={s.id} schedule={s} />
+            ))}
+            {sorted.length === 0 && (
+              <tr>
+                <td colSpan={8} className="text-center text-muted py-4">
+                  {schedules.length === 0 ? "אין הוראות קבע מוגדרות" : "אין תוצאות"}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {addOpen && (
+        <Modal onClose={() => setAddOpen(false)}>
+          <div className="card p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold">הוראות קבע</h2>
-              <button type="button" onClick={() => setOpen(false)} className="text-sm text-muted">
+              <h2 className="font-semibold">הוראת קבע חדשה</h2>
+              <button type="button" onClick={() => setAddOpen(false)} className="text-sm text-muted">
                 סגור
               </button>
             </div>
-            <div className="overflow-x-auto">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>שם</th>
-                    <th>מחלקה</th>
-                    <th>תדירות</th>
-                    <th>תאריך</th>
-                    <th>סכום צפוי</th>
-                    <th>משך</th>
-                    <th>פעיל</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {schedules.map((s) => (
-                    <ScheduleRowItem key={s.id} schedule={s} />
-                  ))}
-                  {schedules.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="text-center text-muted py-4">
-                        אין הוראות קבע מוגדרות
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="border-t border-border pt-3">
-              <h3 className="font-semibold mb-1">הוספת הוראת קבע חדשה</h3>
-              <NewRecurringScheduleForm departments={departments} bankAccounts={bankAccounts} categories={categories} />
-            </div>
+            <NewRecurringScheduleForm departments={departments} bankAccounts={bankAccounts} categories={categories} />
           </div>
         </Modal>
       )}
-    </>
+    </div>
   );
 }
 
@@ -153,9 +176,6 @@ function ScheduleRowItem({ schedule: s }: { schedule: ScheduleRow }) {
           <span className="badge bg-background text-muted">תאריך לא קבוע</span>
         ) : (
           scheduleDateLabel(s)
-        )}
-        {s.earlyByDays > 0 && (
-          <div className="text-xs text-muted">יוצא כ-{s.earlyByDays} ימים לפני</div>
         )}
       </td>
       <td>

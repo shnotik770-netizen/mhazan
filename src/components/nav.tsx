@@ -11,9 +11,9 @@ import type { CurrentUser } from "@/lib/auth";
 // links to admin-only management screens.
 const links = [
   { href: "/", label: "דשבורד" },
-  { href: "/transactions", label: "כל התנועות" },
-  { href: "/incomes", label: "הכנסות" },
   { href: "/checks", label: "צ׳קים והעברות" },
+  { href: "/incomes", label: "הכנסות" },
+  { href: "/transactions", label: "כל התנועות" },
   { href: "/expenses", label: "הוצאות" },
   { href: "/ledger", label: "דוחות מחלקות" },
   { href: "/forecast", label: "תחזית תזרים" },

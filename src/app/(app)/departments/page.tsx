@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireFinanceAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { DepartmentRow, NewDepartmentForm } from "@/components/departments-client";
+import { DepartmentsTable, NewDepartmentForm } from "@/components/departments-client";
 
 export default async function DepartmentsPage() {
   await requireFinanceAdmin();
@@ -30,29 +30,7 @@ export default async function DepartmentsPage() {
 
       <div className="card p-4">
         <div className="overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>שם</th>
-              <th>קוד</th>
-              <th>חשבון בית</th>
-              <th>שימוש</th>
-              <th>פעולות</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(departments ?? []).map((d) => (
-              <DepartmentRow key={d.id} department={d} usage={usageFor(d.id)} bankAccounts={bankAccounts ?? []} />
-            ))}
-            {(departments ?? []).length === 0 && (
-              <tr>
-                <td colSpan={5} className="text-center text-muted py-6">
-                  אין מחלקות מוגדרות עדיין — הוסיפו את המחלקה הראשונה למטה
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+          <DepartmentsTable departments={departments ?? []} usageFor={usageFor} bankAccounts={bankAccounts ?? []} />
         </div>
         <NewDepartmentForm bankAccounts={bankAccounts ?? []} />
       </div>

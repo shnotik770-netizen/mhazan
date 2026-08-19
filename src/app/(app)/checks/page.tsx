@@ -14,7 +14,8 @@ import {
   PendingApprovalTable,
 } from "@/components/checks-sections-client";
 import { ScheduleConfirmationsList, type PendingConfirmation } from "@/components/schedule-confirmations-client";
-import { RecurringSchedulesButton, type ScheduleRow } from "@/components/recurring-schedules-manager-client";
+import { RecurringSchedulesSection, type ScheduleRow } from "@/components/recurring-schedules-manager-client";
+import { NewManualEntryButton } from "@/components/manual-entries-client";
 
 export default async function ChecksPage({
   searchParams,
@@ -91,7 +92,6 @@ export default async function ChecksPage({
       expected_amount: number;
       is_active: boolean;
       end_date: string | null;
-      early_by_days: number;
       departments: { name: string } | null;
       recurring_schedule_allocations: { amount: number; departments: { name: string } | null }[];
     };
@@ -107,7 +107,6 @@ export default async function ChecksPage({
       expected_amount: Number(row.expected_amount),
       is_active: row.is_active,
       end_date: row.end_date,
-      earlyByDays: Number(row.early_by_days ?? 0),
       departmentName: row.departments?.name ?? null,
       allocations: row.recurring_schedule_allocations.map((a) => ({
         amount: Number(a.amount),
@@ -193,12 +192,7 @@ export default async function ChecksPage({
             <UnifiedCheckForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} categories={categories ?? []} />
             <PasteExistingChecksForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <BankReconciliationPanel bankAccounts={bankAccounts ?? []} />
-            <RecurringSchedulesButton
-              schedules={scheduleRows}
-              departments={departments ?? []}
-              bankAccounts={bankAccounts ?? []}
-              categories={categories ?? []}
-            />
+            <NewManualEntryButton departments={departments ?? []} bankAccounts={bankAccounts ?? []} />
           </div>
         )}
       </div>
@@ -294,6 +288,15 @@ export default async function ChecksPage({
             )}
           </CollapsibleSection>
         </div>
+      )}
+
+      {isAdmin && (
+        <RecurringSchedulesSection
+          schedules={scheduleRows}
+          departments={departments ?? []}
+          bankAccounts={bankAccounts ?? []}
+          categories={categories ?? []}
+        />
       )}
 
       {sortedNeedingIssuance.length > 0 && isAdmin && (

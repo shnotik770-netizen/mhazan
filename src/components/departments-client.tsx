@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createDepartment, deleteDepartment, updateDepartment } from "@/app/(app)/settings/actions";
 import { SearchableSelect } from "@/components/searchable-select";
+import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -13,6 +14,64 @@ type BankAccountOption = {
   bank_name: string;
   account_number: string;
 };
+
+type DepartmentTableRow = Department & { usage: { bankAccounts: number; categories: number } };
+
+export function DepartmentsTable({
+  departments,
+  usageFor,
+  bankAccounts,
+}: {
+  departments: Department[];
+  usageFor: (departmentId: string) => { bankAccounts: number; categories: number };
+  bankAccounts: BankAccountOption[];
+}) {
+  const rows: DepartmentTableRow[] = departments.map((d) => ({ ...d, usage: usageFor(d.id) }));
+  const homeAccountLabel = (r: DepartmentTableRow) => {
+    const acc = bankAccounts.find((b) => b.id === r.home_bank_account_id);
+    return acc ? `${acc.bank_name} (${acc.account_number})` : "—";
+  };
+  const columns: ColumnDef<DepartmentTableRow>[] = [
+    { key: "name", label: "שם", sortValue: (r) => r.name, filterValue: (r) => r.name },
+    { key: "code", label: "קוד", sortValue: (r) => r.code, filterValue: (r) => r.code },
+    { key: "home_account", label: "חשבון בית", sortValue: (r) => homeAccountLabel(r), filterValue: (r) => homeAccountLabel(r) },
+    { key: "categories_count", label: "שימוש", sortValue: (r) => r.usage.categories },
+  ];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(rows, columns);
+
+  return (
+    <table className="data-table">
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <SortFilterTh
+              key={col.key}
+              col={col}
+              allRows={rows}
+              sort={sort}
+              toggleSort={toggleSort}
+              activeFilter={filters[col.key]}
+              setColumnFilter={setColumnFilter}
+            />
+          ))}
+          <th>פעולות</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((d) => (
+          <DepartmentRow key={d.id} department={d} usage={d.usage} bankAccounts={bankAccounts} />
+        ))}
+        {sorted.length === 0 && (
+          <tr>
+            <td colSpan={5} className="text-center text-muted py-6">
+              {departments.length === 0 ? "אין מחלקות מוגדרות עדיין — הוסיפו את המחלקה הראשונה למטה" : "אין תוצאות"}
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
 
 export function DepartmentRow({
   department,

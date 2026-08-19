@@ -39,7 +39,6 @@ export function NewRecurringScheduleForm({
   const [categoryId, setCategoryId] = useState("");
   const [limited, setLimited] = useState(false);
   const [durationMonths, setDurationMonths] = useState("");
-  const [earlyByDays, setEarlyByDays] = useState("");
 
   // A schedule's "recurring day" button already fixes the date it fires on
   // every month/week/year — showing a separate date picker alongside it
@@ -60,7 +59,6 @@ export function NewRecurringScheduleForm({
     setCategoryId("");
     setLimited(false);
     setDurationMonths("");
-    setEarlyByDays("");
   }
 
   function submit() {
@@ -97,7 +95,6 @@ export function NewRecurringScheduleForm({
         fd.set("expected_amount", expectedAmount);
         fd.set("bank_account_id", bankAccountId);
         fd.set("category_id", categoryId);
-        if (earlyByDays) fd.set("early_by_days", earlyByDays);
         if (limited && durationMonths) {
           const end = new Date();
           end.setMonth(end.getMonth() + Number(durationMonths));
@@ -279,18 +276,6 @@ export function NewRecurringScheduleForm({
           ) : (
             <span className="text-xs text-muted">קבוע ללא הגבלת זמן</span>
           )}
-        </div>
-
-        <div className="flex items-center gap-1">
-          <input
-            type="number"
-            min="0"
-            value={earlyByDays}
-            onChange={(e) => setEarlyByDays(e.target.value)}
-            placeholder="0"
-            className="rounded border border-border bg-transparent px-2 py-1 text-sm w-16"
-          />
-          <label className="text-xs text-muted whitespace-nowrap">ימים לפני התאריך זה בדרך כלל כבר יוצא (אופציונלי)</label>
         </div>
 
         <button
