@@ -7,7 +7,7 @@ export default async function NewIncomePage() {
   await requireFinanceAdmin();
   const supabase = await createClient();
   const [{ data: bankAccounts }, { data: categories }, { data: departments }] = await Promise.all([
-    supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
+    supabase.from("bank_accounts").select("*, departments!bank_accounts_department_id_fkey(name)").order("bank_name"),
     supabase.from("categories").select("*, departments(name)").order("name"),
     supabase.from("departments").select("*").order("name"),
   ]);

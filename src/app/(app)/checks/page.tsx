@@ -86,7 +86,7 @@ export default async function ChecksPage({
     allChecksQuery,
     supabase.from("departments").select("*").order("name"),
     supabase.from("categories").select("*").order("name"),
-    supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
+    supabase.from("bank_accounts").select("*, departments!bank_accounts_department_id_fkey(name)").order("bank_name"),
     supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
     supabase.from("suppliers").select("name").order("name"),
     supabase.from("check_allocations").select("check_id, department_id, amount, departments(name)"),

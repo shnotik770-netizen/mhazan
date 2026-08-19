@@ -35,7 +35,7 @@ export default async function SettingsPage() {
     { data: accessGrants },
   ] = await Promise.all([
     supabase.from("departments").select("*").order("name"),
-    supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
+    supabase.from("bank_accounts").select("*, departments!bank_accounts_department_id_fkey(name)").order("bank_name"),
     supabase.from("categories").select("*, departments(name)").order("name"),
     supabase
       .from("recurring_schedules")

@@ -50,7 +50,7 @@ export default async function ForecastPage({
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const supabase = await createClient();
   const [{ data: bankAccounts }, { data: departments }] = await Promise.all([
-    supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
+    supabase.from("bank_accounts").select("*, departments!bank_accounts_department_id_fkey(name)").order("bank_name"),
     supabase.from("departments").select("*").order("name"),
   ]);
 

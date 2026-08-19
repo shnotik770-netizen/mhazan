@@ -18,7 +18,7 @@ export default async function DashboardPage() {
     { data: grants },
     { data: pendingManualEntries },
   ] = await Promise.all([
-    supabase.from("bank_accounts").select("*, departments(name)").order("bank_name"),
+    supabase.from("bank_accounts").select("*, departments!bank_accounts_department_id_fkey(name)").order("bank_name"),
     supabase.from("v_pending_queue_summary").select("*"),
     supabase.from("v_inter_department_balances").select("*"),
     supabase.from("departments").select("*"),
