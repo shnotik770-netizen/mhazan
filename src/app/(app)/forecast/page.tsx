@@ -6,6 +6,7 @@ import { BankBalancePanel, ExpectedIncomeManager } from "@/components/forecast-c
 import { ForecastDailyTable } from "@/components/forecast-daily-table-client";
 import { ForecastDayLookup } from "@/components/forecast-day-lookup-client";
 import { ForecastFilterBar } from "@/components/forecast-filter-bar-client";
+import { ForecastSimulation } from "@/components/forecast-simulation-client";
 
 // Days from today through the last day of the given "YYYY-MM" month —
 // turns the user-facing "עד חודש" choice into the p_horizon_days the
@@ -263,37 +264,6 @@ export default async function ForecastPage({
         <ForecastDayLookup rows={dailyBreakdown} startingBalance={Number(selectedAccount.current_balance)} />
       )}
 
-      {mode === "bank" && monthlyCards.length > 0 && (
-        <div>
-          <h2 className="font-semibold mb-2">מצב חזוי לפי חודשים</h2>
-          <div className="flex flex-col gap-3">
-            {monthlyCards.map((c) => (
-              <div key={c.month} className="card p-4 space-y-1">
-                <p className="font-semibold">
-                  {new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(
-                    new Date(`${c.month}-01T00:00:00`),
-                  )}
-                </p>
-                <p className="text-xs text-muted">
-                  יתרת פתיחה: <span className="font-medium text-foreground">{formatCurrency(c.opening)}</span>
-                </p>
-                <p className="text-xs text-success">הכנסות: {formatCurrency(c.income)}</p>
-                <p className="text-xs text-danger">הוצאות: {formatCurrency(Math.abs(c.expense))}</p>
-                {c.oldExpense !== 0 && (
-                  <p className="text-xs text-warning">
-                    הוצאות ישנות שלא נפדו מחודשים קודמים: {formatCurrency(Math.abs(c.oldExpense))}
-                  </p>
-                )}
-                <p className="text-sm font-semibold pt-1 border-t border-border">
-                  יתרת סגירה:{" "}
-                  <span className={c.closing < 0 ? "text-danger" : "text-success"}>{formatCurrency(c.closing)}</span>
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {mode === "bank" && monthlyIncomeRows.length > 0 && (
         <div className="card p-4 overflow-x-auto">
           <h2 className="font-semibold mb-2">הכנסות בפועל לפי חודש (12 חודשים אחרונים)</h2>
@@ -318,40 +288,55 @@ export default async function ForecastPage({
 
       <ForecastDailyTable rows={dailyBreakdown} mode={mode} />
 
-      <details className="card p-4">
-        <summary className="cursor-pointer font-semibold">פירוט מלא לפי פריט</summary>
-        <div className="overflow-x-auto mt-3">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>תאריך</th>
-                <th>מקור</th>
-                <th>שינוי צפוי</th>
-                <th>{mode === "bank" ? "יתרה חזויה" : "שינוי נטו מצטבר"}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(forecast ?? []).map((row, i) => (
-                <tr key={i}>
-                  <td>{formatDate(row.forecast_date!)}</td>
-                  <td>{row.source}</td>
-                  <td className={Number(row.expected_change) < 0 ? "text-danger" : "text-success"}>
-                    {formatCurrency(Number(row.expected_change))}
-                  </td>
-                  <td className="font-semibold">{formatCurrency(Number(row.running_balance))}</td>
-                </tr>
-              ))}
-              {(forecast ?? []).length === 0 && (
+      {mode === "bank" && selectedAccount ? (
+        <ForecastSimulation
+          key={selectedAccount.id}
+          bankAccountId={selectedAccount.id}
+          monthlyCards={monthlyCards}
+          items={(forecast ?? []).map((row, i) => ({
+            id: `${row.category}|${row.source}|${row.forecast_date}|${i}`,
+            date: row.forecast_date!,
+            source: row.source!,
+            change: Number(row.expected_change),
+            runningBalance: Number(row.running_balance),
+          }))}
+        />
+      ) : (
+        <details className="card p-4">
+          <summary className="cursor-pointer font-semibold">פירוט מלא לפי פריט</summary>
+          <div className="overflow-x-auto mt-3">
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <td colSpan={4} className="text-center text-muted py-6">
-                    אין תנועות צפויות בטווח שנבחר
-                  </td>
+                  <th>תאריך</th>
+                  <th>מקור</th>
+                  <th>שינוי צפוי</th>
+                  <th>שינוי נטו מצטבר</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </details>
+              </thead>
+              <tbody>
+                {(forecast ?? []).map((row, i) => (
+                  <tr key={i}>
+                    <td>{formatDate(row.forecast_date!)}</td>
+                    <td>{row.source}</td>
+                    <td className={Number(row.expected_change) < 0 ? "text-danger" : "text-success"}>
+                      {formatCurrency(Number(row.expected_change))}
+                    </td>
+                    <td className="font-semibold">{formatCurrency(Number(row.running_balance))}</td>
+                  </tr>
+                ))}
+                {(forecast ?? []).length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="text-center text-muted py-6">
+                      אין תנועות צפויות בטווח שנבחר
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
     </div>
   );
 }

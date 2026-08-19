@@ -55,6 +55,35 @@ export async function createExpectedIncome(input: {
   return {};
 }
 
+export async function updateExpectedIncome(
+  id: string,
+  input: {
+    bankAccountId: string;
+    amount: number;
+    expectedDate: string;
+    description: string | null;
+    earlyByDays: number;
+  },
+): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  if (!input.bankAccountId) return { error: "יש לבחור חשבון בנק" };
+  if (!input.expectedDate) return { error: "יש להזין תאריך" };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("expected_incomes")
+    .update({
+      bank_account_id: input.bankAccountId,
+      amount: input.amount,
+      expected_date: input.expectedDate,
+      description: input.description,
+      early_by_days: Math.max(0, Math.floor(input.earlyByDays)),
+    })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidateForecastPaths();
+  return {};
+}
+
 export async function updateExpectedIncomeStatus(
   id: string,
   status: "PENDING" | "CONFIRMED" | "NOT_RECEIVED",
