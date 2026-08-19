@@ -120,27 +120,31 @@ function CheckDetailModal({ checkId, onClose }: { checkId: string; onClose: () =
                   </p>
                   <div>
                     <p className="text-sm font-semibold mb-1">סיכום לפי מחלקה — כל הפריסה</p>
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>מחלקה</th>
-                          <th>סה״כ בפריסה</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...totalsByDepartment.entries()].map(([name, sum]) => (
-                          <tr key={name}>
-                            <td className={name === "בהמתנה לסיווג" ? "text-warning" : undefined}>{name}</td>
-                            <td className="font-semibold">{formatCurrency(sum)}</td>
+                    <div className="overflow-x-auto">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>מחלקה</th>
+                            <th>סה״כ בפריסה</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {[...totalsByDepartment.entries()].map(([name, sum]) => (
+                            <tr key={name}>
+                              <td className={name === "בהמתנה לסיווג" ? "text-warning" : undefined}>{name}</td>
+                              <td className="font-semibold">{formatCurrency(sum)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                   <p className="text-sm font-semibold mb-1">פירוט לפי צ׳ק</p>
                 </>
               )}
-              <SpreadRowsTable rows={detail.spreadRows} highlightId={checkId} isSpread={isSpread} />
+              <div className="overflow-x-auto">
+                <SpreadRowsTable rows={detail.spreadRows} highlightId={checkId} isSpread={isSpread} />
+              </div>
             </>
           )}
         </div>
@@ -277,13 +281,15 @@ function PayeeExpensesModal({ payee, onClose }: { payee: string; onClose: () => 
               <p className="text-sm text-muted">
                 {rows.length} הוצאות — סה״כ {formatCurrency(total)}
               </p>
-              <PayeeExpensesTable
-                rows={rows}
-                payee={payee}
-                spreadTotals={spreadTotals}
-                departments={departments}
-                allocationsByCheck={allocationsByCheck}
-              />
+              <div className="overflow-x-auto">
+                <PayeeExpensesTable
+                  rows={rows}
+                  payee={payee}
+                  spreadTotals={spreadTotals}
+                  departments={departments}
+                  allocationsByCheck={allocationsByCheck}
+                />
+              </div>
             </>
           )}
         </div>

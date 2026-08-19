@@ -168,6 +168,11 @@ export function SortFilterTh<T>({
               ✕
             </button>
           </div>
+          {isFiltered && (
+            <p className="mb-1 text-[11px] text-muted">
+              {allRows.filter((r) => activeFilter!.has(col.filterValue!(r))).length} מתוך {allRows.length} שורות
+            </p>
+          )}
           <div className="max-h-48 overflow-y-auto space-y-1">
             {options.map((opt) => {
               const checked = !activeFilter || activeFilter.has(opt);
