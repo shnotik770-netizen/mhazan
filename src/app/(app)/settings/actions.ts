@@ -116,6 +116,7 @@ export async function createRecurringSchedule(formData: FormData): Promise<void>
       category_id: String(formData.get("category_id") ?? "") || null,
       bank_account_id: String(formData.get("bank_account_id") ?? "") || null,
       end_date: String(formData.get("end_date") ?? "") || null,
+      early_by_days: Number(formData.get("early_by_days") ?? 0),
     })
     .select("id")
     .single();

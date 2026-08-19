@@ -40,6 +40,7 @@ export type ScheduleRow = {
   expected_amount: number;
   is_active: boolean;
   end_date: string | null;
+  earlyByDays: number;
   departmentName: string | null;
   allocations: { amount: number; departmentName: string | null }[];
 };
@@ -84,7 +85,6 @@ export function RecurringSchedulesButton({
                   <tr>
                     <th>שם</th>
                     <th>מחלקה</th>
-                    <th>כיוון</th>
                     <th>תדירות</th>
                     <th>תאריך</th>
                     <th>סכום צפוי</th>
@@ -99,7 +99,7 @@ export function RecurringSchedulesButton({
                   ))}
                   {schedules.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="text-center text-muted py-4">
+                      <td colSpan={8} className="text-center text-muted py-4">
                         אין הוראות קבע מוגדרות
                       </td>
                     </tr>
@@ -147,13 +147,15 @@ function ScheduleRowItem({ schedule: s }: { schedule: ScheduleRow }) {
           </span>
         )}
       </td>
-      <td>{s.direction === "INCOME" ? "הכנסה" : "הוצאה"}</td>
       <td>{frequencyLabel(s.frequency)}</td>
       <td>
         {s.type === "VARIABLE_DATE_ESTIMATED_AMOUNT" ? (
           <span className="badge bg-background text-muted">תאריך לא קבוע</span>
         ) : (
           scheduleDateLabel(s)
+        )}
+        {s.earlyByDays > 0 && (
+          <div className="text-xs text-muted">יוצא כ-{s.earlyByDays} ימים לפני</div>
         )}
       </td>
       <td>

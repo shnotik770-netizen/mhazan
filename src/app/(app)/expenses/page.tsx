@@ -161,6 +161,7 @@ export default async function ExpensesPage() {
       expected_amount: number;
       is_active: boolean;
       end_date: string | null;
+      early_by_days: number;
       departments: { name: string } | null;
       recurring_schedule_allocations: { amount: number; departments: { name: string } | null }[];
     };
@@ -176,6 +177,7 @@ export default async function ExpensesPage() {
       expected_amount: Number(row.expected_amount),
       is_active: row.is_active,
       end_date: row.end_date,
+      earlyByDays: Number(row.early_by_days ?? 0),
       departmentName: row.departments?.name ?? null,
       allocations: row.recurring_schedule_allocations.map((a) => ({
         amount: Number(a.amount),

@@ -387,6 +387,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          early_by_days: number
           expected_date: string
           id: string
           status: string
@@ -397,6 +398,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          early_by_days?: number
           expected_date: string
           id?: string
           status?: string
@@ -407,6 +409,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          early_by_days?: number
           expected_date?: string
           id?: string
           status?: string
@@ -791,6 +794,7 @@ export type Database = {
           day_of_week: number | null
           department_id: string | null
           direction: string
+          early_by_days: number
           end_date: string | null
           expected_amount: number
           frequency: string
@@ -808,6 +812,7 @@ export type Database = {
           day_of_week?: number | null
           department_id?: string | null
           direction: string
+          early_by_days?: number
           end_date?: string | null
           expected_amount: number
           frequency: string
@@ -825,6 +830,7 @@ export type Database = {
           day_of_week?: number | null
           department_id?: string | null
           direction?: string
+          early_by_days?: number
           end_date?: string | null
           expected_amount?: number
           frequency?: string

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceAdmin } from "@/lib/auth";
+import { toLocalISODate } from "@/lib/format";
 
 function revalidateForecastPaths() {
   revalidatePath("/forecast");
@@ -31,23 +32,23 @@ export async function createExpectedIncome(input: {
   expectedDate: string;
   description: string | null;
   repeatMonths?: number;
+  earlyByDays?: number;
 }): Promise<{ error?: string }> {
   const admin = await requireFinanceAdmin();
   if (!input.bankAccountId) return { error: "יש לבחור חשבון בנק" };
   if (!input.expectedDate) return { error: "יש להזין תאריך" };
   const supabase = await createClient();
   const months = Math.max(1, Math.floor(input.repeatMonths ?? 1));
+  const earlyByDays = Math.max(0, Math.floor(input.earlyByDays ?? 0));
   const [y, m, d] = input.expectedDate.split("-").map(Number);
-  const rows = Array.from({ length: months }, (_, i) => {
-    const date = new Date(y, m - 1 + i, d);
-    return {
-      bank_account_id: input.bankAccountId,
-      amount: input.amount,
-      expected_date: date.toISOString().slice(0, 10),
-      description: input.description,
-      created_by: admin.id,
-    };
-  });
+  const rows = Array.from({ length: months }, (_, i) => ({
+    bank_account_id: input.bankAccountId,
+    amount: input.amount,
+    expected_date: toLocalISODate(new Date(y, m - 1 + i, d)),
+    description: input.description,
+    early_by_days: earlyByDays,
+    created_by: admin.id,
+  }));
   const { error } = await supabase.from("expected_incomes").insert(rows);
   if (error) return { error: error.message };
   revalidateForecastPaths();

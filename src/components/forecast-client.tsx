@@ -14,6 +14,16 @@ import type { Tables } from "@/lib/supabase/database.types";
 
 type ExpectedIncome = Tables<"expected_incomes">;
 
+// When early_by_days is set, the money is known to typically land that many
+// days before expected_date — so "needs confirmation" should open that much
+// earlier too, instead of waiting for the nominal date itself to pass.
+function dueDateIso(income: Pick<ExpectedIncome, "expected_date" | "early_by_days">): string {
+  if (!income.early_by_days) return income.expected_date;
+  const d = new Date(`${income.expected_date}T00:00:00`);
+  d.setDate(d.getDate() - income.early_by_days);
+  return d.toISOString().slice(0, 10);
+}
+
 export function BankBalancePanel({
   bankAccountId,
   currentBalance,
@@ -97,6 +107,7 @@ export function ExpectedIncomeManager({
   const [description, setDescription] = useState("");
   const [repeats, setRepeats] = useState(false);
   const [repeatMonths, setRepeatMonths] = useState("");
+  const [earlyByDays, setEarlyByDays] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -113,6 +124,7 @@ export function ExpectedIncomeManager({
         expectedDate,
         description: description || null,
         repeatMonths: repeats ? Number(repeatMonths) : 1,
+        earlyByDays: earlyByDays ? Number(earlyByDays) : 0,
       });
       if (result.error) setError(result.error);
       else {
@@ -121,13 +133,14 @@ export function ExpectedIncomeManager({
         setDescription("");
         setRepeats(false);
         setRepeatMonths("");
+        setEarlyByDays("");
         router.refresh();
       }
     });
   }
 
   const needsConfirmationCount = expectedIncomes.filter(
-    (e) => e.status === "PENDING" && e.expected_date < todayIso(),
+    (e) => e.status === "PENDING" && dueDateIso(e) <= todayIso(),
   ).length;
 
   return (
@@ -197,6 +210,17 @@ export function ExpectedIncomeManager({
             className="rounded border border-border bg-transparent px-2 py-1 text-sm w-28"
           />
         )}
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min="0"
+            value={earlyByDays}
+            onChange={(e) => setEarlyByDays(e.target.value)}
+            placeholder="0"
+            className="rounded border border-border bg-transparent px-2 py-1 text-sm w-16"
+          />
+          <label className="text-xs text-muted whitespace-nowrap">ימים לפני התאריך זה בדרך כלל כבר קרה</label>
+        </div>
         <button
           disabled={isPending || amount <= 0 || !expectedDate || !targetAccountId}
           onClick={submit}
@@ -234,7 +258,7 @@ export function ExpectedIncomeManager({
 function ExpectedIncomeRow({ income }: { income: ExpectedIncome }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const isPast = income.expected_date < todayIso();
+  const isPast = dueDateIso(income) <= todayIso();
 
   function setStatus(status: "PENDING" | "CONFIRMED" | "NOT_RECEIVED") {
     startTransition(async () => {
@@ -255,7 +279,10 @@ function ExpectedIncomeRow({ income }: { income: ExpectedIncome }) {
 
   return (
     <tr className={needsConfirmation ? "bg-warning-bg/40" : undefined}>
-      <td>{formatDate(income.expected_date)}</td>
+      <td>
+        {formatDate(income.expected_date)}
+        {income.early_by_days > 0 && <div className="text-xs text-muted">מגיע כ-{income.early_by_days} ימים לפני</div>}
+      </td>
       <td>{income.description ?? "—"}</td>
       <td>{formatCurrency(Number(income.amount))}</td>
       <td>

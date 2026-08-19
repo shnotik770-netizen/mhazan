@@ -152,7 +152,6 @@ export default async function SettingsPage() {
             <tr>
               <th>שם</th>
               <th>מחלקה</th>
-              <th>כיוון</th>
               <th>תדירות</th>
               <th>תאריך</th>
               <th>סכום צפוי</th>
@@ -175,7 +174,6 @@ export default async function SettingsPage() {
                     </span>
                   )}
                 </td>
-                <td>{s.direction === "INCOME" ? "הכנסה" : "הוצאה"}</td>
                 <td>{frequencyLabel(s.frequency)}</td>
                 <td>
                   {s.type === "VARIABLE_DATE_ESTIMATED_AMOUNT" ? (
