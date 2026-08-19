@@ -1,6 +1,6 @@
 import { requireFinanceAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { CategoryRow, NewCategoryForm, PendingCategoryRow } from "@/components/categories-client";
+import { CategoriesTable, NewCategoryForm, PendingCategoriesTable } from "@/components/categories-client";
 
 export default async function CategoriesPage() {
   await requireFinanceAdmin();
@@ -27,20 +27,7 @@ export default async function CategoriesPage() {
           <h2 className="font-semibold mb-1">
             ⚠ ישנן {pendingCategories!.length} קטגוריות הדורשות שיוך למחלקה
           </h2>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>שם קטגוריה</th>
-                <th>מחלקה</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {pendingCategories!.map((c) => (
-                <PendingCategoryRow key={c.id!} category={c as never} departments={departments ?? []} />
-              ))}
-            </tbody>
-          </table>
+          <PendingCategoriesTable categories={pendingCategories ?? []} departments={departments ?? []} />
         </div>
       )}
 
@@ -49,29 +36,10 @@ export default async function CategoriesPage() {
         <p className="text-xs text-muted mb-2">
           קטגוריות הממתינות לשיוך מחלקה מוצגות רק בטבלה שלמעלה, ולא כאן, עד שהן משויכות.
         </p>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>שם</th>
-              <th>מחלקה</th>
-              <th>פעולות</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(categories ?? [])
-              .filter((c) => c.is_split || c.department_id != null)
-              .map((c) => (
-                <CategoryRow key={c.id} category={c} departments={departments ?? []} />
-              ))}
-            {(categories ?? []).filter((c) => c.is_split || c.department_id != null).length === 0 && (
-              <tr>
-                <td colSpan={3} className="text-center text-muted py-6">
-                  אין קטגוריות מוגדרות עדיין — הוסיפו את הקטגוריה הראשונה למטה
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <CategoriesTable
+          categories={(categories ?? []).filter((c) => c.is_split || c.department_id != null)}
+          departments={departments ?? []}
+        />
         <NewCategoryForm departments={departments ?? []} />
       </div>
     </div>

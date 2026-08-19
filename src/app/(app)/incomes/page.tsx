@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { DeleteIncomeButton } from "@/components/delete-income-button";
-import { IncomeDepartmentEditor } from "@/components/income-department-editor";
+import { StandingOrdersTable, IncomesTable, type IncomeRow } from "@/components/incomes-table-client";
 
 export default async function IncomesPage({
   searchParams,
@@ -113,140 +111,52 @@ export default async function IncomesPage({
           <p className="text-xs text-muted mb-2">
             לפי מספר ההוראה ועמודת &quot;סוג&quot; (X מתוך Y) בהדבקת ההכנסה האחרונה של כל הוראה.
           </p>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>מס׳ הוראה</th>
-                <th>שם תורם</th>
-                <th>קטגוריה</th>
-                <th>סכום אחרון</th>
-                <th>תשלום אחרון</th>
-                <th>תשלומים שנותרו</th>
-              </tr>
-            </thead>
-            <tbody>
-              {standingOrders.map((o) => {
-                const remaining = o.current != null && o.total != null ? o.total - o.current : null;
-                return (
-                  <tr key={o.orderRef}>
-                    <td>{o.orderRef}</td>
-                    <td>{o.donorName ?? "—"}</td>
-                    <td>{o.categoryName ?? "—"}</td>
-                    <td>{formatCurrency(o.amount)}</td>
-                    <td>
-                      {formatDate(o.date)}
-                      {o.current != null && o.total != null ? ` (${o.current}/${o.total})` : ""}
-                    </td>
-                    <td>
-                      {remaining == null ? (
-                        <span className="text-muted">לא ידוע</span>
-                      ) : remaining <= 1 ? (
-                        <span className="badge bg-warning-bg text-warning">{remaining} — עומדת להסתיים</span>
-                      ) : (
-                        remaining
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <StandingOrdersTable orders={standingOrders} />
         </div>
       )}
 
       <div className="card p-4 overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>תאריך</th>
-              <th>קטגוריה</th>
-              <th>שם תורם</th>
-              <th>סכום</th>
-              <th>מקור</th>
-              <th>סוג</th>
-              <th>חשבון בנק</th>
-              <th>מחלקה בעלים</th>
-              <th>מחלקה מנפיקה</th>
-              <th>התחשבנות</th>
-              <th>מס׳ קבלה</th>
-              <th>מס׳ הוראה</th>
-              {isAdmin && <th></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {(incomes ?? []).map((inc) => {
-              const row = inc as unknown as {
-                id: string;
-                date: string;
-                amount: number;
-                donor_name: string | null;
-                receipt_number: string | null;
-                order_ref: string | null;
-                payment_method: string | null;
-                installment_current: number | null;
-                installment_total: number | null;
-                requires_inter_settlement: boolean;
-                owner_department_id: string | null;
-                categories: { name: string } | null;
-                bank_accounts: { bank_name: string; account_number: string } | null;
-                owner: { name: string } | null;
-                issuer: { name: string } | null;
-              };
-              return (
-                <tr key={row.id}>
-                  <td>{formatDate(row.date)}</td>
-                  <td>{row.categories?.name}</td>
-                  <td>{row.donor_name ?? "—"}</td>
-                  <td>{formatCurrency(Number(row.amount))}</td>
-                  <td>{row.payment_method ?? "—"}</td>
-                  <td>
-                    {row.installment_current && row.installment_total
-                      ? `${row.installment_current}/${row.installment_total}`
-                      : "—"}
-                  </td>
-                  <td>
-                    {row.bank_accounts?.bank_name} ({row.bank_accounts?.account_number})
-                  </td>
-                  <td>
-                    {row.owner?.name}
-                    {isAdmin && (
-                      <div>
-                        <IncomeDepartmentEditor
-                          incomeId={row.id}
-                          amount={Number(row.amount)}
-                          currentDepartmentId={row.owner_department_id}
-                          departments={departments ?? []}
-                        />
-                      </div>
-                    )}
-                  </td>
-                  <td>{row.issuer?.name}</td>
-                  <td>
-                    {row.requires_inter_settlement ? (
-                      <span className="badge bg-warning-bg text-warning">חוב פנימי</span>
-                    ) : (
-                      <span className="badge bg-success-bg text-success">ישיר</span>
-                    )}
-                  </td>
-                  <td>{row.receipt_number ?? "—"}</td>
-                  <td>{row.order_ref ?? "—"}</td>
-                  {isAdmin && (
-                    <td>
-                      <DeleteIncomeButton incomeId={row.id} label={row.donor_name ?? row.categories?.name ?? ""} />
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-            {(incomes ?? []).length === 0 && (
-              <tr>
-                <td colSpan={isAdmin ? 13 : 12} className="text-center text-muted py-6">
-                  אין הכנסות רשומות עדיין
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <IncomesTable
+          rows={(incomes ?? []).map((inc) => {
+            const row = inc as unknown as {
+              id: string;
+              date: string;
+              amount: number;
+              donor_name: string | null;
+              receipt_number: string | null;
+              order_ref: string | null;
+              payment_method: string | null;
+              installment_current: number | null;
+              installment_total: number | null;
+              requires_inter_settlement: boolean;
+              owner_department_id: string | null;
+              categories: { name: string } | null;
+              bank_accounts: { bank_name: string; account_number: string } | null;
+              owner: { name: string } | null;
+              issuer: { name: string } | null;
+            };
+            const income: IncomeRow = {
+              id: row.id,
+              date: row.date,
+              amount: Number(row.amount),
+              donor_name: row.donor_name,
+              receipt_number: row.receipt_number,
+              order_ref: row.order_ref,
+              payment_method: row.payment_method,
+              installment_current: row.installment_current,
+              installment_total: row.installment_total,
+              requires_inter_settlement: row.requires_inter_settlement,
+              owner_department_id: row.owner_department_id,
+              categoryName: row.categories?.name ?? null,
+              bankLabel: row.bank_accounts ? `${row.bank_accounts.bank_name} (${row.bank_accounts.account_number})` : null,
+              ownerName: row.owner?.name ?? null,
+              issuerName: row.issuer?.name ?? null,
+            };
+            return income;
+          })}
+          isAdmin={isAdmin}
+          departments={departments ?? []}
+        />
       </div>
     </div>
   );

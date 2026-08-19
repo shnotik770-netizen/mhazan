@@ -7,10 +7,103 @@ import {
   deleteCategory,
   updateCategory,
 } from "@/app/(app)/categories/actions";
+import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
 type Category = Tables<"categories">;
+type PendingCategory = Tables<"v_pending_categories">;
+
+export function PendingCategoriesTable({
+  categories,
+  departments,
+}: {
+  categories: PendingCategory[];
+  departments: Department[];
+}) {
+  const columns: ColumnDef<PendingCategory>[] = [{ key: "name", label: "שם קטגוריה", sortValue: (c) => c.name ?? "", filterValue: (c) => c.name ?? "" }];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(categories, columns);
+  return (
+    <table className="data-table">
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <SortFilterTh
+              key={col.key}
+              col={col}
+              allRows={categories}
+              sort={sort}
+              toggleSort={toggleSort}
+              activeFilter={filters[col.key]}
+              setColumnFilter={setColumnFilter}
+            />
+          ))}
+          <th>מחלקה</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((c) => (
+          <PendingCategoryRow key={c.id!} category={c as never} departments={departments} />
+        ))}
+        {sorted.length === 0 && (
+          <tr>
+            <td colSpan={3} className="text-center text-muted py-4">
+              אין תוצאות
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+export function CategoriesTable({
+  categories,
+  departments,
+}: {
+  categories: Category[];
+  departments: Department[];
+}) {
+  const departmentName = (c: Category) => (c.is_split ? "מפוצלת בין מחלקות" : departments.find((d) => d.id === c.department_id)?.name ?? "—");
+  const columns: ColumnDef<Category>[] = [
+    { key: "name", label: "שם", sortValue: (c) => c.name, filterValue: (c) => c.name },
+    { key: "department", label: "מחלקה", sortValue: (c) => departmentName(c), filterValue: (c) => departmentName(c) },
+  ];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(categories, columns);
+  return (
+    <table className="data-table">
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <SortFilterTh
+              key={col.key}
+              col={col}
+              allRows={categories}
+              sort={sort}
+              toggleSort={toggleSort}
+              activeFilter={filters[col.key]}
+              setColumnFilter={setColumnFilter}
+            />
+          ))}
+          <th>פעולות</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((c) => (
+          <CategoryRow key={c.id} category={c} departments={departments} />
+        ))}
+        {sorted.length === 0 && (
+          <tr>
+            <td colSpan={3} className="text-center text-muted py-6">
+              {categories.length === 0 ? "אין קטגוריות מוגדרות עדיין — הוסיפו את הקטגוריה הראשונה למטה" : "אין תוצאות"}
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
 
 export function PendingCategoryRow({
   category,

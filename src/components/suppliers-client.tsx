@@ -3,6 +3,61 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createSupplier, deleteSupplier, importSuppliersFromCheckHistory } from "@/app/(app)/suppliers/actions";
+import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
+import { formatDate } from "@/lib/format";
+import type { Tables } from "@/lib/supabase/database.types";
+
+type Supplier = Tables<"suppliers">;
+
+export function SuppliersTable({ suppliers }: { suppliers: Supplier[] }) {
+  const columns: ColumnDef<Supplier>[] = [
+    { key: "name", label: "שם ספק", sortValue: (s) => s.name, filterValue: (s) => s.name },
+    { key: "notes", label: "הערות", sortValue: (s) => s.notes ?? "" },
+    { key: "created_at", label: "נוסף בתאריך", sortValue: (s) => s.created_at },
+  ];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(suppliers, columns);
+  return (
+    <table className="data-table">
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <SortFilterTh
+              key={col.key}
+              col={col}
+              allRows={suppliers}
+              sort={sort}
+              toggleSort={toggleSort}
+              activeFilter={filters[col.key]}
+              setColumnFilter={setColumnFilter}
+            />
+          ))}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((s) => (
+          <tr key={s.id}>
+            <td>{s.name}</td>
+            <td>{s.notes ?? "—"}</td>
+            <td>{formatDate(s.created_at)}</td>
+            <td>
+              <DeleteSupplierButton supplierId={s.id} name={s.name} />
+            </td>
+          </tr>
+        ))}
+        {sorted.length === 0 && (
+          <tr>
+            <td colSpan={4} className="text-center text-muted py-6">
+              {suppliers.length === 0
+                ? "אין ספקים רשומים עדיין. ניתן להוסיף ידנית או לייבא מתוך היסטוריית הצ׳קים."
+                : "אין תוצאות"}
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
 
 export function NewSupplierForm() {
   const router = useRouter();
