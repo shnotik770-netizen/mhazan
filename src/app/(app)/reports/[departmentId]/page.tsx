@@ -46,7 +46,7 @@ export default async function DepartmentReportPage({
         </div>
       </div>
 
-      <DepartmentReport departmentId={departmentId} departmentName={department.name} />
+      <DepartmentReport departmentId={departmentId} departmentName={department.name} isAdmin={isAdmin} />
     </div>
   );
 }

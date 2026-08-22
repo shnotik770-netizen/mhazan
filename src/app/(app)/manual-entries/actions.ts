@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser, requireFinanceAdmin } from "@/lib/auth";
+import { safeErrorMessage } from "@/lib/safe-error";
 
 function revalidateEntryPaths() {
   revalidatePath("/");
@@ -42,7 +43,7 @@ export async function createManualEntry(input: {
     approved_at: isAdmin ? new Date().toISOString() : null,
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: safeErrorMessage(error) };
   revalidateEntryPaths();
   return {};
 }
@@ -67,7 +68,7 @@ export async function updateManualEntry(
       ...(input.bankAccountId ? { bank_account_id: input.bankAccountId } : {}),
     })
     .eq("id", entryId);
-  if (error) return { error: error.message };
+  if (error) return { error: safeErrorMessage(error) };
   revalidateEntryPaths();
   return {};
 }

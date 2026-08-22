@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceAdmin } from "@/lib/auth";
+import { safeErrorMessage } from "@/lib/safe-error";
 import type { TablesInsert } from "@/lib/supabase/database.types";
 
 export type SplitAllocation = { departmentId: string; amount: number };
@@ -125,7 +126,7 @@ export async function submitIncomeBatch(
 
     const { error } = await supabase.from("incomes").insert(rowPayload);
     if (error) {
-      const reason = error.code === "23505" ? "מספר עסקה כפול — כבר קיים במערכת" : error.message;
+      const reason = error.code === "23505" ? "מספר עסקה כפול — כבר קיים במערכת" : safeErrorMessage(error);
       outcomes.push({ success: false, reason });
     } else {
       savedCount += 1;
@@ -146,7 +147,7 @@ export async function deleteIncome(incomeId: string): Promise<{ error?: string }
   revalidatePath("/incomes");
   revalidatePath("/");
   revalidatePath("/ledger");
-  return { error: error?.message };
+  return { error: safeErrorMessage(error) };
 }
 
 function revalidateIncomePaths() {
@@ -169,7 +170,7 @@ export async function updateIncomeDepartment(incomeId: string, departmentId: str
     .select("issuing_department_id")
     .eq("id", incomeId)
     .single();
-  if (fetchError || !income) return { error: fetchError?.message ?? "ההכנסה לא נמצאה" };
+  if (fetchError || !income) return { error: safeErrorMessage(fetchError) ?? "ההכנסה לא נמצאה" };
 
   const { error } = await supabase
     .from("incomes")
@@ -178,7 +179,7 @@ export async function updateIncomeDepartment(incomeId: string, departmentId: str
       requires_inter_settlement: departmentId !== income.issuing_department_id,
     })
     .eq("id", incomeId);
-  if (error) return { error: error.message };
+  if (error) return { error: safeErrorMessage(error) };
 
   revalidateIncomePaths();
   return {};
@@ -196,7 +197,7 @@ export async function updateIncomeLedgerFlag(incomeId: string, skipDepartmentLed
     .update({ skip_department_ledger: skipDepartmentLedger })
     .eq("id", incomeId);
   revalidateIncomePaths();
-  return { error: error?.message };
+  return { error: safeErrorMessage(error) };
 }
 
 // Splits an existing (previously single-department) income across several
@@ -216,7 +217,7 @@ export async function splitIncome(
   if (validAllocations.length < 2) return { error: "יש להזין לפחות שתי מחלקות עם סכום" };
 
   const { data: income, error: fetchError } = await supabase.from("incomes").select("*").eq("id", incomeId).single();
-  if (fetchError || !income) return { error: fetchError?.message ?? "ההכנסה לא נמצאה" };
+  if (fetchError || !income) return { error: safeErrorMessage(fetchError) ?? "ההכנסה לא נמצאה" };
 
   const { data: category } = await supabase.from("categories").select("is_split").eq("id", income.category_id).single();
   if (!category?.is_split) {
@@ -239,7 +240,7 @@ export async function splitIncome(
       .from("incomes")
       .update({ transaction_ref: null })
       .eq("id", incomeId);
-    if (freeRefError) return { error: freeRefError.message };
+    if (freeRefError) return { error: safeErrorMessage(freeRefError) };
   }
 
   const rows = validAllocations.map((alloc, i) => ({
@@ -262,7 +263,7 @@ export async function splitIncome(
   const { data: inserted, error: insertError } = await supabase.from("incomes").insert(rows).select("id");
   if (insertError) {
     if (originalRef) await supabase.from("incomes").update({ transaction_ref: originalRef }).eq("id", incomeId);
-    return { error: insertError.message };
+    return { error: safeErrorMessage(insertError) };
   }
 
   const { error: deleteError } = await supabase.from("incomes").delete().eq("id", incomeId);
@@ -272,7 +273,7 @@ export async function splitIncome(
       .from("incomes")
       .delete()
       .in("id", (inserted ?? []).map((r) => r.id));
-    return { error: deleteError.message };
+    return { error: safeErrorMessage(deleteError) };
   }
 
   revalidateIncomePaths();

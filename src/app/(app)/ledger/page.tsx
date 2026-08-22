@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { DepartmentReport } from "@/components/department-report";
@@ -65,27 +66,32 @@ export default async function LedgerPage({
         <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} />
       </div>
 
-      <form className="card p-4 flex flex-wrap items-end gap-3 no-print" method="get">
-        <div>
-          <label className="block text-sm font-medium mb-1">מחלקה</label>
-          <select name="department" defaultValue={departmentParam ?? ""} className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm">
-            <option value="">בחר מחלקה...</option>
-            {myDepartments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button type="submit" className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold">
-          הצג דוח
-        </button>
-      </form>
+      <div className="card p-4 flex flex-wrap items-center gap-2 no-print">
+        <span className="text-sm font-medium ml-1">מחלקה:</span>
+        {myDepartments.map((d) => (
+          <Link
+            key={d.id}
+            href={`/ledger?department=${d.id}`}
+            className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+              selectedDepartment?.id === d.id
+                ? "bg-primary text-primary-foreground"
+                : "border border-border hover:bg-background"
+            }`}
+          >
+            {d.name}
+          </Link>
+        ))}
+        {selectedDepartment && (
+          <Link href="/ledger" className="text-sm text-muted underline mr-2">
+            נקה בחירה
+          </Link>
+        )}
+      </div>
 
       {selectedDepartment && (
         <div className="space-y-4">
           <h2 className="text-lg font-bold">דוח — {selectedDepartment.name}</h2>
-          <DepartmentReport departmentId={selectedDepartment.id} departmentName={selectedDepartment.name} />
+          <DepartmentReport departmentId={selectedDepartment.id} departmentName={selectedDepartment.name} isAdmin={isAdmin} />
         </div>
       )}
 

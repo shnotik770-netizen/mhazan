@@ -49,6 +49,17 @@ export default async function ExpensesPage() {
 
   const [{ data: checks }, { data: manualEntries }] = await Promise.all([checksQuery, manualQuery]);
 
+  // A split check has no single department_id (it's divided across several
+  // departments via check_allocations) — that's a different, resolved state
+  // from a check that's simply unclassified, so the two need distinct
+  // labels rather than both falling back to "pending".
+  const unclassifiedCheckIds = (checks ?? []).filter((c) => !c.department_id).map((c) => c.id);
+  const { data: allocationRows } =
+    unclassifiedCheckIds.length > 0
+      ? await supabase.from("check_allocations").select("check_id").in("check_id", unclassifiedCheckIds)
+      : { data: [] as { check_id: string }[] };
+  const splitCheckIds = new Set((allocationRows ?? []).map((a) => a.check_id));
+
   type Row = {
     id: string;
     isCheck: boolean;
@@ -97,7 +108,7 @@ export default async function ExpensesPage() {
         notes: row.notes,
         amount: Number(row.amount),
         departmentId: row.department_id,
-        departmentName: row.departments?.name ?? null,
+        departmentName: row.departments?.name ?? (splitCheckIds.has(row.id) ? "מפוצל" : null),
         categoryId: row.category_id,
         categoryName: row.categories?.name ?? null,
         bankAccountName: row.bank_accounts ? `${row.bank_accounts.bank_name} (${row.bank_accounts.account_number})` : null,

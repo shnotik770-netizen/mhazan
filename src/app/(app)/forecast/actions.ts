@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceAdmin } from "@/lib/auth";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { toLocalISODate } from "@/lib/format";
 
 function revalidateForecastPaths() {
@@ -17,7 +18,7 @@ export async function updateBankBalance(bankAccountId: string, newBalance: numbe
     .from("bank_accounts")
     .update({ current_balance: newBalance })
     .eq("id", bankAccountId);
-  if (error) return { error: error.message };
+  if (error) return { error: safeErrorMessage(error) };
   revalidateForecastPaths();
   return {};
 }
@@ -47,7 +48,7 @@ export async function createExpectedIncome(input: {
     created_by: admin.id,
   }));
   const { error } = await supabase.from("expected_incomes").insert(rows);
-  if (error) return { error: error.message };
+  if (error) return { error: safeErrorMessage(error) };
   revalidateForecastPaths();
   return {};
 }
@@ -74,7 +75,7 @@ export async function updateExpectedIncome(
       description: input.description,
     })
     .eq("id", id);
-  if (error) return { error: error.message };
+  if (error) return { error: safeErrorMessage(error) };
   revalidateForecastPaths();
   return {};
 }
@@ -98,22 +99,22 @@ export async function updateExpectedIncomeStatus(
       .select("amount, bank_account_id")
       .eq("id", id)
       .single();
-    if (fetchError) return { error: fetchError.message };
+    if (fetchError) return { error: safeErrorMessage(fetchError) };
     const { data: account, error: accountError } = await supabase
       .from("bank_accounts")
       .select("current_balance")
       .eq("id", income.bank_account_id)
       .single();
-    if (accountError) return { error: accountError.message };
+    if (accountError) return { error: safeErrorMessage(accountError) };
     const { error: balanceError } = await supabase
       .from("bank_accounts")
       .update({ current_balance: Number(account.current_balance) + Number(income.amount) })
       .eq("id", income.bank_account_id);
-    if (balanceError) return { error: balanceError.message };
+    if (balanceError) return { error: safeErrorMessage(balanceError) };
   }
 
   const { error } = await supabase.from("expected_incomes").update({ status }).eq("id", id);
-  if (error) return { error: error.message };
+  if (error) return { error: safeErrorMessage(error) };
   revalidateForecastPaths();
   return {};
 }
@@ -122,7 +123,7 @@ export async function deleteExpectedIncome(id: string): Promise<{ error?: string
   await requireFinanceAdmin();
   const supabase = await createClient();
   const { error } = await supabase.from("expected_incomes").delete().eq("id", id);
-  if (error) return { error: error.message };
+  if (error) return { error: safeErrorMessage(error) };
   revalidateForecastPaths();
   return {};
 }

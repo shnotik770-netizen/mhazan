@@ -9,6 +9,9 @@ type CombinedRow = {
   description: string;
   amount: number;
   spreadTotal?: number | null;
+  status?: string | null;
+  isOld: boolean;
+  kind: "check" | "income" | "manual";
 };
 
 // Deliberately minimal: a department manager just wants to know how much
@@ -19,9 +22,11 @@ type CombinedRow = {
 export async function DepartmentReport({
   departmentId,
   departmentName,
+  isAdmin,
 }: {
   departmentId: string;
   departmentName: string;
+  isAdmin: boolean;
 }) {
   const supabase = await createClient();
 
@@ -33,7 +38,7 @@ export async function DepartmentReport({
       .order("date", { ascending: false }),
     supabase
       .from("v_check_department_amounts")
-      .select("check_id, due_date, amount, payee, payment_method, skip_department_ledger, spread_id")
+      .select("check_id, due_date, amount, payee, payment_method, skip_department_ledger, spread_id, status")
       .eq("department_id", departmentId)
       .neq("status", "CANCELLED")
       .order("due_date", { ascending: false }),
@@ -47,34 +52,35 @@ export async function DepartmentReport({
       .order("entry_date", { ascending: false }),
   ]);
 
-  const incomeRows: CombinedRow[] = (incomes ?? [])
-    .filter((r) => !r.skip_department_ledger)
-    .map((r) => {
-      const category = (r as unknown as { categories: { name: string } | null }).categories?.name;
-      return {
-        id: r.id,
-        date: r.date,
-        type: "הכנסה" + (category ? ` — ${category}` : "") + (r.payment_method ? ` (${r.payment_method})` : ""),
-        description: r.donor_name || "—",
-        amount: Number(r.amount),
-      };
-    });
+  const incomeRows: CombinedRow[] = (incomes ?? []).map((r) => {
+    const category = (r as unknown as { categories: { name: string } | null }).categories?.name;
+    return {
+      id: r.id,
+      date: r.date,
+      type: "הכנסה" + (category ? ` — ${category}` : "") + (r.payment_method ? ` (${r.payment_method})` : ""),
+      description: r.donor_name || "—",
+      amount: Number(r.amount),
+      isOld: r.skip_department_ledger,
+      kind: "income",
+    };
+  });
 
-  const activeExpenses = (expenses ?? []).filter((r) => !r.skip_department_ledger);
   // Several checks/transfers under one spread_id (a split payment plan,
   // or several requests merged into one payee's schedule) should read as
   // one recurring commitment, not unrelated rows — so each row in a spread
-  // carries the group's total, not just its own installment.
+  // carries the group's total, not just its own installment. Only rows
+  // still counted toward the balance participate in that group total.
+  const allExpenses = expenses ?? [];
   const spreadTotals = new Map<string, { total: number; count: number }>();
-  for (const r of activeExpenses) {
-    if (!r.spread_id) continue;
+  for (const r of allExpenses) {
+    if (!r.spread_id || r.skip_department_ledger) continue;
     const g = spreadTotals.get(r.spread_id) ?? { total: 0, count: 0 };
     g.total += Number(r.amount);
     g.count += 1;
     spreadTotals.set(r.spread_id, g);
   }
 
-  const expenseRows: CombinedRow[] = activeExpenses.map((r) => {
+  const expenseRows: CombinedRow[] = allExpenses.map((r) => {
     const group = r.spread_id ? spreadTotals.get(r.spread_id) : undefined;
     return {
       id: r.check_id as string,
@@ -83,6 +89,9 @@ export async function DepartmentReport({
       description: r.payee ?? "הוצאה",
       amount: -Number(r.amount),
       spreadTotal: group && group.count > 1 ? group.total : null,
+      status: r.status,
+      isOld: Boolean(r.skip_department_ledger),
+      kind: "check",
     };
   });
 
@@ -106,13 +115,19 @@ export async function DepartmentReport({
       type: `${directionLabel} — ${kindLabel}`,
       description: e.notes ? `${label} (${e.notes})` : label,
       amount: e.direction === "INCOME" ? Number(e.amount) : -Number(e.amount),
+      isOld: false,
+      kind: "manual",
     };
   });
 
   const allRows = [...incomeRows, ...expenseRows, ...manualRows].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 
-  const totalIncome = allRows.filter((r) => r.amount > 0).reduce((sum, r) => sum + r.amount, 0);
-  const totalExpense = allRows.filter((r) => r.amount < 0).reduce((sum, r) => sum + -r.amount, 0);
+  // "Old" rows (skip_department_ledger) still appear in the list, tagged,
+  // but never count toward the department's balance — that's the whole
+  // point of the flag.
+  const countedRows = allRows.filter((r) => !r.isOld);
+  const totalIncome = countedRows.filter((r) => r.amount > 0).reduce((sum, r) => sum + r.amount, 0);
+  const totalExpense = countedRows.filter((r) => r.amount < 0).reduce((sum, r) => sum + -r.amount, 0);
   const net = totalIncome - totalExpense;
 
   return (
@@ -134,7 +149,7 @@ export async function DepartmentReport({
 
       <div className="card p-4 overflow-x-auto">
         <h2 className="font-semibold mb-3">כל התנועות — {departmentName}</h2>
-        <DepartmentTransactionsTable rows={allRows} />
+        <DepartmentTransactionsTable rows={allRows} isAdmin={isAdmin} />
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { formatCurrency, formatDate, daysAgoLabel } from "@/lib/format";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { BankBalancePanel, ExpectedIncomeManager } from "@/components/forecast-client";
 import { ForecastDailyTable } from "@/components/forecast-daily-table-client";
 import { ForecastDayLookup } from "@/components/forecast-day-lookup-client";
@@ -298,7 +299,7 @@ export default async function ForecastPage({
           </div>
         )}
 
-      {error && <div className="card p-4 bg-danger-bg text-danger text-sm">{error.message}</div>}
+      {error && <div className="card p-4 bg-danger-bg text-danger text-sm">{safeErrorMessage(error)}</div>}
 
       {mode === "bank" && selectedAccount ? (
         <ForecastSimulationProvider

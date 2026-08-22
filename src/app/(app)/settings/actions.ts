@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceAdmin } from "@/lib/auth";
+import { safeErrorMessage } from "@/lib/safe-error";
 
 export async function createDepartment(formData: FormData): Promise<void> {
   await requireFinanceAdmin();
@@ -154,7 +155,10 @@ export async function createUser(input: {
   });
 
   if (error) {
-    let message = error.message;
+    // Prefer the Edge Function's own friendly Hebrew error text (already
+    // safe to show); only fall back to the SDK-level error — a network
+    // failure message, not a raw DB error — sanitized like everything else.
+    let message = safeErrorMessage(error);
     try {
       const context = (error as { context?: Response }).context;
       const body = await context?.json();
@@ -231,7 +235,7 @@ export async function confirmScheduleOccurrence(
     .select("name, direction, bank_account_id")
     .eq("id", scheduleId)
     .single();
-  if (scheduleError || !schedule) return { error: scheduleError?.message ?? "הוראת הקבע לא נמצאה" };
+  if (scheduleError || !schedule) return { error: safeErrorMessage(scheduleError) ?? "הוראת הקבע לא נמצאה" };
   if (!schedule.bank_account_id) return { error: "להוראת הקבע הזו אין חשבון בנק מוגדר" };
 
   const { error } = await supabase.from("manual_department_entries").insert(
@@ -251,7 +255,7 @@ export async function confirmScheduleOccurrence(
     })),
   );
   if (error) {
-    const reason = error.code === "23505" ? "התקופה הזו כבר אושרה עבור אחת המחלקות שנבחרו" : error.message;
+    const reason = error.code === "23505" ? "התקופה הזו כבר אושרה עבור אחת המחלקות שנבחרו" : safeErrorMessage(error);
     return { error: reason };
   }
 
@@ -266,7 +270,7 @@ export async function deleteRecurringSchedule(scheduleId: string): Promise<{ err
   await requireFinanceAdmin();
   const supabase = await createClient();
   const { error } = await supabase.from("recurring_schedules").delete().eq("id", scheduleId);
-  if (error) return { error: error.message };
+  if (error) return { error: safeErrorMessage(error) };
   revalidatePath("/settings");
   revalidatePath("/expenses");
   revalidatePath("/forecast");
@@ -277,7 +281,7 @@ export async function setRecurringScheduleActive(scheduleId: string, isActive: b
   await requireFinanceAdmin();
   const supabase = await createClient();
   const { error } = await supabase.from("recurring_schedules").update({ is_active: isActive }).eq("id", scheduleId);
-  if (error) return { error: error.message };
+  if (error) return { error: safeErrorMessage(error) };
   revalidatePath("/settings");
   revalidatePath("/expenses");
   revalidatePath("/forecast");

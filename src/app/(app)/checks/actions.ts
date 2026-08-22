@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireFinanceAdmin } from "@/lib/auth";
+import { requireFinanceAdmin, requireUser } from "@/lib/auth";
+import { safeErrorMessage } from "@/lib/safe-error";
 import type { Tables } from "@/lib/supabase/database.types";
 
 export type CheckAllocationInput = { departmentId: string; amount: number };
@@ -23,7 +24,7 @@ function friendlyCheckError(error: { message: string; code?: string } | null, ch
   if (error.code === "23505" && error.message.includes("idx_checks_unique_number_per_bank")) {
     return checkNumber ? `מספר צ׳ק ${checkNumber} כבר קיים בחשבון הבנק הזה` : "מספר צ׳ק זה כבר קיים בחשבון הבנק הזה";
   }
-  return error.message;
+  return safeErrorMessage(error);
 }
 
 // Grows the suppliers list automatically as new payees are used, so admins
@@ -50,7 +51,7 @@ async function insertAllocations(
   const { error } = await supabase.from("check_allocations").insert(
     rows.map((a) => ({ check_id: checkId, department_id: a.departmentId, amount: a.amount })),
   );
-  return error?.message ?? null;
+  return safeErrorMessage(error) ?? null;
 }
 
 // Full-featured creation used by finance admins: any payment method,
@@ -129,10 +130,8 @@ export async function createDeptExpenseRequest(input: {
   dueDate: string | null;
   notes: string | null;
 }): Promise<{ error?: string }> {
+  const currentUser = await requireUser();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const { error } = await supabase.from("checks").insert({
     payment_method: input.paymentMethod,
@@ -142,11 +141,11 @@ export async function createDeptExpenseRequest(input: {
     amount: input.amount,
     due_date: input.dueDate || null,
     notes: input.notes,
-    created_by: user?.id ?? null,
+    created_by: currentUser.id,
   });
 
-  if (error) return { error: error.message };
-  await ensureSupplier(supabase, input.payee, user?.id ?? null);
+  if (error) return { error: safeErrorMessage(error) };
+  await ensureSupplier(supabase, input.payee, currentUser.id);
   revalidateCheckPaths();
   return {};
 }
@@ -214,8 +213,8 @@ export async function convertPendingCheckToSpread(
       supabase.from("checks").select("*").eq("id", checkId).single(),
       supabase.from("check_allocations").select("department_id, amount").eq("check_id", checkId),
     ]);
-  if (fetchError || !original) return { error: fetchError?.message ?? "הצ׳ק/הבקשה לא נמצא/ה" };
-  if (allocFetchError) return { error: allocFetchError.message };
+  if (fetchError || !original) return { error: safeErrorMessage(fetchError) ?? "הצ׳ק/הבקשה לא נמצא/ה" };
+  if (allocFetchError) return { error: safeErrorMessage(allocFetchError) };
 
   // If the original was itself split across departments (e.g. the result
   // of an earlier merge), the per-row department picker in the spread UI
@@ -254,7 +253,7 @@ export async function convertPendingCheckToSpread(
   if (spreadResult.error) return spreadResult;
 
   const { error: deleteError } = await supabase.from("checks").delete().eq("id", checkId);
-  if (deleteError) return { error: deleteError.message };
+  if (deleteError) return { error: safeErrorMessage(deleteError) };
 
   revalidateCheckPaths();
   return {};
@@ -297,7 +296,7 @@ export async function createPaymentSpread(input: {
     })
     .select("id")
     .single();
-  if (spreadError) return { error: spreadError.message };
+  if (spreadError) return { error: safeErrorMessage(spreadError) };
 
   for (const row of validRows) {
     const isSplit = row.allocations.some((a) => a.departmentId && a.amount > 0);
@@ -391,6 +390,7 @@ export async function pasteExistingChecks(
 // from the most recent prior check to the same payee that was already
 // classified, so only genuinely new payees land in the pending queue.
 export async function lookupDepartmentsByPayee(payees: string[]): Promise<Record<string, string>> {
+  await requireUser();
   const unique = Array.from(new Set(payees.filter(Boolean)));
   if (unique.length === 0) return {};
 
@@ -422,7 +422,7 @@ export async function bulkAssignCheckDepartment(checkIds: string[], departmentId
   await supabase.from("check_allocations").delete().in("check_id", checkIds);
   const { error } = await supabase.from("checks").update({ department_id: departmentId }).in("id", checkIds);
   revalidateCheckPaths();
-  return { error: error?.message };
+  return { error: safeErrorMessage(error) };
 }
 
 // Splits the combined total of several already-existing checks/transfers
@@ -450,7 +450,7 @@ export async function splitChecksAcrossDepartments(
     .select("id, amount")
     .in("id", checkIds)
     .order("created_at");
-  if (fetchError) return { error: fetchError.message };
+  if (fetchError) return { error: safeErrorMessage(fetchError) };
   if (!checks || checks.length !== checkIds.length) return { error: "חלק מהצ׳קים לא נמצאו" };
 
   const totalChecks = checks.reduce((sum, c) => sum + Number(c.amount), 0);
@@ -487,14 +487,14 @@ export async function splitChecksAcrossDepartments(
         .from("checks")
         .update({ department_id: rows[0].department_id })
         .eq("id", checkId);
-      if (error) return { error: error.message };
+      if (error) return { error: safeErrorMessage(error) };
     } else {
       const { error: clearError } = await supabase.from("checks").update({ department_id: null }).eq("id", checkId);
-      if (clearError) return { error: clearError.message };
+      if (clearError) return { error: safeErrorMessage(clearError) };
       const { error } = await supabase
         .from("check_allocations")
         .insert(rows.map((r) => ({ check_id: checkId, department_id: r.department_id, amount: r.amount })));
-      if (error) return { error: error.message };
+      if (error) return { error: safeErrorMessage(error) };
     }
   }
 
@@ -578,7 +578,7 @@ export async function updateCheckDueDate(checkId: string, dueDate: string | null
   const supabase = await createClient();
   const { error } = await supabase.from("checks").update({ due_date: dueDate || null }).eq("id", checkId);
   revalidateCheckPaths();
-  return { error: error?.message };
+  return { error: safeErrorMessage(error) };
 }
 
 export async function updateCheckStatus(
@@ -586,6 +586,7 @@ export async function updateCheckStatus(
   status: "UNPAID" | "CLEARED" | "CANCELLED",
   internalBeneficiary?: string | null,
 ) {
+  await requireFinanceAdmin();
   const supabase = await createClient();
   const { error } = await supabase
     .from("checks")
@@ -597,7 +598,7 @@ export async function updateCheckStatus(
     .eq("id", checkId);
 
   revalidateCheckPaths();
-  return { error: error?.message };
+  return { error: safeErrorMessage(error) };
 }
 
 export async function deleteCheck(checkId: string): Promise<{ error?: string }> {
@@ -605,7 +606,7 @@ export async function deleteCheck(checkId: string): Promise<{ error?: string }> 
   const supabase = await createClient();
   const { error } = await supabase.from("checks").delete().eq("id", checkId);
   revalidateCheckPaths();
-  return { error: error?.message };
+  return { error: safeErrorMessage(error) };
 }
 
 export type CheckSpreadRow = {
@@ -635,13 +636,14 @@ export type CheckSpreadDetail = {
 // merged payment requests), pulls in every sibling check and each row's
 // department split, not just the one that was clicked.
 export async function getCheckSpreadDetail(checkId: string): Promise<{ error?: string; detail?: CheckSpreadDetail }> {
+  await requireUser();
   const supabase = await createClient();
   const { data: check, error } = await supabase
     .from("checks")
     .select("*, bank_accounts(bank_name, account_number)")
     .eq("id", checkId)
     .single();
-  if (error || !check) return { error: error?.message ?? "הצ׳ק לא נמצא" };
+  if (error || !check) return { error: error ? safeErrorMessage(error) : "הצ׳ק לא נמצא" };
 
   const rawRows = check.spread_id
     ? (
@@ -730,6 +732,7 @@ export async function getExpensesByPayee(payee: string): Promise<{
   departments: Tables<"departments">[];
   allocationsByCheck: Record<string, CheckAllocationInput[]>;
 }> {
+  await requireUser();
   const supabase = await createClient();
   const [{ data }, { data: departments }] = await Promise.all([
     supabase
@@ -816,7 +819,7 @@ export async function bulkMarkChecksCleared(checkIds: string[]): Promise<{ error
     .from("checks")
     .update({ status: "CLEARED" }, { count: "exact" })
     .in("id", checkIds);
-  if (error) return { error: error.message };
+  if (error) return { error: safeErrorMessage(error) };
   revalidateCheckPaths();
   return { count: count ?? checkIds.length };
 }
@@ -889,10 +892,8 @@ export type BulkExpenseRequestRow = {
 export async function createDeptExpenseRequestBatch(
   rows: BulkExpenseRequestRow[],
 ): Promise<{ outcomes: BulkRowOutcome[] }> {
+  const currentUser = await requireUser();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const outcomes: BulkRowOutcome[] = [];
   for (const row of rows) {
@@ -904,13 +905,13 @@ export async function createDeptExpenseRequestBatch(
       amount: row.amount,
       due_date: row.dueDate || null,
       notes: row.notes,
-      created_by: user?.id ?? null,
+      created_by: currentUser.id,
     });
     if (error) {
-      outcomes.push({ success: false, reason: error.message });
+      outcomes.push({ success: false, reason: safeErrorMessage(error) ?? "שגיאה" });
     } else {
       outcomes.push({ success: true });
-      await ensureSupplier(supabase, row.payee, user?.id ?? null);
+      await ensureSupplier(supabase, row.payee, currentUser.id);
     }
   }
 
@@ -944,7 +945,7 @@ export async function mergeChecks(
       .from("checks")
       .update({ payment_method: forcePaymentMethod, check_number: null })
       .in("id", checkIds);
-    if (convertError) return { error: convertError.message };
+    if (convertError) return { error: safeErrorMessage(convertError) };
   }
 
   const [{ data: checks, error: fetchError }, { data: existingAllocations, error: allocFetchError }] =
@@ -952,8 +953,8 @@ export async function mergeChecks(
       supabase.from("checks").select("*").in("id", checkIds),
       supabase.from("check_allocations").select("*").in("check_id", checkIds),
     ]);
-  if (fetchError) return { error: fetchError.message };
-  if (allocFetchError) return { error: allocFetchError.message };
+  if (fetchError) return { error: safeErrorMessage(fetchError) };
+  if (allocFetchError) return { error: safeErrorMessage(allocFetchError) };
   if (!checks || checks.length !== checkIds.length) return { error: "חלק מהצ׳קים לא נמצאו" };
 
   const payees = new Set(checks.map((c) => c.payee.trim().toLowerCase()));
@@ -1019,7 +1020,7 @@ export async function mergeChecks(
     })
     .select("id")
     .single();
-  if (insertError) return { error: insertError.message };
+  if (insertError) return { error: safeErrorMessage(insertError) };
 
   if (!singleDepartment) {
     const allocRows = [...departmentTotals.entries()].map(([departmentId, amount]) => ({ departmentId, amount }));
@@ -1028,7 +1029,7 @@ export async function mergeChecks(
   }
 
   const { error: deleteError } = await supabase.from("checks").delete().in("id", checkIds);
-  if (deleteError) return { error: deleteError.message };
+  if (deleteError) return { error: safeErrorMessage(deleteError) };
 
   revalidateCheckPaths();
   return {};
@@ -1048,7 +1049,7 @@ export async function groupChecksIntoSpread(checkIds: string[]): Promise<{ error
   if (checkIds.length < 2) return { error: "יש לבחור לפחות שני צ׳קים/העברות לקיבוץ" };
 
   const { data: checks, error: fetchError } = await supabase.from("checks").select("*").in("id", checkIds);
-  if (fetchError) return { error: fetchError.message };
+  if (fetchError) return { error: safeErrorMessage(fetchError) };
   if (!checks || checks.length !== checkIds.length) return { error: "חלק מהצ׳קים לא נמצאו" };
 
   const payees = new Set(checks.map((c) => c.payee.trim().toLowerCase()));
@@ -1066,12 +1067,12 @@ export async function groupChecksIntoSpread(checkIds: string[]): Promise<{ error
       .insert({ payee: checks[0].payee, payment_method: checks[0].payment_method, created_by: user?.id ?? null })
       .select("id")
       .single();
-    if (spreadError) return { error: spreadError.message };
+    if (spreadError) return { error: safeErrorMessage(spreadError) };
     spreadId = spread.id;
   }
 
   const { error: updateError } = await supabase.from("checks").update({ spread_id: spreadId }).in("id", checkIds);
-  if (updateError) return { error: updateError.message };
+  if (updateError) return { error: safeErrorMessage(updateError) };
 
   revalidateCheckPaths();
   return {};
@@ -1145,5 +1146,5 @@ export async function updateCheckLedgerFlag(checkId: string, skipDepartmentLedge
     .update({ skip_department_ledger: skipDepartmentLedger })
     .eq("id", checkId);
   revalidateCheckPaths();
-  return { error: error?.message };
+  return { error: safeErrorMessage(error) };
 }
