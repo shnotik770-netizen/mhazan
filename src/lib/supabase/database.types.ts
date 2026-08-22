@@ -587,6 +587,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "inter_department_ledger_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_checks_issued"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_department_ledger_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_checks_needing_issuance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_department_ledger_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_checks_pending_approval"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_department_ledger_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_checks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_department_ledger_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_transfers_needing_verification"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_department_ledger_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_transfers_pending_execution"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "inter_department_ledger_from_department_id_fkey"
             columns: ["from_department_id"]
             isOneToOne: false
@@ -815,7 +857,7 @@ export type Database = {
           is_active?: boolean
           name: string
           one_time_date?: string | null
-          type: string
+          type?: string
         }
         Update: {
           bank_account_id?: string | null
@@ -1433,6 +1475,11 @@ export type Database = {
       }
     }
     Functions: {
+      create_print_label: {
+        Args: { p_label_data: Json; p_secret: string }
+        Returns: number
+      }
+      fn_sync_check_ledger: { Args: { p_check_id: string }; Returns: undefined }
       get_cash_flow_forecast: {
         Args: { p_bank_account_id: string; p_horizon_days?: number }
         Returns: {
@@ -1458,16 +1505,38 @@ export type Database = {
         Returns: {
           bank_account_id: string
           department_id: string
-          department_name: string | null
+          department_name: string
           direction: string
           expected_amount: number
+          is_split: boolean
           period_date: string
           schedule_id: string
           schedule_name: string
+          split_allocations: Json
         }[]
       }
-      materialize_known_recurring_occurrences: { Args: never; Returns: number }
       is_finance_admin: { Args: never; Returns: boolean }
+      kiosk_mark_printed: {
+        Args: { p_id: number; p_secret: string }
+        Returns: undefined
+      }
+      kiosk_read_pending_labels: {
+        Args: { p_secret: string }
+        Returns: {
+          created_at: string | null
+          id: number
+          label_data: Json
+          printed_at: string | null
+          status: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "print_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      materialize_known_recurring_occurrences: { Args: never; Returns: number }
       review_manual_entry: {
         Args: { p_decision: string; p_entry_id: string }
         Returns: undefined

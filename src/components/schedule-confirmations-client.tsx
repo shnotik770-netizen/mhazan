@@ -13,10 +13,12 @@ export type PendingConfirmation = {
   scheduleId: string;
   scheduleName: string;
   direction: string;
-  departmentId: string;
+  departmentId: string | null;
   departmentName: string | null;
   expectedAmount: number;
   periodDate: string;
+  isSplit: boolean;
+  splitAllocations: { departmentId: string; departmentName: string; amount: number }[];
 };
 
 export function ScheduleConfirmationsList({
@@ -50,11 +52,17 @@ function ConfirmationRow({ item, departments }: { item: PendingConfirmation; dep
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [split, setSplit] = useState(false);
+  // A schedule that's inherently split across departments (no single
+  // department_id) has no non-split mode to fall back to — start already
+  // in split mode, pre-filled with its existing per-department amounts as
+  // the default to confirm against.
+  const [split, setSplit] = useState(item.isSplit);
   const [amount, setAmount] = useState(String(item.expectedAmount));
   const [confirmedDate, setConfirmedDate] = useState(item.periodDate);
-  const [departmentId, setDepartmentId] = useState(item.departmentId);
-  const [allocations, setAllocations] = useState<ScheduleConfirmationAllocation[]>([]);
+  const [departmentId, setDepartmentId] = useState(item.departmentId ?? "");
+  const [allocations, setAllocations] = useState<ScheduleConfirmationAllocation[]>(
+    item.isSplit ? item.splitAllocations.map((a) => ({ departmentId: a.departmentId, amount: a.amount })) : [],
+  );
 
   function submit() {
     setError(null);
@@ -99,6 +107,7 @@ function ConfirmationRow({ item, departments }: { item: PendingConfirmation; dep
           <span className="text-xs text-muted mr-2">
             {item.direction === "INCOME" ? "הכנסה" : "הוצאה"} · {formatDate(item.periodDate)} · צפי:{" "}
             {formatCurrency(item.expectedAmount)}
+            {item.isSplit && ` · מפוצל (${item.splitAllocations.length} מחלקות)`}
           </span>
         </div>
       </div>
@@ -143,17 +152,19 @@ function ConfirmationRow({ item, departments }: { item: PendingConfirmation; dep
           </>
         )}
 
-        <label className="flex items-center gap-1 text-xs text-muted">
-          <input
-            type="checkbox"
-            checked={split}
-            onChange={(e) => {
-              setSplit(e.target.checked);
-              if (e.target.checked) setAllocations([{ departmentId: item.departmentId, amount: item.expectedAmount }]);
-            }}
-          />
-          פיצול בין כמה מחלקות
-        </label>
+        {!item.isSplit && (
+          <label className="flex items-center gap-1 text-xs text-muted">
+            <input
+              type="checkbox"
+              checked={split}
+              onChange={(e) => {
+                setSplit(e.target.checked);
+                if (e.target.checked) setAllocations([{ departmentId, amount: item.expectedAmount }]);
+              }}
+            />
+            פיצול בין כמה מחלקות
+          </label>
+        )}
 
         <button
           disabled={isPending}

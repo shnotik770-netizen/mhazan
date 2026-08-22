@@ -168,15 +168,30 @@ export default async function ChecksPage({
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
 
-  const pendingConfirmationRows: PendingConfirmation[] = (pendingConfirmations ?? []).map((p) => ({
-    scheduleId: p.schedule_id,
-    scheduleName: p.schedule_name,
-    direction: p.direction,
-    departmentId: p.department_id,
-    departmentName: p.department_name,
-    expectedAmount: Number(p.expected_amount),
-    periodDate: p.period_date,
-  }));
+  const pendingConfirmationRows: PendingConfirmation[] = (pendingConfirmations ?? []).map((p) => {
+    const row = p as unknown as {
+      schedule_id: string;
+      schedule_name: string;
+      direction: string;
+      department_id: string | null;
+      department_name: string | null;
+      expected_amount: number;
+      period_date: string;
+      is_split: boolean;
+      split_allocations: { departmentId: string; departmentName: string; amount: number }[] | null;
+    };
+    return {
+      scheduleId: row.schedule_id,
+      scheduleName: row.schedule_name,
+      direction: row.direction,
+      departmentId: row.department_id,
+      departmentName: row.department_name,
+      expectedAmount: Number(row.expected_amount),
+      periodDate: row.period_date,
+      isSplit: row.is_split,
+      splitAllocations: row.split_allocations ?? [],
+    };
+  });
 
   return (
     <div className="space-y-6">
