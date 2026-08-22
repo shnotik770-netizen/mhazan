@@ -14,6 +14,7 @@ import {
   updateCheckStatus,
   deleteCheck,
   groupChecksIntoSpread,
+  splitSpreadIntoNew,
   splitChecksAcrossDepartments,
   type CheckAllocationInput,
 } from "@/app/(app)/checks/actions";
@@ -156,6 +157,28 @@ export function ExpensesTable({
     });
   }
 
+  function applySplitIntoNewSpread() {
+    if (selected.size < 1) return;
+    if (
+      !confirm(
+        "לפרק את הנבחרים לפריסה נפרדת חדשה?\n\n" +
+          "פעולה זו בלתי הפיכה: הצ׳קים הנבחרים יעברו לפריסה חדשה ונפרדת מהפריסה הקיימת. " +
+          "שיוך המחלקה יתאפס ל״ממתין לסיווג״ גם על הנבחרים וגם על שאר הצ׳קים שנשארים בפריסה המקורית — יש לסווג מחדש את שתי הפריסות.",
+      )
+    )
+      return;
+    setGroupError(null);
+    startGroup(async () => {
+      const result = await splitSpreadIntoNew([...selected]);
+      if (result.error) {
+        setGroupError(result.error);
+        return;
+      }
+      setSelected(new Set());
+      router.refresh();
+    });
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -242,6 +265,15 @@ export function ExpensesTable({
             title="פיצול הסכום הכולל של הנבחרים בין כמה מחלקות"
           >
             חלוקה למחלקות מהסכום הכולל
+          </button>
+          <button
+            type="button"
+            disabled={selected.size < 1 || groupPending}
+            onClick={applySplitIntoNewSpread}
+            className="rounded-lg border border-danger/40 text-danger px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+            title="מוציא את הנבחרים מהפריסה הקיימת שלהם לפריסה נפרדת חדשה — בלתי הפיך, מאפס סיווג מחלקה בשתי הפריסות"
+          >
+            {groupPending ? "מפרק…" : "פרק לפריסה נפרדת"}
           </button>
           <button type="button" onClick={() => setSelected(new Set())} className="text-sm text-muted underline">
             בטל בחירה

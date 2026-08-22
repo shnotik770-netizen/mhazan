@@ -1079,6 +1079,63 @@ export async function groupChecksIntoSpread(checkIds: string[]): Promise<{ error
   return {};
 }
 
+// Detaches a chosen subset of checks out of whatever spread they currently
+// belong to and into a brand-new, separate spread — for when part of a
+// merged/split payment plan turns out to actually be unrelated and needs
+// its own tracking. Department classification on BOTH sides of the split
+// is reset to pending: the original per-check amounts (and any department
+// split percentages) were set relative to the combined group, so once the
+// group is divided those numbers no longer mean anything and must be
+// re-classified by hand. This is irreversible — the UI must confirm with
+// the admin before calling it.
+export async function splitSpreadIntoNew(checkIds: string[]): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (checkIds.length < 1) return { error: "יש לבחור לפחות צ׳ק אחד לפירוק" };
+
+  const { data: checks, error: fetchError } = await supabase.from("checks").select("id, spread_id, payee, payment_method").in("id", checkIds);
+  if (fetchError) return { error: safeErrorMessage(fetchError) };
+  if (!checks || checks.length !== checkIds.length) return { error: "חלק מהצ׳קים לא נמצאו" };
+
+  const spreadIds = new Set(checks.map((c) => c.spread_id).filter((s): s is string => !!s));
+  if (spreadIds.size !== 1) return { error: "יש לבחור צ׳קים מתוך אותה פריסה קיימת בדיוק" };
+  const oldSpreadId = [...spreadIds][0];
+
+  const { data: allInOldSpread, error: siblingsError } = await supabase.from("checks").select("id").eq("spread_id", oldSpreadId);
+  if (siblingsError) return { error: safeErrorMessage(siblingsError) };
+  const remainingIds = (allInOldSpread ?? []).map((c) => c.id).filter((id) => !checkIds.includes(id));
+  if (remainingIds.length === 0) return { error: "הבחירה כוללת את כל הצ׳קים בפריסה — אין ממה לפרק" };
+
+  const { data: newSpread, error: spreadError } = await supabase
+    .from("payment_spreads")
+    .insert({ payee: checks[0].payee, payment_method: checks[0].payment_method, created_by: user?.id ?? null })
+    .select("id")
+    .single();
+  if (spreadError) return { error: safeErrorMessage(spreadError) };
+
+  const { error: moveError } = await supabase
+    .from("checks")
+    .update({ spread_id: newSpread.id, department_id: null })
+    .in("id", checkIds);
+  if (moveError) return { error: safeErrorMessage(moveError) };
+
+  const { error: resetRemainingError } = await supabase
+    .from("checks")
+    .update({ department_id: null })
+    .in("id", remainingIds);
+  if (resetRemainingError) return { error: safeErrorMessage(resetRemainingError) };
+
+  const { error: deleteAllocError } = await supabase.from("check_allocations").delete().in("check_id", [...checkIds, ...remainingIds]);
+  if (deleteAllocError) return { error: safeErrorMessage(deleteAllocError) };
+
+  revalidateCheckPaths();
+  return {};
+}
+
 export async function updateCheck(
   checkId: string,
   input: {
