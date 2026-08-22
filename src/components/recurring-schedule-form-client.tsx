@@ -11,8 +11,6 @@ type Department = Tables<"departments">;
 type BankAccountOption = { id: string; bank_name: string; account_number: string };
 type CategoryOption = { id: string; name: string };
 
-const WEEKDAY_LABELS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
-
 // Same form for creating a new schedule and editing an existing one's
 // rule — passing `existing` switches every field's initial value to the
 // schedule being edited and calls updateRecurringSchedule instead of
@@ -43,8 +41,17 @@ export function NewRecurringScheduleForm({
   );
   const [type, setType] = useState(existing?.type ?? "FIXED_DATE_FIXED_AMOUNT");
   const [frequency, setFrequency] = useState(existing?.frequency ?? "MONTHLY");
-  const [dayOfMonth, setDayOfMonth] = useState(existing?.day_of_month ? String(existing.day_of_month) : "");
-  const [dayOfWeek, setDayOfWeek] = useState(existing?.day_of_week != null ? String(existing.day_of_week) : "0");
+  // Only "day of month" is actually stored — the month/year picked here
+  // just gives the date input a sensible starting point (today, or for an
+  // existing schedule, today's month with its existing day) since the
+  // recurrence itself starts running from whenever the row is saved.
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date();
+    const day = existing?.day_of_month ?? today.getDate();
+    today.setDate(1);
+    today.setDate(day);
+    return today.toISOString().slice(0, 10);
+  });
   const [oneTimeDate, setOneTimeDate] = useState(existing?.one_time_date ?? "");
   const [expectedAmount, setExpectedAmount] = useState(existing ? String(existing.expected_amount) : "");
   const [bankAccountId, setBankAccountId] = useState(existing?.bankAccountId ?? "");
@@ -64,7 +71,7 @@ export function NewRecurringScheduleForm({
     setSplit(false);
     setDepartmentId("");
     setAllocations([]);
-    setDayOfMonth("");
+    setStartDate(new Date().toISOString().slice(0, 10));
     setOneTimeDate("");
     setExpectedAmount("");
     setBankAccountId("");
@@ -101,8 +108,9 @@ export function NewRecurringScheduleForm({
         fd.set("direction", "EXPENSE");
         fd.set("type", type);
         fd.set("frequency", frequency);
-        if ((frequency === "MONTHLY" || frequency === "YEARLY") && !isVariableMonthly) fd.set("day_of_month", dayOfMonth);
-        if (frequency === "WEEKLY") fd.set("day_of_week", dayOfWeek);
+        if (frequency === "MONTHLY" && !isVariableMonthly) {
+          fd.set("day_of_month", String(new Date(`${startDate}T00:00:00`).getDate()));
+        }
         if (frequency === "ONCE") fd.set("one_time_date", oneTimeDate);
         fd.set("expected_amount", expectedAmount);
         fd.set("bank_account_id", bankAccountId);
@@ -181,34 +189,17 @@ export function NewRecurringScheduleForm({
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         >
           <option value="MONTHLY">חודשי</option>
-          <option value="WEEKLY">שבועי</option>
-          <option value="YEARLY">שנתי</option>
           <option value="ONCE">חד פעמי</option>
         </select>
 
-        {(frequency === "MONTHLY" || frequency === "YEARLY") && !isVariableMonthly && (
+        {frequency === "MONTHLY" && !isVariableMonthly && (
           <input
-            type="number"
-            min="1"
-            max="31"
-            value={dayOfMonth}
-            onChange={(e) => setDayOfMonth(e.target.value)}
-            placeholder="יום בחודש"
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            title="היום בחודש שנבחר כאן קובע את יום החיוב החוזר בכל חודש"
             className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           />
-        )}
-        {frequency === "WEEKLY" && (
-          <select
-            value={dayOfWeek}
-            onChange={(e) => setDayOfWeek(e.target.value)}
-            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          >
-            {WEEKDAY_LABELS.map((label, i) => (
-              <option key={i} value={i}>
-                {label}
-              </option>
-            ))}
-          </select>
         )}
         {frequency === "ONCE" && (
           <input
