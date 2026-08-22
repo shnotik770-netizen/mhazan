@@ -1,10 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { formatCurrency } from "@/lib/format";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 
 type BalanceRow = {
+  debtorId: string | null;
   debtorName: string;
+  creditorId: string | null;
   creditorName: string;
   netAmount: number;
   // True when the creditor side is the central/hub department — i.e. this
@@ -40,8 +43,24 @@ export function LedgerBalancesTable({ rows }: { rows: BalanceRow[] }) {
       <tbody>
         {filtered.map((row, i) => (
           <tr key={i} className={row.owedToHub ? "bg-danger-bg" : undefined}>
-            <td className={row.owedToHub ? "text-danger font-semibold" : undefined}>{row.debtorName}</td>
-            <td>{row.creditorName}</td>
+            <td className={row.owedToHub ? "text-danger font-semibold" : undefined}>
+              {row.debtorId ? (
+                <Link href={`/ledger?department=${row.debtorId}`} className="underline decoration-dotted hover:decoration-solid">
+                  {row.debtorName}
+                </Link>
+              ) : (
+                row.debtorName
+              )}
+            </td>
+            <td>
+              {row.creditorId ? (
+                <Link href={`/ledger?department=${row.creditorId}`} className="underline decoration-dotted hover:decoration-solid">
+                  {row.creditorName}
+                </Link>
+              ) : (
+                row.creditorName
+              )}
+            </td>
             <td className={`font-semibold ${row.owedToHub ? "text-danger" : ""}`}>{formatCurrency(row.netAmount)}</td>
           </tr>
         ))}

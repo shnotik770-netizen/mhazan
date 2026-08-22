@@ -66,27 +66,27 @@ export default async function LedgerPage({
         <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} />
       </div>
 
-      <div className="card p-4 flex flex-wrap items-center gap-2 no-print">
-        <span className="text-sm font-medium ml-1">מחלקה:</span>
-        {myDepartments.map((d) => (
-          <Link
-            key={d.id}
-            href={`/ledger?department=${d.id}`}
-            className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
-              selectedDepartment?.id === d.id
-                ? "bg-primary text-primary-foreground"
-                : "border border-border hover:bg-background"
-            }`}
-          >
-            {d.name}
-          </Link>
-        ))}
-        {selectedDepartment && (
+      {selectedDepartment && (
+        <div className="card p-4 flex flex-wrap items-center gap-2 no-print">
+          <span className="text-sm font-medium ml-1">מחלקה:</span>
+          {myDepartments.map((d) => (
+            <Link
+              key={d.id}
+              href={`/ledger?department=${d.id}`}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                selectedDepartment.id === d.id
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border hover:bg-background"
+              }`}
+            >
+              {d.name}
+            </Link>
+          ))}
           <Link href="/ledger" className="text-sm text-muted underline mr-2">
             נקה בחירה
           </Link>
-        )}
-      </div>
+        </div>
+      )}
 
       {selectedDepartment && (
         <div className="space-y-4">
@@ -99,14 +99,16 @@ export default async function LedgerPage({
         <div>
           <h2 className="text-lg font-bold mb-3">התחשבנות פנימית בין מחלקות</h2>
           <p className="text-sm text-muted mb-3">
-            מציג כמה כל מחלקה חייבת למחלקה אחרת, בשל הכנסות שנכנסו לחשבון בנק של מחלקה אחרת מבעלת הקטגוריה.
+            מציג כמה כל מחלקה חייבת למחלקה אחרת, בשל הכנסות שנכנסו לחשבון בנק של מחלקה אחרת מבעלת הקטגוריה. לחיצה על שם מחלקה בטבלה פותחת את הדוח שלה.
           </p>
 
           <div className="card p-4 overflow-x-auto">
             <h3 className="font-semibold mb-3">מטריצת יתרות נטו</h3>
             <LedgerBalancesTable
               rows={(balances ?? []).map((row) => ({
+                debtorId: row.debtor_department_id,
                 debtorName: deptName(row.debtor_department_id),
+                creditorId: row.creditor_department_id,
                 creditorName: deptName(row.creditor_department_id),
                 netAmount: Number(row.net_amount),
                 owedToHub: row.creditor_department_id === hubDepartmentId,
