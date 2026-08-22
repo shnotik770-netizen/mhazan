@@ -11,11 +11,13 @@ import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortab
 import {
   bulkAssignCheckDepartment,
   updateCheck,
+  updateCheckStatus,
+  deleteCheck,
   groupChecksIntoSpread,
   splitChecksAcrossDepartments,
   type CheckAllocationInput,
 } from "@/app/(app)/checks/actions";
-import { updateManualEntry } from "@/app/(app)/manual-entries/actions";
+import { updateManualEntry, deleteManualEntry } from "@/app/(app)/manual-entries/actions";
 
 type ExpenseRow = {
   id: string;
@@ -39,7 +41,8 @@ type ExpenseRow = {
 
 type Option = { id: string; name: string };
 
-const statusLabel = (s: string | null) => (s === "CLEARED" ? "נפרע" : s === "APPROVED" ? "מאושר" : "לא נפרע");
+const statusLabel = (s: string | null) =>
+  s === "CLEARED" ? "נפרע" : s === "APPROVED" ? "מאושר" : s === "CANCELLED" ? "בוטל" : "לא נפרע";
 
 export function ExpensesTable({
   rows,
@@ -307,16 +310,20 @@ export function ExpensesTable({
                     <span className="badge bg-success-bg text-success">נפרע</span>
                   ) : r.status === "APPROVED" ? (
                     <span className="badge bg-success-bg text-success">מאושר</span>
+                  ) : r.status === "CANCELLED" ? (
+                    <span className="badge bg-background text-muted">בוטל</span>
                   ) : (
                     <span className="badge bg-warning-bg text-warning">לא נפרע</span>
                   )}
                 </td>
                 {isAdmin && (
-                  <td className="flex items-center gap-2">
+                  <td className="flex items-center gap-2 flex-wrap">
                     {r.isCheck && <CheckDetailLink checkId={r.id} />}
                     <button type="button" onClick={() => setEditRow(r)} className="text-xs text-primary underline">
                       עריכה
                     </button>
+                    {r.isCheck && r.status !== "CANCELLED" && <CancelCheckButton checkId={r.id} />}
+                    <DeleteExpenseButton row={r} />
                   </td>
                 )}
               </tr>
@@ -475,6 +482,54 @@ function SplitAcrossDepartmentsForm({
           {isPending ? "שומר…" : "שמירה"}
         </button>
       </div>
+    </div>
+  );
+}
+
+function CancelCheckButton({ checkId }: { checkId: string }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function cancel() {
+    if (!confirm("לבטל את הצ׳ק/העברה? הפעולה תסמן אותו כמבוטל — הוא יישאר ברשימה עם סטטוס \"בוטל\" ולא יימחק.")) return;
+    startTransition(async () => {
+      const result = await updateCheckStatus(checkId, "CANCELLED");
+      if (result.error) setError(result.error);
+      else router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <button type="button" disabled={isPending} onClick={cancel} className="text-xs text-warning underline disabled:opacity-50">
+        ביטול
+      </button>
+      {error && <span className="text-xs text-danger">{error}</span>}
+    </div>
+  );
+}
+
+function DeleteExpenseButton({ row }: { row: ExpenseRow }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function remove() {
+    if (!confirm(`למחוק לצמיתות את השורה "${row.description}"? פעולה זו אינה הפיכה.`)) return;
+    startTransition(async () => {
+      const result = row.isCheck ? await deleteCheck(row.id) : await deleteManualEntry(row.id);
+      if (result.error) setError(result.error);
+      else router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <button type="button" disabled={isPending} onClick={remove} className="text-xs text-danger underline disabled:opacity-50">
+        מחיקה
+      </button>
+      {error && <span className="text-xs text-danger">{error}</span>}
     </div>
   );
 }

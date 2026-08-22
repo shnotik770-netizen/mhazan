@@ -73,6 +73,15 @@ export async function updateManualEntry(
   return {};
 }
 
+export async function deleteManualEntry(entryId: string): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("manual_department_entries").delete().eq("id", entryId);
+  if (error) return { error: safeErrorMessage(error) };
+  revalidateEntryPaths();
+  return {};
+}
+
 export async function reviewManualEntry(entryId: string, decision: "APPROVED" | "REJECTED"): Promise<void> {
   await requireFinanceAdmin();
   const supabase = await createClient();

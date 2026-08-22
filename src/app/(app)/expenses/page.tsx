@@ -31,7 +31,6 @@ export default async function ExpensesPage() {
       "id, due_date, amount, payee, notes, status, payment_method, check_number, department_id, category_id, bank_account_id, spread_id, departments(name), categories(name), bank_accounts(bank_name, account_number)",
     )
     .not("due_date", "is", null)
-    .neq("status", "CANCELLED")
     .order("due_date", { ascending: false })
     .limit(300);
   let manualQuery = supabase

@@ -539,6 +539,7 @@ export async function bulkAssignCheckNumbers(
 export async function recordCancelledCheckNumber(
   bankAccountId: string,
   checkNumber: string,
+  notes?: string,
 ): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const trimmed = checkNumber.trim();
@@ -559,7 +560,7 @@ export async function recordCancelledCheckNumber(
     issued_at: new Date().toISOString(),
     status: "CANCELLED",
     department_id: null,
-    notes: "מספר צ׳ק שדולג (פגום) בהנפקה מהירה",
+    notes: notes?.trim() || "מספר צ׳ק שדולג (פגום) בהנפקה מהירה",
     created_by: user?.id ?? null,
     approved_at: new Date().toISOString(),
     approved_by: user?.id ?? null,
