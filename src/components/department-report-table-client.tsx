@@ -22,7 +22,15 @@ function statusLabel(status: string) {
   return "לא נפרע";
 }
 
-export function DepartmentTransactionsTable({ rows, isAdmin }: { rows: Row[]; isAdmin: boolean }) {
+export function DepartmentTransactionsTable({
+  rows,
+  isAdmin,
+  defaultSortDir = "desc",
+}: {
+  rows: Row[];
+  isAdmin: boolean;
+  defaultSortDir?: "asc" | "desc";
+}) {
   const columns: ColumnDef<Row>[] = [
     { key: "date", label: "תאריך", sortValue: (r) => r.date ?? "" },
     { key: "type", label: "סוג", sortValue: (r) => r.type, filterValue: (r) => r.type },
@@ -35,7 +43,10 @@ export function DepartmentTransactionsTable({ rows, isAdmin }: { rows: Row[]; is
       filterValue: (r) => (r.status ? statusLabel(r.status) : "—"),
     },
   ];
-  const { rows: filtered, sort, toggleSort, filters, setColumnFilter } = useSortFilter(rows, columns);
+  const { rows: filtered, sort, toggleSort, filters, setColumnFilter } = useSortFilter(rows, columns, {
+    key: "date",
+    dir: defaultSortDir,
+  });
 
   return (
     <table className="data-table">

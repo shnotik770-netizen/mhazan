@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency, todayIso } from "@/lib/format";
-import { DepartmentTransactionsTable } from "@/components/department-report-table-client";
+import { DepartmentTransactionsSection } from "@/components/department-transactions-section-client";
 import { DepartmentMonthlyCashFlow } from "@/components/department-monthly-cashflow-client";
 
 function addMonths(monthKey: string, n: number): string {
@@ -21,11 +21,11 @@ type CombinedRow = {
   kind: "check" | "income" | "manual";
 };
 
-// Deliberately minimal: a department manager just wants to know how much
-// came in, how much went out, and therefore how much the department owes
-// (or is owed by) the account it actually runs through — usually the
-// central "פעילות מרכזית" account, or its own account if it has one. One
-// mixed list of every transaction, newest first, no filters, no tabs.
+// Three sections, top to bottom: today's actual state (the "מצב נוכחי"
+// cards, past-only), known future commitments (checks/transfers already in
+// the system with a date that hasn't come yet), then full transaction
+// history — each of the latter two filterable by month or an exact date,
+// with its own income/expense/net summary for whatever's currently shown.
 export async function DepartmentReport({
   departmentId,
   departmentName,
@@ -144,12 +144,12 @@ export async function DepartmentReport({
   // but never count toward the department's balance — that's the whole
   // point of the flag.
   const pastCounted = pastRows.filter((r) => !r.isOld);
-  const futureCounted = futureRows.filter((r) => !r.isOld);
   const totalIncome = pastCounted.filter((r) => r.amount > 0).reduce((sum, r) => sum + r.amount, 0);
   const totalExpense = pastCounted.filter((r) => r.amount < 0).reduce((sum, r) => sum + -r.amount, 0);
   const net = totalIncome - totalExpense;
-  const futureIncome = futureCounted.filter((r) => r.amount > 0).reduce((sum, r) => sum + r.amount, 0);
-  const futureExpense = futureCounted.filter((r) => r.amount < 0).reduce((sum, r) => sum + -r.amount, 0);
+
+  const futureMonths = [...new Set(futureRows.filter((r) => r.date).map((r) => r.date!.slice(0, 7)))].sort();
+  const pastMonths = [...new Set(pastRows.filter((r) => r.date).map((r) => r.date!.slice(0, 7)))].sort();
 
   // Monthly cash-flow view: actual history per month, continuing seamlessly
   // into the same forecast the bank/department forecast page shows, so a
@@ -209,43 +209,40 @@ export async function DepartmentReport({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card p-4">
-          <p className="text-sm text-muted mb-1">סה״כ הכנסות</p>
-          <p className="text-2xl font-bold text-success">{formatCurrency(totalIncome)}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-sm text-muted mb-1">סה״כ הוצאות</p>
-          <p className="text-2xl font-bold text-danger">{formatCurrency(totalExpense)}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-sm text-muted mb-1">{net >= 0 ? "זכאית מהחשבון" : "חייבת לחשבון"}</p>
-          <p className={`text-2xl font-bold ${net >= 0 ? "text-success" : "text-danger"}`}>{formatCurrency(Math.abs(net))}</p>
+      <div>
+        <h2 className="font-semibold mb-3">מצב נוכחי — {departmentName}</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="card p-4">
+            <p className="text-sm text-muted mb-1">סה״כ הכנסות</p>
+            <p className="text-2xl font-bold text-success">{formatCurrency(totalIncome)}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-sm text-muted mb-1">סה״כ הוצאות</p>
+            <p className="text-2xl font-bold text-danger">{formatCurrency(totalExpense)}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-sm text-muted mb-1">{net >= 0 ? "זכאית מהחשבון" : "חייבת לחשבון"}</p>
+            <p className={`text-2xl font-bold ${net >= 0 ? "text-success" : "text-danger"}`}>{formatCurrency(Math.abs(net))}</p>
+          </div>
         </div>
       </div>
 
-      <div className="card p-4 overflow-x-auto">
-        <h2 className="font-semibold mb-3">תנועות עד היום — {departmentName}</h2>
-        <DepartmentTransactionsTable rows={pastRows} isAdmin={isAdmin} />
-      </div>
+      <DepartmentTransactionsSection
+        title="תנועות עתידיות ידועות"
+        rows={futureRows}
+        isAdmin={isAdmin}
+        monthOptions={futureMonths}
+        defaultSortDir="asc"
+      />
+      <DepartmentMonthlyCashFlow rows={monthlyFlow} />
 
-      <div className="card p-4 space-y-4">
-        <div className="overflow-x-auto">
-          <h2 className="font-semibold mb-1">תנועות עתידיות ידועות</h2>
-          <p className="text-sm text-muted mb-3">
-            צ׳קים/העברות שכבר קיימים במערכת עם תאריך שעדיין לא הגיע.{" "}
-            {futureRows.length > 0 && (
-              <>
-                סה״כ: <span className="text-success font-medium">{formatCurrency(futureIncome)}</span> הכנסות ·{" "}
-                <span className="text-danger font-medium">{formatCurrency(futureExpense)}</span> הוצאות.
-              </>
-            )}
-          </p>
-          <DepartmentTransactionsTable rows={futureRows} isAdmin={isAdmin} />
-        </div>
-
-        <DepartmentMonthlyCashFlow rows={monthlyFlow} />
-      </div>
+      <DepartmentTransactionsSection
+        title="תנועות עד היום"
+        rows={pastRows}
+        isAdmin={isAdmin}
+        monthOptions={pastMonths}
+        defaultSortDir="desc"
+      />
     </div>
   );
 }

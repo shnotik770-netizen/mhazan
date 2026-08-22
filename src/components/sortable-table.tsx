@@ -19,8 +19,8 @@ export type ColumnDef<T> = {
 
 export type SortState = { key: string; dir: "asc" | "desc" } | null;
 
-export function useSortFilter<T>(rows: T[], columns: ColumnDef<T>[]) {
-  const [sort, setSort] = useState<SortState>(null);
+export function useSortFilter<T>(rows: T[], columns: ColumnDef<T>[], initialSort: SortState = null) {
+  const [sort, setSort] = useState<SortState>(initialSort);
   const [filters, setFilters] = useState<Record<string, Set<string>>>({});
 
   function toggleSort(key: string) {

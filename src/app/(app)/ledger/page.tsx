@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { DepartmentReport } from "@/components/department-report";
 import { NewManualEntryButton } from "@/components/manual-entries-client";
 import { LedgerBalancesTable } from "@/components/ledger-tables-client";
+import { DepartmentPickerSelect } from "@/components/department-picker-select-client";
 
 export default async function LedgerPage({
   searchParams,
@@ -66,27 +67,15 @@ export default async function LedgerPage({
         <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} />
       </div>
 
-      {selectedDepartment && (
-        <div className="card p-4 flex flex-wrap items-center gap-2 no-print">
-          <span className="text-sm font-medium ml-1">מחלקה:</span>
-          {myDepartments.map((d) => (
-            <Link
-              key={d.id}
-              href={`/ledger?department=${d.id}`}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
-                selectedDepartment.id === d.id
-                  ? "bg-primary text-primary-foreground"
-                  : "border border-border hover:bg-background"
-              }`}
-            >
-              {d.name}
-            </Link>
-          ))}
+      <div className="card p-4 flex flex-wrap items-center gap-2 no-print">
+        <span className="text-sm font-medium ml-1">מחלקה:</span>
+        <DepartmentPickerSelect departments={myDepartments} selectedId={selectedDepartment?.id ?? ""} />
+        {selectedDepartment && (
           <Link href="/ledger" className="text-sm text-muted underline mr-2">
             נקה בחירה
           </Link>
-        </div>
-      )}
+        )}
+      </div>
 
       {selectedDepartment && (
         <div className="space-y-4">
