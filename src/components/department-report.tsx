@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, todayIso } from "@/lib/format";
 import { DepartmentTransactionsTable } from "@/components/department-report-table-client";
 import { DepartmentMonthlyCashFlow } from "@/components/department-monthly-cashflow-client";
 
@@ -129,23 +129,39 @@ export async function DepartmentReport({
 
   const allRows = [...incomeRows, ...expenseRows, ...manualRows].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 
+  // Split into what's already happened (or has no date) vs. what's already
+  // in the system with a future date (an approved check/transfer not yet
+  // due, mostly) — the "current" cards below only ever reflect the former,
+  // so they show the account's actual state today rather than a number
+  // that silently includes commitments that haven't come due yet.
+  const today = todayIso();
+  const pastRows = allRows.filter((r) => !r.date || r.date <= today);
+  const futureRows = [...allRows.filter((r) => r.date && r.date > today)].sort((a, b) =>
+    (a.date ?? "").localeCompare(b.date ?? ""),
+  );
+
   // "Old" rows (skip_department_ledger) still appear in the list, tagged,
   // but never count toward the department's balance — that's the whole
   // point of the flag.
-  const countedRows = allRows.filter((r) => !r.isOld);
-  const totalIncome = countedRows.filter((r) => r.amount > 0).reduce((sum, r) => sum + r.amount, 0);
-  const totalExpense = countedRows.filter((r) => r.amount < 0).reduce((sum, r) => sum + -r.amount, 0);
+  const pastCounted = pastRows.filter((r) => !r.isOld);
+  const futureCounted = futureRows.filter((r) => !r.isOld);
+  const totalIncome = pastCounted.filter((r) => r.amount > 0).reduce((sum, r) => sum + r.amount, 0);
+  const totalExpense = pastCounted.filter((r) => r.amount < 0).reduce((sum, r) => sum + -r.amount, 0);
   const net = totalIncome - totalExpense;
+  const futureIncome = futureCounted.filter((r) => r.amount > 0).reduce((sum, r) => sum + r.amount, 0);
+  const futureExpense = futureCounted.filter((r) => r.amount < 0).reduce((sum, r) => sum + -r.amount, 0);
 
-  // Optional monthly cash-flow view (collapsed by default — the cards +
-  // transaction list above stay exactly as before): actual history per
-  // month, continuing seamlessly into the same forecast the bank/department
-  // forecast page shows, so a manager can see "what did we owe at the end
-  // of month X" and "what's the running balance expected each month after
-  // that" in one continuous table instead of two separate pages.
-  const todayMonth = new Date().toISOString().slice(0, 7);
+  // Monthly cash-flow view: actual history per month, continuing seamlessly
+  // into the same forecast the bank/department forecast page shows, so a
+  // manager can see "what did we owe at the end of month X" and "what's the
+  // running balance expected each month after that" in one continuous
+  // table. Only *past* rows feed the history side — future-dated rows
+  // already in the system (the list above) are also what the forecast RPC
+  // below projects for those same dates, so folding them in here too would
+  // double-count them.
+  const todayMonth = today.slice(0, 7);
   const historicalByMonth = new Map<string, { income: number; expense: number }>();
-  for (const r of countedRows) {
+  for (const r of pastCounted) {
     if (!r.date) continue;
     const m = r.date.slice(0, 7);
     const g = historicalByMonth.get(m) ?? { income: 0, expense: 0 };
@@ -209,11 +225,27 @@ export async function DepartmentReport({
       </div>
 
       <div className="card p-4 overflow-x-auto">
-        <h2 className="font-semibold mb-3">כל התנועות — {departmentName}</h2>
-        <DepartmentTransactionsTable rows={allRows} isAdmin={isAdmin} />
+        <h2 className="font-semibold mb-3">תנועות עד היום — {departmentName}</h2>
+        <DepartmentTransactionsTable rows={pastRows} isAdmin={isAdmin} />
       </div>
 
-      <DepartmentMonthlyCashFlow rows={monthlyFlow} />
+      <div className="card p-4 space-y-4">
+        <div className="overflow-x-auto">
+          <h2 className="font-semibold mb-1">תנועות עתידיות ידועות</h2>
+          <p className="text-sm text-muted mb-3">
+            צ׳קים/העברות שכבר קיימים במערכת עם תאריך שעדיין לא הגיע.{" "}
+            {futureRows.length > 0 && (
+              <>
+                סה״כ: <span className="text-success font-medium">{formatCurrency(futureIncome)}</span> הכנסות ·{" "}
+                <span className="text-danger font-medium">{formatCurrency(futureExpense)}</span> הוצאות.
+              </>
+            )}
+          </p>
+          <DepartmentTransactionsTable rows={futureRows} isAdmin={isAdmin} />
+        </div>
+
+        <DepartmentMonthlyCashFlow rows={monthlyFlow} />
+      </div>
     </div>
   );
 }

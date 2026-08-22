@@ -16,15 +16,15 @@ const links = [
   { href: "/transactions", label: "כל התנועות" },
   { href: "/expenses", label: "הוצאות" },
   { href: "/ledger", label: "דוחות מחלקות" },
-  { href: "/forecast", label: "תחזית תזרים" },
+  { href: "/forecast", label: "תחזית תזרים", forecastOnly: true },
   { href: "/settings", label: "הגדרות", adminOnly: true },
 ];
 
-export function Nav({ user }: { user: CurrentUser }) {
+export function Nav({ user, canSeeForecast }: { user: CurrentUser; canSeeForecast: boolean }) {
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
-  const visibleLinks = links.filter((l) => !l.adminOnly || isAdmin);
+  const visibleLinks = links.filter((l) => (!l.adminOnly || isAdmin) && (!l.forecastOnly || canSeeForecast));
 
   return (
     <header className="border-b border-border bg-surface no-print">

@@ -36,9 +36,6 @@ export default async function DepartmentReportPage({
           <h1 className="text-xl font-bold">דוח מחלקתי — {department.name}</h1>
         </div>
         <div className="flex items-center gap-2 no-print">
-          <Link href={`/forecast?mode=department&department=${departmentId}`} className="text-sm text-primary">
-            תחזית מחלקתית מלאה ←
-          </Link>
           <Link href="/" className="text-sm text-primary">
             ← חזרה לדשבורד
           </Link>

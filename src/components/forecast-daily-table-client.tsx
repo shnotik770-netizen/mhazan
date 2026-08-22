@@ -22,13 +22,7 @@ function monthLabel(month: string) {
 
 // Always shows every row passed in — the range is already scoped by the
 // page-level "עד חודש" filter, so there's no separate cutoff control here.
-export function ForecastDailyTable({
-  rows,
-  mode,
-}: {
-  rows: [string, DayEntry][];
-  mode: "bank" | "department";
-}) {
+export function ForecastDailyTable({ rows }: { rows: [string, DayEntry][] }) {
   const allRows: Row[] = rows.map(([date, entry]) => ({ date, entry }));
 
   const columns: ColumnDef<Row>[] = [
@@ -36,21 +30,17 @@ export function ForecastDailyTable({
     { key: "checks", label: "צ׳קים", sortValue: (r) => r.entry.checks },
     { key: "transfers", label: "העברות", sortValue: (r) => r.entry.transfers },
     { key: "recurring", label: "הוראות קבע", sortValue: (r) => r.entry.recurring },
-    ...(mode === "bank" ? [{ key: "income", label: "צפי הכנסה", sortValue: (r: Row) => r.entry.income } as ColumnDef<Row>] : []),
+    { key: "income", label: "צפי הכנסה", sortValue: (r) => r.entry.income },
     { key: "overdue", label: "פיגורים (ישנים)", sortValue: (r) => r.entry.overdue },
     { key: "total", label: "סה״כ שינוי יומי", sortValue: (r) => r.entry.total },
-    {
-      key: "runningBalance",
-      label: mode === "bank" ? "יתרה בסוף היום" : "יתרה מצטברת בסוף היום",
-      sortValue: (r) => r.entry.runningBalance,
-    },
+    { key: "runningBalance", label: "יתרה בסוף היום", sortValue: (r) => r.entry.runningBalance },
   ];
 
   const { rows: processedRows, sort, toggleSort, filters, setColumnFilter, hasActiveFilters, clearAll } = useSortFilter(
     allRows,
     columns,
   );
-  const colSpan = mode === "bank" ? 8 : 7;
+  const colSpan = 8;
   // Month separators only make sense in natural chronological order —
   // once the table is sorted by anything else, a flat list is what
   // actually matches what the user asked to see.
@@ -101,7 +91,7 @@ export function ForecastDailyTable({
                   <td className={d.checks < 0 ? "text-danger" : undefined}>{formatCurrency(d.checks)}</td>
                   <td className={d.transfers < 0 ? "text-danger" : undefined}>{formatCurrency(d.transfers)}</td>
                   <td className={d.recurring < 0 ? "text-danger" : undefined}>{formatCurrency(d.recurring)}</td>
-                  {mode === "bank" && <td className="text-success">{formatCurrency(d.income)}</td>}
+                  <td className="text-success">{formatCurrency(d.income)}</td>
                   <td className={d.overdue < 0 ? "text-warning" : undefined}>
                     {d.overdue !== 0 ? formatCurrency(d.overdue) : "—"}
                   </td>

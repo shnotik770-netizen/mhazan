@@ -34,8 +34,8 @@ export function DepartmentMonthlyCashFlow({ rows }: { rows: MonthlyFlow[] }) {
   const summaryRow = startIndex > 0 ? rows[startIndex - 1] : null;
 
   return (
-    <details className="card p-4">
-      <summary className="cursor-pointer font-semibold">תזרים חודשי — עבר ותחזית</summary>
+    <details className="border-t border-border pt-4">
+      <summary className="cursor-pointer font-semibold">תזרים חודשי מלא — עבר ותחזית</summary>
       <div className="mt-3 space-y-3">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <label className="text-muted">הצג החל מחודש:</label>
