@@ -41,8 +41,11 @@ export type ScheduleRow = {
   expected_amount: number;
   is_active: boolean;
   end_date: string | null;
+  departmentId: string | null;
+  bankAccountId: string | null;
+  categoryId: string | null;
   departmentName: string | null;
-  allocations: { amount: number; departmentName: string | null }[];
+  allocations: { departmentId: string; amount: number; departmentName: string | null }[];
 };
 
 function departmentLabel(s: ScheduleRow) {
@@ -64,6 +67,7 @@ export function RecurringSchedulesSection({
   categories: CategoryOption[];
 }) {
   const [addOpen, setAddOpen] = useState(false);
+  const [editSchedule, setEditSchedule] = useState<ScheduleRow | null>(null);
 
   const columns: ColumnDef<ScheduleRow>[] = [
     { key: "name", label: "שם", sortValue: (s) => s.name, filterValue: (s) => s.name },
@@ -112,7 +116,7 @@ export function RecurringSchedulesSection({
           </thead>
           <tbody>
             {sorted.map((s) => (
-              <ScheduleRowItem key={s.id} schedule={s} />
+              <ScheduleRowItem key={s.id} schedule={s} onEdit={() => setEditSchedule(s)} />
             ))}
             {sorted.length === 0 && (
               <tr>
@@ -137,11 +141,30 @@ export function RecurringSchedulesSection({
           </div>
         </Modal>
       )}
+      {editSchedule && (
+        <Modal onClose={() => setEditSchedule(null)}>
+          <div className="card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">עריכת הוראת קבע — {editSchedule.name}</h2>
+              <button type="button" onClick={() => setEditSchedule(null)} className="text-sm text-muted">
+                סגור
+              </button>
+            </div>
+            <NewRecurringScheduleForm
+              departments={departments}
+              bankAccounts={bankAccounts}
+              categories={categories}
+              existing={editSchedule}
+              onSaved={() => setEditSchedule(null)}
+            />
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
 
-function ScheduleRowItem({ schedule: s }: { schedule: ScheduleRow }) {
+function ScheduleRowItem({ schedule: s, onEdit }: { schedule: ScheduleRow; onEdit: () => void }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -188,7 +211,10 @@ function ScheduleRowItem({ schedule: s }: { schedule: ScheduleRow }) {
           {s.is_active ? "פעיל" : "לא פעיל"}
         </button>
       </td>
-      <td>
+      <td className="flex items-center gap-2">
+        <button type="button" onClick={onEdit} className="text-xs text-primary underline">
+          עריכה
+        </button>
         <button disabled={isPending} onClick={remove} className="text-xs text-danger underline">
           מחיקה
         </button>

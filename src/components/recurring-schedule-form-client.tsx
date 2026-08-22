@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createRecurringSchedule } from "@/app/(app)/settings/actions";
+import { createRecurringSchedule, updateRecurringSchedule } from "@/app/(app)/settings/actions";
 import { SplitAllocationEditor, type Allocation } from "@/components/split-allocation-editor";
+import type { ScheduleRow } from "@/components/recurring-schedules-manager-client";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -12,32 +13,43 @@ type CategoryOption = { id: string; name: string };
 
 const WEEKDAY_LABELS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
 
+// Same form for creating a new schedule and editing an existing one's
+// rule — passing `existing` switches every field's initial value to the
+// schedule being edited and calls updateRecurringSchedule instead of
+// createRecurringSchedule on submit.
 export function NewRecurringScheduleForm({
   departments,
   bankAccounts,
   categories,
+  existing,
+  onSaved,
 }: {
   departments: Department[];
   bankAccounts: BankAccountOption[];
   categories: CategoryOption[];
+  existing?: ScheduleRow;
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const [name, setName] = useState("");
-  const [split, setSplit] = useState(false);
-  const [departmentId, setDepartmentId] = useState("");
-  const [allocations, setAllocations] = useState<Allocation[]>([]);
-  const [type, setType] = useState("FIXED_DATE_FIXED_AMOUNT");
-  const [frequency, setFrequency] = useState("MONTHLY");
-  const [dayOfMonth, setDayOfMonth] = useState("");
-  const [dayOfWeek, setDayOfWeek] = useState("0");
-  const [oneTimeDate, setOneTimeDate] = useState("");
-  const [expectedAmount, setExpectedAmount] = useState("");
-  const [bankAccountId, setBankAccountId] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [limited, setLimited] = useState(false);
+  const existingIsSplit = (existing?.allocations.length ?? 0) >= 2;
+  const [name, setName] = useState(existing?.name ?? "");
+  const [split, setSplit] = useState(existingIsSplit);
+  const [departmentId, setDepartmentId] = useState(existing?.departmentId ?? "");
+  const [allocations, setAllocations] = useState<Allocation[]>(
+    existingIsSplit ? existing!.allocations.map((a) => ({ departmentId: a.departmentId, amount: a.amount })) : [],
+  );
+  const [type, setType] = useState(existing?.type ?? "FIXED_DATE_FIXED_AMOUNT");
+  const [frequency, setFrequency] = useState(existing?.frequency ?? "MONTHLY");
+  const [dayOfMonth, setDayOfMonth] = useState(existing?.day_of_month ? String(existing.day_of_month) : "");
+  const [dayOfWeek, setDayOfWeek] = useState(existing?.day_of_week != null ? String(existing.day_of_week) : "0");
+  const [oneTimeDate, setOneTimeDate] = useState(existing?.one_time_date ?? "");
+  const [expectedAmount, setExpectedAmount] = useState(existing ? String(existing.expected_amount) : "");
+  const [bankAccountId, setBankAccountId] = useState(existing?.bankAccountId ?? "");
+  const [categoryId, setCategoryId] = useState(existing?.categoryId ?? "");
+  const [limited, setLimited] = useState(Boolean(existing?.end_date));
   const [durationMonths, setDurationMonths] = useState("");
 
   // A schedule's "recurring day" button already fixes the date it fires on
@@ -108,11 +120,16 @@ export function NewRecurringScheduleForm({
         } else {
           fd.set("department_id", departmentId);
         }
-        await createRecurringSchedule(fd);
-        reset();
+        if (existing) {
+          await updateRecurringSchedule(existing.id, fd);
+          onSaved?.();
+        } else {
+          await createRecurringSchedule(fd);
+          reset();
+        }
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "שגיאה בהוספה");
+        setError(e instanceof Error ? e.message : "שגיאה בשמירה");
       }
     });
   }
@@ -283,7 +300,7 @@ export function NewRecurringScheduleForm({
           onClick={submit}
           className="rounded bg-primary text-primary-foreground text-sm px-3 py-1 disabled:opacity-50"
         >
-          הוסף הוראת קבע
+          {existing ? "שמירת שינויים" : "הוסף הוראת קבע"}
         </button>
       </div>
 

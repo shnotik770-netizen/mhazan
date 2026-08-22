@@ -74,7 +74,7 @@ export default async function ChecksPage({
     isAdmin
       ? supabase
           .from("recurring_schedules")
-          .select("*, departments(name), recurring_schedule_allocations(amount, departments(name))")
+          .select("*, departments(name), recurring_schedule_allocations(department_id, amount, departments(name))")
           .order("name")
       : Promise.resolve({ data: [] as never[] }),
   ]);
@@ -93,8 +93,11 @@ export default async function ChecksPage({
       expected_amount: number;
       is_active: boolean;
       end_date: string | null;
+      department_id: string | null;
+      bank_account_id: string | null;
+      category_id: string | null;
       departments: { name: string } | null;
-      recurring_schedule_allocations: { amount: number; departments: { name: string } | null }[];
+      recurring_schedule_allocations: { department_id: string; amount: number; departments: { name: string } | null }[];
     };
     return {
       id: row.id,
@@ -108,8 +111,12 @@ export default async function ChecksPage({
       expected_amount: Number(row.expected_amount),
       is_active: row.is_active,
       end_date: row.end_date,
+      departmentId: row.department_id,
+      bankAccountId: row.bank_account_id,
+      categoryId: row.category_id,
       departmentName: row.departments?.name ?? null,
       allocations: row.recurring_schedule_allocations.map((a) => ({
+        departmentId: a.department_id,
         amount: Number(a.amount),
         departmentName: a.departments?.name ?? null,
       })),

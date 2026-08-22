@@ -135,6 +135,72 @@ export async function createRecurringSchedule(formData: FormData): Promise<void>
 
   revalidatePath("/settings");
   revalidatePath("/forecast");
+  revalidatePath("/checks");
+}
+
+// Lets an admin correct the recurring rule itself (name, amount, date
+// pattern, department split, bank account, category, end date) instead of
+// deleting and recreating the schedule — past occurrences already
+// materialized into manual_department_entries are untouched; only future
+// ones follow the updated rule.
+export async function updateRecurringSchedule(scheduleId: string, formData: FormData): Promise<void> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const frequency = String(formData.get("frequency") ?? "MONTHLY");
+  const type = String(formData.get("type") ?? "FIXED_DATE_FIXED_AMOUNT");
+  const dayOfMonthRaw = formData.get("day_of_month");
+  const dayOfMonth =
+    (frequency === "MONTHLY" && type === "VARIABLE_DATE_ESTIMATED_AMOUNT" && !dayOfMonthRaw) || frequency === "WEEKLY" || frequency === "ONCE"
+      ? null
+      : Number(dayOfMonthRaw);
+
+  const allocations = formData
+    .getAll("allocation_department_id")
+    .map((departmentId, i) => ({
+      departmentId: String(departmentId),
+      amount: Number(formData.getAll("allocation_amount")[i]),
+    }))
+    .filter((a) => a.departmentId && a.amount > 0);
+
+  const { error } = await supabase
+    .from("recurring_schedules")
+    .update({
+      department_id: allocations.length >= 2 ? null : String(formData.get("department_id") ?? ""),
+      name: String(formData.get("name") ?? ""),
+      type,
+      direction: String(formData.get("direction") ?? "EXPENSE"),
+      frequency,
+      day_of_month: frequency === "MONTHLY" || frequency === "YEARLY" ? dayOfMonth : null,
+      day_of_week: frequency === "WEEKLY" ? Number(formData.get("day_of_week")) : null,
+      one_time_date: frequency === "ONCE" ? String(formData.get("one_time_date")) : null,
+      expected_amount: Number(formData.get("expected_amount") ?? 0),
+      category_id: String(formData.get("category_id") ?? "") || null,
+      bank_account_id: String(formData.get("bank_account_id") ?? "") || null,
+      end_date: String(formData.get("end_date") ?? "") || null,
+    })
+    .eq("id", scheduleId);
+  if (error) throw new Error(safeErrorMessage(error));
+
+  // Simplest correct way to replace a split: drop the old allocation rows
+  // and insert the new set — there's no meaningful "diff" between two
+  // arbitrary department splits worth preserving row-by-row.
+  const { error: deleteError } = await supabase.from("recurring_schedule_allocations").delete().eq("schedule_id", scheduleId);
+  if (deleteError) throw new Error(safeErrorMessage(deleteError));
+
+  if (allocations.length >= 2) {
+    const { error: allocError } = await supabase.from("recurring_schedule_allocations").insert(
+      allocations.map((a) => ({
+        schedule_id: scheduleId,
+        department_id: a.departmentId,
+        amount: a.amount,
+      })),
+    );
+    if (allocError) throw new Error(safeErrorMessage(allocError));
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/forecast");
+  revalidatePath("/checks");
 }
 
 // Creates a new login for a user directly (rather than requiring them to
