@@ -1,6 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/format";
 import { DepartmentTransactionsTable } from "@/components/department-report-table-client";
+import { DepartmentMonthlyCashFlow } from "@/components/department-monthly-cashflow-client";
+
+function addMonths(monthKey: string, n: number): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
 
 type CombinedRow = {
   id: string;
@@ -130,6 +137,60 @@ export async function DepartmentReport({
   const totalExpense = countedRows.filter((r) => r.amount < 0).reduce((sum, r) => sum + -r.amount, 0);
   const net = totalIncome - totalExpense;
 
+  // Optional monthly cash-flow view (collapsed by default — the cards +
+  // transaction list above stay exactly as before): actual history per
+  // month, continuing seamlessly into the same forecast the bank/department
+  // forecast page shows, so a manager can see "what did we owe at the end
+  // of month X" and "what's the running balance expected each month after
+  // that" in one continuous table instead of two separate pages.
+  const todayMonth = new Date().toISOString().slice(0, 7);
+  const historicalByMonth = new Map<string, { income: number; expense: number }>();
+  for (const r of countedRows) {
+    if (!r.date) continue;
+    const m = r.date.slice(0, 7);
+    const g = historicalByMonth.get(m) ?? { income: 0, expense: 0 };
+    if (r.amount > 0) g.income += r.amount;
+    else g.expense += -r.amount;
+    historicalByMonth.set(m, g);
+  }
+
+  const { data: forecastRows } = await supabase.rpc("get_department_cash_flow_forecast", {
+    p_department_id: departmentId,
+    p_horizon_days: 400,
+  });
+  const forecastByMonth = new Map<string, { income: number; expense: number }>();
+  for (const row of forecastRows ?? []) {
+    const m = row.forecast_date!.slice(0, 7);
+    const g = forecastByMonth.get(m) ?? { income: 0, expense: 0 };
+    const change = Number(row.expected_change);
+    if (change > 0) g.income += change;
+    else g.expense += -change;
+    forecastByMonth.set(m, g);
+  }
+
+  const touchedMonths = [...new Set([...historicalByMonth.keys(), ...forecastByMonth.keys()])].sort();
+  let running = 0;
+  const monthlyFlow =
+    touchedMonths.length === 0
+      ? []
+      : (() => {
+          const rows: { month: string; income: number; expense: number; opening: number; closing: number; isFuture: boolean }[] = [];
+          let cursor = touchedMonths[0];
+          const last = touchedMonths[touchedMonths.length - 1];
+          while (cursor <= last) {
+            const hist = historicalByMonth.get(cursor);
+            const fut = forecastByMonth.get(cursor);
+            const income = (hist?.income ?? 0) + (fut?.income ?? 0);
+            const expense = (hist?.expense ?? 0) + (fut?.expense ?? 0);
+            const opening = running;
+            const closing = opening + income - expense;
+            running = closing;
+            rows.push({ month: cursor, income, expense, opening, closing, isFuture: cursor > todayMonth });
+            cursor = addMonths(cursor, 1);
+          }
+          return rows;
+        })();
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -151,6 +212,8 @@ export async function DepartmentReport({
         <h2 className="font-semibold mb-3">כל התנועות — {departmentName}</h2>
         <DepartmentTransactionsTable rows={allRows} isAdmin={isAdmin} />
       </div>
+
+      <DepartmentMonthlyCashFlow rows={monthlyFlow} />
     </div>
   );
 }
