@@ -7,6 +7,7 @@ import { SearchableSelect } from "@/components/searchable-select";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
 import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
+import { RowActionsMenu } from "@/components/row-actions-menu";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import {
   bulkAssignCheckDepartment,
@@ -349,13 +350,15 @@ export function ExpensesTable({
                   )}
                 </td>
                 {isAdmin && (
-                  <td className="flex items-center gap-2 flex-wrap">
-                    {r.isCheck && <CheckDetailLink checkId={r.id} />}
-                    <button type="button" onClick={() => setEditRow(r)} className="text-xs text-primary underline">
-                      עריכה
-                    </button>
-                    {r.isCheck && r.status !== "CANCELLED" && <CancelCheckButton checkId={r.id} />}
-                    <DeleteExpenseButton row={r} />
+                  <td>
+                    <RowActionsMenu>
+                      {r.isCheck && <CheckDetailLink checkId={r.id} />}
+                      <button type="button" onClick={() => setEditRow(r)} className="text-xs text-primary underline">
+                        עריכה
+                      </button>
+                      {r.isCheck && r.status !== "CANCELLED" && <CancelCheckButton checkId={r.id} />}
+                      <DeleteExpenseButton row={r} />
+                    </RowActionsMenu>
                   </td>
                 )}
               </tr>
