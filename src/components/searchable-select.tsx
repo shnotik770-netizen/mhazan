@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { Command as CommandPrimitive } from "cmdk";
+import { usePortalContainer } from "@/lib/use-portal-container";
 
 export type SearchableOption = { id: string; label: string };
 
@@ -32,9 +33,16 @@ export function SearchableSelect({
   const selected = options.find((o) => o.id === value) ?? null;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const container = usePortalContainer(inputRef);
 
+  // Opening always starts from the full option list (empty query) instead
+  // of pre-filled with the current selection — otherwise re-opening a
+  // field that already has a value immediately narrows to "1 out of N"
+  // matching only itself, forcing the user to clear it before they can see
+  // anything else to pick.
   function handleOpenChange(next: boolean) {
-    if (next) setQuery(selected?.label ?? "");
+    if (next) setQuery("");
     setOpen(next);
   }
 
@@ -52,6 +60,7 @@ export function SearchableSelect({
       <Popover.Root open={open} onOpenChange={handleOpenChange}>
         <Popover.Anchor asChild>
           <CommandPrimitive.Input
+            ref={inputRef}
             value={open ? query : (selected?.label ?? "")}
             onValueChange={(v) => {
               setQuery(v);
@@ -63,7 +72,7 @@ export function SearchableSelect({
             className={className ?? "rounded border border-border bg-transparent px-2 py-1 text-sm"}
           />
         </Popover.Anchor>
-        <Popover.Portal>
+        <Popover.Portal container={container}>
           <Popover.Content
             dir="rtl"
             align="start"

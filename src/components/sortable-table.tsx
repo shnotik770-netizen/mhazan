@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
+import { usePortalContainer } from "@/lib/use-portal-container";
 
 // Shared "Excel-style" column header behavior: click to sort (asc → desc →
 // none), and an optional dropdown with a checkbox list of the column's
@@ -90,6 +91,8 @@ export function SortFilterTh<T>({
   setColumnFilter: (key: string, values: Set<string> | null) => void;
   }) {
   const [open, setOpen] = useState(false);
+  const filterTriggerRef = useRef<HTMLButtonElement>(null);
+  const container = usePortalContainer(filterTriggerRef);
   const options = useMemo(() => {
     if (!col.filterValue) return [];
     return Array.from(new Set(allRows.map((r) => col.filterValue!(r)))).sort((a, b) => a.localeCompare(b, "he"));
@@ -121,6 +124,7 @@ export function SortFilterTh<T>({
           <Popover.Root open={open} onOpenChange={setOpen}>
             <Popover.Trigger asChild>
               <button
+                ref={filterTriggerRef}
                 type="button"
                 className={`inline-flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-background hover:text-foreground ${
                   isFiltered ? "text-primary" : "text-muted/60"
@@ -133,7 +137,7 @@ export function SortFilterTh<T>({
                 </svg>
               </button>
             </Popover.Trigger>
-            <Popover.Portal>
+            <Popover.Portal container={container}>
               <Popover.Content
                 dir="rtl"
                 align="start"

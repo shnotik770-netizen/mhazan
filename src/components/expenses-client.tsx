@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { SearchableSelect } from "@/components/searchable-select";
+import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
 import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
@@ -39,6 +40,9 @@ type ExpenseRow = {
   checkNumber: string | null;
   paymentMethod: string | null;
   spreadId: string | null;
+  isOld: boolean;
+  hasInvoice: boolean;
+  allocations: { departmentId: string; amount: number }[];
 };
 
 type Option = { id: string; name: string };
@@ -588,6 +592,10 @@ function EditExpenseForm({
   const [departmentId, setDepartmentId] = useState(row.departmentId ?? "");
   const [categoryId, setCategoryId] = useState(row.categoryId ?? "");
   const [notes, setNotes] = useState(row.notes ?? "");
+  const [isSplitting, setIsSplitting] = useState(row.allocations.length > 0);
+  const [allocations, setAllocations] = useState<CheckAllocationInput[]>(row.allocations);
+  const [hasInvoice, setHasInvoice] = useState(row.hasInvoice);
+  const [isOld, setIsOld] = useState(row.isOld);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -597,7 +605,9 @@ function EditExpenseForm({
       setError("סכום לא תקין");
       return;
     }
-    if (!departmentId) {
+    // A check/transfer is allowed to stay unclassified ("ממתין לסיווג") —
+    // only a manual entry, which has no such pending state, still requires one.
+    if (!row.isCheck && !departmentId) {
       setError("יש לבחור מחלקה");
       return;
     }
@@ -609,9 +619,12 @@ function EditExpenseForm({
             amount: amountNum,
             dueDate: date || null,
             checkNumber: checkNumber || null,
-            departmentId,
+            departmentId: isSplitting ? null : departmentId || null,
             categoryId: categoryId || null,
             notes: notes || null,
+            hasInvoice,
+            skipDepartmentLedger: isOld,
+            allocations: isSplitting ? allocations : [],
           })
         : await updateManualEntry(row.id, {
             amount: amountNum,
@@ -673,13 +686,18 @@ function EditExpenseForm({
       <div className={row.isCheck ? "grid grid-cols-2 gap-3" : ""}>
         <div>
           <label className="block text-sm text-muted mb-1">מחלקה</label>
-          <SearchableSelect
-            value={departmentId}
-            onChange={setDepartmentId}
-            options={departments.map((d) => ({ id: d.id, label: d.name }))}
-            required
-            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-          />
+          {isSplitting ? (
+            <p className="text-xs text-muted flex items-center h-9">פיצול בין מחלקות — למטה</p>
+          ) : (
+            <SearchableSelect
+              value={departmentId}
+              onChange={setDepartmentId}
+              options={departments.map((d) => ({ id: d.id, label: d.name }))}
+              placeholder={row.isCheck ? "ממתין לסיווג" : undefined}
+              required={!row.isCheck}
+              className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+            />
+          )}
         </div>
         {row.isCheck && (
           <div>
@@ -695,6 +713,15 @@ function EditExpenseForm({
         )}
       </div>
 
+      {row.isCheck && isSplitting && (
+        <SplitAllocationEditor
+          departments={departments}
+          totalAmount={Number(amount) || 0}
+          allocations={allocations}
+          onChange={setAllocations}
+        />
+      )}
+
       <div>
         <label className="block text-sm text-muted mb-1">הערות</label>
         <input
@@ -703,6 +730,30 @@ function EditExpenseForm({
           className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
         />
       </div>
+
+      {row.isCheck && (
+        <div className="flex flex-wrap items-center gap-4 rounded-lg bg-background p-3">
+          <label className="flex items-center gap-1.5 text-sm">
+            <input
+              type="checkbox"
+              checked={isSplitting}
+              onChange={(e) => {
+                setIsSplitting(e.target.checked);
+                if (!e.target.checked) setAllocations([]);
+              }}
+            />
+            פיצול מחלקה
+          </label>
+          <label className="flex items-center gap-1.5 text-sm">
+            <input type="checkbox" checked={hasInvoice} onChange={(e) => setHasInvoice(e.target.checked)} />
+            יש חשבונית
+          </label>
+          <label className="flex items-center gap-1.5 text-sm">
+            <input type="checkbox" checked={isOld} onChange={(e) => setIsOld(e.target.checked)} />
+            סימון כישן (לא לכלול במאזן המחלקה)
+          </label>
+        </div>
+      )}
 
       {error && <p className="text-sm text-danger">{error}</p>}
 

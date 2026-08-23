@@ -1,6 +1,8 @@
 "use client";
 
+import { useRef } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { usePortalContainer } from "@/lib/use-portal-container";
 
 // A single button that opens a dropdown of row actions (details, edit,
 // cancel, delete, ...) instead of spreading them out as separate text links
@@ -13,10 +15,14 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 // pending/error state, so plain buttons styled with `rowActionButtonClass`
 // are used instead, staying mounted (and the menu open) through that flow.
 export function RowActionsMenu({ children, label = "פעולות" }: { children: React.ReactNode; label?: string }) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const container = usePortalContainer(triggerRef);
+
   return (
     <DropdownMenu.Root dir="rtl">
       <DropdownMenu.Trigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-muted transition-colors hover:border-border hover:bg-background hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 data-[state=open]:border-border data-[state=open]:bg-background data-[state=open]:text-foreground"
           title={label}
@@ -29,7 +35,7 @@ export function RowActionsMenu({ children, label = "פעולות" }: { children:
           </svg>
         </button>
       </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
+      <DropdownMenu.Portal container={container}>
         <DropdownMenu.Content
           align="end"
           sideOffset={6}

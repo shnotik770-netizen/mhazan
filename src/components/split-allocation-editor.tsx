@@ -1,8 +1,5 @@
 "use client";
 
-import type { Tables } from "@/lib/supabase/database.types";
-
-type Department = Tables<"departments">;
 export type Allocation = { departmentId: string; amount: number };
 
 export function SplitAllocationEditor({
@@ -11,7 +8,7 @@ export function SplitAllocationEditor({
   allocations,
   onChange,
 }: {
-  departments: Department[];
+  departments: { id: string; name: string }[];
   totalAmount: number;
   allocations: Allocation[];
   onChange: (allocations: Allocation[]) => void;

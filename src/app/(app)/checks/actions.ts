@@ -1153,6 +1153,7 @@ export async function updateCheck(
     notes: string | null;
     paymentMethod?: "CHECK" | "TRANSFER";
     hasInvoice?: boolean;
+    skipDepartmentLedger?: boolean;
     allocations?: CheckAllocationInput[];
   },
 ): Promise<{ error?: string }> {
@@ -1175,6 +1176,7 @@ export async function updateCheck(
       ...(input.categoryId !== undefined ? { category_id: input.categoryId || null } : {}),
       ...(input.paymentMethod ? { payment_method: input.paymentMethod } : {}),
       ...(input.hasInvoice !== undefined ? { has_invoice: input.hasInvoice } : {}),
+      ...(input.skipDepartmentLedger !== undefined ? { skip_department_ledger: input.skipDepartmentLedger } : {}),
       ...(justNumbered ? { issued_at: new Date().toISOString() } : {}),
     })
     .eq("id", checkId);

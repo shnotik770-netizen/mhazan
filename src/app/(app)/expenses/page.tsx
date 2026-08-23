@@ -28,7 +28,7 @@ export default async function ExpensesPage() {
   let checksQuery = supabase
     .from("checks")
     .select(
-      "id, due_date, amount, payee, notes, status, payment_method, check_number, department_id, category_id, bank_account_id, spread_id, departments(name), categories(name), bank_accounts(bank_name, account_number)",
+      "id, due_date, amount, payee, notes, status, payment_method, check_number, department_id, category_id, bank_account_id, spread_id, skip_department_ledger, has_invoice, departments(name), categories(name), bank_accounts(bank_name, account_number)",
     )
     .not("due_date", "is", null)
     .order("due_date", { ascending: false })
@@ -55,9 +55,18 @@ export default async function ExpensesPage() {
   const unclassifiedCheckIds = (checks ?? []).filter((c) => !c.department_id).map((c) => c.id);
   const { data: allocationRows } =
     unclassifiedCheckIds.length > 0
-      ? await supabase.from("check_allocations").select("check_id").in("check_id", unclassifiedCheckIds)
-      : { data: [] as { check_id: string }[] };
+      ? await supabase
+          .from("check_allocations")
+          .select("check_id, department_id, amount")
+          .in("check_id", unclassifiedCheckIds)
+      : { data: [] as { check_id: string; department_id: string; amount: number }[] };
   const splitCheckIds = new Set((allocationRows ?? []).map((a) => a.check_id));
+  const allocationsByCheckId = new Map<string, { departmentId: string; amount: number }[]>();
+  for (const a of allocationRows ?? []) {
+    const arr = allocationsByCheckId.get(a.check_id) ?? [];
+    arr.push({ departmentId: a.department_id, amount: Number(a.amount) });
+    allocationsByCheckId.set(a.check_id, arr);
+  }
 
   type Row = {
     id: string;
@@ -77,6 +86,9 @@ export default async function ExpensesPage() {
     checkNumber: string | null;
     paymentMethod: string | null;
     spreadId: string | null;
+    isOld: boolean;
+    hasInvoice: boolean;
+    allocations: { departmentId: string; amount: number }[];
   };
 
   const rows: Row[] = [
@@ -93,6 +105,8 @@ export default async function ExpensesPage() {
         department_id: string | null;
         category_id: string | null;
         spread_id: string | null;
+        skip_department_ledger: boolean;
+        has_invoice: boolean;
         departments: { name: string } | null;
         categories: { name: string } | null;
         bank_accounts: { bank_name: string; account_number: string } | null;
@@ -115,6 +129,9 @@ export default async function ExpensesPage() {
         checkNumber: row.check_number,
         paymentMethod: row.payment_method,
         spreadId: row.spread_id,
+        isOld: row.skip_department_ledger,
+        hasInvoice: row.has_invoice,
+        allocations: allocationsByCheckId.get(row.id) ?? [],
       };
     }),
     ...(manualEntries ?? []).map((m) => {
@@ -145,6 +162,9 @@ export default async function ExpensesPage() {
         checkNumber: null,
         paymentMethod: null,
         spreadId: null,
+        isOld: false,
+        hasInvoice: false,
+        allocations: [],
       };
     }),
   ].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
