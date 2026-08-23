@@ -1226,3 +1226,15 @@ export async function updateCheckInvoiceFlag(checkId: string, hasInvoice: boolea
   revalidateCheckPaths();
   return { error: safeErrorMessage(error) };
 }
+
+// Bulk-toggles the "old, excluded from department ledger" flag on several
+// checks/transfers at once — e.g. clearing a backlog of old expenses from
+// the /expenses screen without editing each one individually.
+export async function bulkSetSkipDepartmentLedger(checkIds: string[], skip: boolean): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  if (checkIds.length === 0) return {};
+  const supabase = await createClient();
+  const { error } = await supabase.from("checks").update({ skip_department_ledger: skip }).in("id", checkIds);
+  revalidateCheckPaths();
+  return { error: safeErrorMessage(error) };
+}

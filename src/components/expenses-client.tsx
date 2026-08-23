@@ -12,6 +12,7 @@ import { RowActionsMenu, rowActionButtonClass } from "@/components/row-actions-m
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import {
   bulkAssignCheckDepartment,
+  bulkSetSkipDepartmentLedger,
   updateCheck,
   updateCheckStatus,
   deleteCheck,
@@ -71,6 +72,8 @@ export function ExpensesTable({
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [groupPending, startGroup] = useTransition();
   const [groupError, setGroupError] = useState<string | null>(null);
+  const [oldPending, startOld] = useTransition();
+  const [oldError, setOldError] = useState<string | null>(null);
   const [splitOpen, setSplitOpen] = useState(false);
   const [editRow, setEditRow] = useState<ExpenseRow | null>(null);
   const router = useRouter();
@@ -130,8 +133,27 @@ export function ExpensesTable({
     setSelected(allSelectableSelected ? new Set() : new Set(selectableIds));
   }
 
+  const selectedRows = rows.filter((r) => selected.has(r.id));
+  const selectedTotal = selectedRows.reduce((sum, r) => sum + r.amount, 0);
+
+  // Several bulk actions below overwrite department/spread assignment that
+  // may already exist on the selected rows — surfaces a confirmation naming
+  // exactly how many of the selection already carry that state, so admins
+  // don't silently clobber existing classification/grouping by mistake.
+  function existingStateWarning(): string | null {
+    const alreadyClassified = selectedRows.filter((r) => r.departmentName).length;
+    const alreadyInSpread = selectedRows.filter((r) => r.spreadId).length;
+    if (alreadyClassified === 0 && alreadyInSpread === 0) return null;
+    const parts: string[] = [];
+    if (alreadyClassified > 0) parts.push(`${alreadyClassified} כבר משויכים למחלקה`);
+    if (alreadyInSpread > 0) parts.push(`${alreadyInSpread} כבר חלק מפריסה קיימת`);
+    return `שים לב: מתוך ${selectedRows.length} הנבחרים, ${parts.join(" ו-")}. הפעולה תשנה את השיוך הקיים. להמשיך?`;
+  }
+
   function applyBulkDepartment() {
     if (!bulkDepartmentId || selected.size === 0) return;
+    const warning = existingStateWarning();
+    if (warning && !confirm(warning)) return;
     setBulkError(null);
     startBulk(async () => {
       const result = await bulkAssignCheckDepartment([...selected], bulkDepartmentId);
@@ -145,16 +167,29 @@ export function ExpensesTable({
     });
   }
 
-  const selectedRows = rows.filter((r) => selected.has(r.id));
-  const selectedTotal = selectedRows.reduce((sum, r) => sum + r.amount, 0);
-
   function applyGroup() {
     if (selected.size < 2) return;
+    const warning = existingStateWarning();
+    if (warning && !confirm(warning)) return;
     setGroupError(null);
     startGroup(async () => {
       const result = await groupChecksIntoSpread([...selected]);
       if (result.error) {
         setGroupError(result.error);
+        return;
+      }
+      setSelected(new Set());
+      router.refresh();
+    });
+  }
+
+  function applyBulkOld(skip: boolean) {
+    if (selected.size === 0) return;
+    setOldError(null);
+    startOld(async () => {
+      const result = await bulkSetSkipDepartmentLedger([...selected], skip);
+      if (result.error) {
+        setOldError(result.error);
         return;
       }
       setSelected(new Set());
@@ -265,7 +300,11 @@ export function ExpensesTable({
           <button
             type="button"
             disabled={selected.size < 2}
-            onClick={() => setSplitOpen(true)}
+            onClick={() => {
+              const warning = existingStateWarning();
+              if (warning && !confirm(warning)) return;
+              setSplitOpen(true);
+            }}
             className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
             title="פיצול הסכום הכולל של הנבחרים בין כמה מחלקות"
           >
@@ -280,11 +319,30 @@ export function ExpensesTable({
           >
             {groupPending ? "מפרק…" : "פרק לפריסה נפרדת"}
           </button>
+          <button
+            type="button"
+            disabled={oldPending}
+            onClick={() => applyBulkOld(true)}
+            className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+            title="מסמן את הנבחרים כישן — לא ייכללו במאזן המחלקה"
+          >
+            {oldPending ? "מסמן…" : "סמן כישן — לא נכלל"}
+          </button>
+          <button
+            type="button"
+            disabled={oldPending}
+            onClick={() => applyBulkOld(false)}
+            className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+            title="מבטל את סימון ה'ישן' מהנבחרים — ייכללו שוב במאזן המחלקה"
+          >
+            {oldPending ? "מסמן…" : "סמן כן נכלל"}
+          </button>
           <button type="button" onClick={() => setSelected(new Set())} className="text-sm text-muted underline">
             בטל בחירה
           </button>
           {bulkError && <span className="text-sm text-danger">{bulkError}</span>}
           {groupError && <span className="text-sm text-danger">{groupError}</span>}
+          {oldError && <span className="text-sm text-danger">{oldError}</span>}
         </div>
       )}
 
