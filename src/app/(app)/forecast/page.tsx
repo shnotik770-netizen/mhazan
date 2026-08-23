@@ -87,6 +87,14 @@ export default async function ForecastPage({
       })
     : { data: [], error: null };
 
+  // Approved checks/transfers with no due date yet have no day to slot
+  // into — the RPC reports them as their own "UNDATED" category with a
+  // null date/running balance so they never distort a specific day's or
+  // month's totals below; surfaced instead as one separate summary total.
+  const datedForecast = (forecast ?? []).filter((row) => row.category !== "UNDATED");
+  const undatedForecast = (forecast ?? []).filter((row) => row.category === "UNDATED");
+  const undatedTotal = undatedForecast.reduce((sum, row) => sum + Number(row.expected_change), 0);
+
   // Group the flat per-item forecast rows into a per-day breakdown by
   // category (checks / transfers / recurring / expected income) — the
   // per-item list further down stays for anyone who wants to see exactly
@@ -104,7 +112,7 @@ export default async function ForecastPage({
         runningBalance: number;
       }
     >();
-    for (const row of forecast ?? []) {
+    for (const row of datedForecast) {
       const d = row.forecast_date!;
       const entry =
         byDate.get(d) ??
@@ -212,7 +220,7 @@ export default async function ForecastPage({
           key={selectedAccount.id}
           bankAccountId={selectedAccount.id}
           startingBalance={Number(selectedAccount.current_balance)}
-          items={(forecast ?? []).map((row, i) => ({
+          items={datedForecast.map((row, i) => ({
             id: `${row.category}|${row.source}|${row.forecast_date}|${i}`,
             date: row.forecast_date!,
             source: row.source!,
@@ -267,6 +275,25 @@ export default async function ForecastPage({
             </div>
           )}
 
+          {undatedForecast.length > 0 && (
+            <div className="card p-4 bg-warning-bg border-warning/40">
+              <h2 className="font-semibold mb-1 text-warning">צ׳קים/העברות מאושרים ללא תאריך יעד</h2>
+              <p className="text-xs text-muted mb-2">
+                מאושרים לתשלום אך טרם נקבע להם תאריך — לכן אינם משויכים לחודש מסוים ולא נכללים בסיכום היומי/חודשי
+                וביתרה החזויה למטה. סכום זה מייצג התחייבות עתידית אמיתית שעדיין לא ניתן לתזמן.
+              </p>
+              <p className="text-lg font-bold text-danger mb-2">{formatCurrency(Math.abs(undatedTotal))}</p>
+              <ul className="text-sm space-y-1">
+                {undatedForecast.map((row, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2 border-t border-border/60 pt-1 first:border-t-0 first:pt-0">
+                    <span>{row.source}</span>
+                    <span className="font-medium text-danger">{formatCurrency(Number(row.expected_change))}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <ForecastDailyTable rows={dailyBreakdown} />
           <ForecastSimulationPanel monthlyCards={monthlyCards} />
         </ForecastSimulationProvider>
@@ -286,7 +313,7 @@ export default async function ForecastPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {(forecast ?? []).map((row, i) => (
+                  {datedForecast.map((row, i) => (
                     <tr key={i}>
                       <td>{formatDate(row.forecast_date!)}</td>
                       <td>{row.source}</td>
@@ -296,7 +323,7 @@ export default async function ForecastPage({
                       <td className="font-semibold">{formatCurrency(Number(row.running_balance))}</td>
                     </tr>
                   ))}
-                  {(forecast ?? []).length === 0 && (
+                  {datedForecast.length === 0 && (
                     <tr>
                       <td colSpan={4} className="text-center text-muted py-6">
                         אין תנועות צפויות בטווח שנבחר
