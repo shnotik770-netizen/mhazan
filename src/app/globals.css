@@ -108,6 +108,16 @@ h3 {
   animation: card-rise 0.35s ease-out both;
 }
 
+/* The end state is `transform: none`, not `translateY(0)` — any non-`none`
+   transform value, even a numeric no-op, makes the element a containing
+   block for `position: fixed` descendants (CSS spec). Since nearly every
+   table/section on this site lives inside a `.card`, that turned every
+   fixed-positioned dropdown (row-action menus, column filters, searchable
+   selects) into something anchored to the card's box instead of the
+   viewport — the dropdown would render nowhere near the button that opened
+   it. `animation-fill-mode: both` keeps whatever the last keyframe says
+   after the animation ends, so this matters even long after the 0.35s
+   entrance animation itself is done. */
 @keyframes card-rise {
   from {
     opacity: 0;
@@ -115,7 +125,7 @@ h3 {
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
@@ -208,6 +218,49 @@ table.data-table tbody tr {
 
 table.data-table tbody tr:hover {
   background: color-mix(in srgb, var(--primary) 6%, transparent);
+}
+
+/* Shared chrome for every Radix-based floating panel (dropdown menus,
+   popovers, the searchable-select combobox) — portaled to <body>, so this
+   never runs into the .card containing-block problem above. Radix exposes
+   the chosen side as a custom property, so the panel scales from the edge
+   nearest its trigger instead of always from its own center. */
+.popover-panel {
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin, var(--radix-popover-content-transform-origin, center));
+  animation: popover-in 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.popover-panel[data-state="closed"] {
+  animation: popover-out 0.1s ease-in forwards;
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes popover-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95) translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover-panel,
+  .popover-panel[data-state="closed"] {
+    animation: none;
+  }
 }
 
 @media print {

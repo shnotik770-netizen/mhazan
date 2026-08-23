@@ -11,6 +11,7 @@ import {
 } from "@/app/(app)/checks/actions";
 import { EditDeleteCheckRow } from "@/components/checks-client";
 import { Modal } from "@/components/modal";
+import { rowActionButtonClass } from "@/components/row-actions-menu";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -21,15 +22,21 @@ function statusLabel(status: string) {
   return "לא נפרע";
 }
 
-// A small "פרטים" link next to a check row — opens the full picture: if
-// the check is part of a spread (several checks under one spread_id,
-// whether from splitting one request or merging several), every sibling
-// check and its department split, not just the row that was clicked.
-export function CheckDetailLink({ checkId }: { checkId: string }) {
+// A "פרטים" trigger next to a check row — opens the full picture: if the
+// check is part of a spread (several checks under one spread_id, whether
+// from splitting one request or merging several), every sibling check and
+// its department split, not just the row that was clicked. `variant="menu"`
+// renders it as a full-width row-action-menu button instead of the default
+// small underlined link, for callers that place it inside RowActionsMenu.
+export function CheckDetailLink({ checkId, variant = "link" }: { checkId: string; variant?: "link" | "menu" }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="text-xs text-primary underline whitespace-nowrap">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={variant === "menu" ? rowActionButtonClass("primary") : "text-xs text-primary underline whitespace-nowrap"}
+      >
         פרטים
       </button>
       {open && <CheckDetailModal checkId={checkId} onClose={() => setOpen(false)} />}

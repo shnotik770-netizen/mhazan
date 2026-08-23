@@ -1,58 +1,61 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 
-// A single "⌄" button that opens a dropdown of row actions (details, edit,
+// A single button that opens a dropdown of row actions (details, edit,
 // cancel, delete, ...) instead of spreading them out as separate text links
-// across the row — same fixed-position-escapes-overflow-clipping trick as
-// the column filter dropdown, since every data table on this site scrolls
-// horizontally. Stays open after clicking an action inside it (only the
-// outside-click catcher or the ✕ closes it) so an action's own pending/error
-// state next to its button doesn't get yanked out from under the user mid-flight.
+// across the row. Built on Radix's DropdownMenu — it portals the panel to
+// <body> and repositions itself against the trigger with real collision
+// detection, so it can never end up anchored to the wrong box the way a
+// hand-rolled `position: fixed` calculation could (see the `.card`
+// transform bug fixed in globals.css). Content isn't restricted to
+// DropdownMenu.Item — several actions here carry their own confirm()/async
+// pending/error state, so plain buttons styled with `rowActionButtonClass`
+// are used instead, staying mounted (and the menu open) through that flow.
 export function RowActionsMenu({ children, label = "פעולות" }: { children: React.ReactNode; label?: string }) {
-  const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open || !buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const panelWidth = 176; // matches w-44 below
-    const left = Math.min(Math.max(8, rect.right - panelWidth), window.innerWidth - panelWidth - 8);
-    setCoords({ top: rect.bottom + 4, left });
-  }, [open]);
-
   return (
-    <>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="rounded p-1 text-muted hover:text-foreground hover:bg-background"
-        title={label}
-        aria-label={label}
-        aria-expanded={open}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-        </svg>
-      </button>
-      {open && coords && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div
-            className="fixed z-50 w-44 rounded-lg border border-border bg-surface p-2 shadow-lg text-right"
-            style={{ top: coords.top, left: coords.left }}
-          >
-            <div className="flex items-center justify-end mb-1">
-              <button type="button" className="text-xs text-muted" onClick={() => setOpen(false)}>
-                ✕
-              </button>
-            </div>
-            <div className="flex flex-col items-start gap-1.5">{children}</div>
-          </div>
-        </>
-      )}
-    </>
+    <DropdownMenu.Root dir="rtl">
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-muted transition-colors hover:border-border hover:bg-background hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 data-[state=open]:border-border data-[state=open]:bg-background data-[state=open]:text-foreground"
+          title={label}
+          aria-label={label}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="6" r="1.4" fill="currentColor" stroke="none" />
+            <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+            <circle cx="12" cy="18" r="1.4" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          sideOffset={6}
+          collisionPadding={8}
+          className="popover-panel z-50 min-w-[10rem] rounded-xl border border-border bg-surface p-1.5 text-right shadow-lg"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
+          <div className="flex flex-col gap-0.5">{children}</div>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
+}
+
+type Tone = "default" | "primary" | "warning" | "danger";
+
+const TONE_CLASS: Record<Tone, string> = {
+  default: "text-foreground",
+  primary: "text-primary",
+  warning: "text-warning",
+  danger: "text-danger",
+};
+
+// Shared look for a plain <button> living inside RowActionsMenu — bigger
+// touch target and a hover fill instead of the small underlined text links
+// this replaced.
+export function rowActionButtonClass(tone: Tone = "default"): string {
+  return `flex w-full items-center justify-end rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-50 ${TONE_CLASS[tone]}`;
 }

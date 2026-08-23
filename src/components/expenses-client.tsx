@@ -7,7 +7,7 @@ import { SearchableSelect } from "@/components/searchable-select";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
 import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
-import { RowActionsMenu } from "@/components/row-actions-menu";
+import { RowActionsMenu, rowActionButtonClass } from "@/components/row-actions-menu";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import {
   bulkAssignCheckDepartment,
@@ -352,8 +352,8 @@ export function ExpensesTable({
                 {isAdmin && (
                   <td>
                     <RowActionsMenu>
-                      {r.isCheck && <CheckDetailLink checkId={r.id} />}
-                      <button type="button" onClick={() => setEditRow(r)} className="text-xs text-primary underline">
+                      {r.isCheck && <CheckDetailLink checkId={r.id} variant="menu" />}
+                      <button type="button" onClick={() => setEditRow(r)} className={rowActionButtonClass("primary")}>
                         עריכה
                       </button>
                       {r.isCheck && r.status !== "CANCELLED" && <CancelCheckButton checkId={r.id} />}
@@ -536,11 +536,11 @@ function CancelCheckButton({ checkId }: { checkId: string }) {
   }
 
   return (
-    <div className="flex items-center gap-1">
-      <button type="button" disabled={isPending} onClick={cancel} className="text-xs text-warning underline disabled:opacity-50">
+    <div className="flex w-full flex-col items-end gap-0.5">
+      <button type="button" disabled={isPending} onClick={cancel} className={rowActionButtonClass("warning")}>
         ביטול
       </button>
-      {error && <span className="text-xs text-danger">{error}</span>}
+      {error && <span className="px-3 text-xs text-danger">{error}</span>}
     </div>
   );
 }
@@ -560,11 +560,11 @@ function DeleteExpenseButton({ row }: { row: ExpenseRow }) {
   }
 
   return (
-    <div className="flex items-center gap-1">
-      <button type="button" disabled={isPending} onClick={remove} className="text-xs text-danger underline disabled:opacity-50">
+    <div className="flex w-full flex-col items-end gap-0.5">
+      <button type="button" disabled={isPending} onClick={remove} className={rowActionButtonClass("danger")}>
         מחיקה
       </button>
-      {error && <span className="text-xs text-danger">{error}</span>}
+      {error && <span className="px-3 text-xs text-danger">{error}</span>}
     </div>
   );
 }

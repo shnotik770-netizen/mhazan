@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import * as Popover from "@radix-ui/react-popover";
 
 // Shared "Excel-style" column header behavior: click to sort (asc → desc →
 // none), and an optional dropdown with a checkbox list of the column's
@@ -89,26 +90,11 @@ export function SortFilterTh<T>({
   setColumnFilter: (key: string, values: Set<string> | null) => void;
   }) {
   const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
   const options = useMemo(() => {
     if (!col.filterValue) return [];
     return Array.from(new Set(allRows.map((r) => col.filterValue!(r)))).sort((a, b) => a.localeCompare(b, "he"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allRows]);
-
-  // A table wrapped in overflow-x-auto (every data table on this site is)
-  // implicitly clips overflow-y too — a dropdown positioned absolute
-  // relative to its <th> gets cut off or garbled on narrow screens where
-  // the table scrolls. Anchoring it as position:fixed from the trigger
-  // button's actual screen coordinates escapes that clipping entirely.
-  useEffect(() => {
-    if (!open || !buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const panelWidth = 208; // matches w-52 below
-    const left = Math.min(Math.max(8, rect.left), window.innerWidth - panelWidth - 8);
-    setCoords({ top: rect.bottom + 4, left });
-  }, [open]);
 
   const isSorted = sort?.key === col.key;
   const isFiltered = Boolean(activeFilter && activeFilter.size > 0);
@@ -120,7 +106,7 @@ export function SortFilterTh<T>({
           <button
             type="button"
             onClick={() => toggleSort(col.key)}
-            className="flex items-center gap-1 hover:text-foreground"
+            className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-background hover:text-foreground"
             title="מיין"
           >
             {col.label}
@@ -132,70 +118,75 @@ export function SortFilterTh<T>({
           <span>{col.label}</span>
         )}
         {col.filterValue && (
-          <button
-            ref={buttonRef}
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            className={`text-xs ${isFiltered ? "text-primary" : "text-muted/50"} hover:text-foreground`}
-            title="סנן"
-          >
-            ⏷
-          </button>
+          <Popover.Root open={open} onOpenChange={setOpen}>
+            <Popover.Trigger asChild>
+              <button
+                type="button"
+                className={`inline-flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-background hover:text-foreground ${
+                  isFiltered ? "text-primary" : "text-muted/60"
+                }`}
+                title="סנן"
+                aria-label={`סנן לפי ${col.label}`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16l-6 8v6l-4-2v-4z" />
+                </svg>
+              </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                dir="rtl"
+                align="start"
+                sideOffset={6}
+                collisionPadding={8}
+                className="popover-panel z-50 w-56 rounded-xl border border-border bg-surface p-2.5 text-right font-normal shadow-lg"
+              >
+                <div className="mb-1.5 flex items-center justify-between">
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-primary underline"
+                    onClick={() => setColumnFilter(col.key, null)}
+                  >
+                    נקה סינון
+                  </button>
+                  <Popover.Close className="rounded p-0.5 text-muted hover:bg-background hover:text-foreground" aria-label="סגור">
+                    ✕
+                  </Popover.Close>
+                </div>
+                {isFiltered && (
+                  <p className="mb-1.5 text-[11px] text-muted">
+                    {allRows.filter((r) => activeFilter!.has(col.filterValue!(r))).length} מתוך {allRows.length} שורות
+                  </p>
+                )}
+                <div className="max-h-52 space-y-0.5 overflow-y-auto">
+                  {options.map((opt) => {
+                    const checked = !activeFilter || activeFilter.has(opt);
+                    return (
+                      <label
+                        key={opt}
+                        className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-xs font-normal hover:bg-background cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = new Set(activeFilter ?? options);
+                            if (e.target.checked) next.add(opt);
+                            else next.delete(opt);
+                            setColumnFilter(col.key, next.size === options.length ? null : next);
+                          }}
+                          className="h-4 w-4 accent-[var(--primary)]"
+                        />
+                        <span className="truncate">{opt || "(ריק)"}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
         )}
       </div>
-      {open && col.filterValue && coords && (
-        <>
-          {/* Invisible full-screen catcher so clicking anywhere outside the
-              dropdown closes it, without needing a global click listener. */}
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div
-            className="fixed z-50 w-52 rounded-lg border border-border bg-surface p-2 shadow-lg text-right font-normal"
-            style={{ top: coords.top, left: coords.left }}
-            onClick={(e) => e.stopPropagation()}
-          >
-          <div className="flex items-center justify-between mb-1 text-xs">
-            <button
-              type="button"
-              className="text-primary underline"
-              onClick={() => {
-                setColumnFilter(col.key, null);
-                setOpen(false);
-              }}
-            >
-              נקה סינון
-            </button>
-            <button type="button" className="text-muted" onClick={() => setOpen(false)}>
-              ✕
-            </button>
-          </div>
-          {isFiltered && (
-            <p className="mb-1 text-[11px] text-muted">
-              {allRows.filter((r) => activeFilter!.has(col.filterValue!(r))).length} מתוך {allRows.length} שורות
-            </p>
-          )}
-          <div className="max-h-48 overflow-y-auto space-y-1">
-            {options.map((opt) => {
-              const checked = !activeFilter || activeFilter.has(opt);
-              return (
-                <label key={opt} className="flex items-center gap-1.5 text-xs font-normal cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(e) => {
-                      const next = new Set(activeFilter ?? options);
-                      if (e.target.checked) next.add(opt);
-                      else next.delete(opt);
-                      setColumnFilter(col.key, next.size === options.length ? null : next);
-                    }}
-                  />
-                  <span className="truncate">{opt || "(ריק)"}</span>
-                </label>
-              );
-            })}
-          </div>
-          </div>
-        </>
-      )}
     </th>
   );
 }

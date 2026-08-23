@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import * as Popover from "@radix-ui/react-popover";
+import { Command as CommandPrimitive } from "cmdk";
 
 export type SearchableOption = { id: string; label: string };
 
@@ -8,6 +10,10 @@ export type SearchableOption = { id: string; label: string };
 // (departments, bank accounts) a native select pops open as a full list
 // covering the screen; this filters as you type, like the payee
 // autocomplete, and only ever shows a short filtered list under the input.
+// Built on Radix Popover (portaled, real collision detection — never
+// anchors to the wrong box the way a hand-rolled `position: fixed`
+// calculation could) + cmdk for keyboard navigation (arrow keys / Enter),
+// which the previous version didn't have at all.
 export function SearchableSelect({
   value,
   onChange,
@@ -24,100 +30,72 @@ export function SearchableSelect({
   required?: boolean;
 }) {
   const selected = options.find((o) => o.id === value) ?? null;
-  const [query, setQuery] = useState(selected?.label ?? "");
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [query, setQuery] = useState("");
 
-  // Resync the displayed text when `value` changes from outside (e.g. a
-  // parent resetting the form) — adjusted during render, per React's
-  // guidance, instead of in an effect that would cause an extra render.
-  const [syncedValue, setSyncedValue] = useState(value);
-  if (value !== syncedValue) {
-    setSyncedValue(value);
-    setQuery(selected?.label ?? "");
+  function handleOpenChange(next: boolean) {
+    if (next) setQuery(selected?.label ?? "");
+    setOpen(next);
   }
 
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery(selected?.label ?? "");
-      }
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [selected]);
+  function pick(option: SearchableOption) {
+    onChange(option.id);
+    setOpen(false);
+  }
 
   const filtered = query.trim()
     ? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()))
     : options;
 
-  // Same fix as the table filter dropdowns: a list positioned `absolute`
-  // relative to this input gets clipped or garbled whenever an ancestor
-  // scrolls (a modal's own overflow-y-auto, a table's overflow-x-auto) —
-  // especially on mobile. Anchoring it as position:fixed from the input's
-  // real screen coordinates escapes that clipping entirely, and it's
-  // recomputed on every keystroke since the input can move as validation
-  // text above/below it appears or the page scrolls to keep it in view.
-  useEffect(() => {
-    if (!open || !inputRef.current) return;
-    const rect = inputRef.current.getBoundingClientRect();
-    const left = Math.min(Math.max(8, rect.left), window.innerWidth - rect.width - 8);
-    setCoords({ top: rect.bottom + 4, left, width: rect.width });
-  }, [open, query, filtered.length]);
-
-  function pick(option: SearchableOption) {
-    onChange(option.id);
-    setQuery(option.label);
-    setOpen(false);
-  }
-
   return (
-    <div ref={containerRef} className="relative">
-      <input
-        ref={inputRef}
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-          if (e.target.value === "") onChange("");
-        }}
-        onFocus={() => setOpen(true)}
-        placeholder={placeholder}
-        required={required && !value}
-        className={className ?? "rounded border border-border bg-transparent px-2 py-1 text-sm"}
-      />
-      {open && coords && (
-        <div
-          className="fixed z-50 overflow-hidden rounded-lg border border-border bg-surface shadow-lg"
-          style={{ top: coords.top, left: coords.left, width: coords.width }}
-        >
-          {query.trim() && (
-            <p className="border-b border-border px-3 py-1 text-xs text-muted">
-              {filtered.length} מתוך {options.length} תוצאות
-            </p>
-          )}
-          {filtered.length > 0 ? (
-            <ul className="max-h-56 overflow-y-auto">
-              {filtered.map((o) => (
-                <li key={o.id}>
-                  <button
-                    type="button"
-                    onClick={() => pick(o)}
-                    className="block w-full px-3 py-1.5 text-right text-sm hover:bg-background"
+    <CommandPrimitive shouldFilter={false} className="contents">
+      <Popover.Root open={open} onOpenChange={handleOpenChange}>
+        <Popover.Anchor asChild>
+          <CommandPrimitive.Input
+            value={open ? query : (selected?.label ?? "")}
+            onValueChange={(v) => {
+              setQuery(v);
+              if (v === "") onChange("");
+            }}
+            onFocus={() => handleOpenChange(true)}
+            placeholder={placeholder}
+            required={required && !value}
+            className={className ?? "rounded border border-border bg-transparent px-2 py-1 text-sm"}
+          />
+        </Popover.Anchor>
+        <Popover.Portal>
+          <Popover.Content
+            dir="rtl"
+            align="start"
+            sideOffset={6}
+            collisionPadding={8}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            className="popover-panel z-50 w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
+          >
+            {query.trim() && (
+              <p className="border-b border-border px-3 py-1.5 text-xs text-muted">
+                {filtered.length} מתוך {options.length} תוצאות
+              </p>
+            )}
+            <CommandPrimitive.List className="max-h-60 overflow-y-auto p-1">
+              {filtered.length > 0 ? (
+                filtered.map((o) => (
+                  <CommandPrimitive.Item
+                    key={o.id}
+                    value={o.id}
+                    onSelect={() => pick(o)}
+                    className="cursor-pointer rounded-lg px-3 py-2 text-right text-sm data-[selected=true]:bg-background aria-selected:bg-background"
                   >
                     {o.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="px-3 py-2 text-sm text-muted">אין תוצאות</p>
-          )}
-        </div>
-      )}
-    </div>
+                  </CommandPrimitive.Item>
+                ))
+              ) : (
+                <p className="px-3 py-2 text-sm text-muted">אין תוצאות</p>
+              )}
+            </CommandPrimitive.List>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    </CommandPrimitive>
   );
 }
