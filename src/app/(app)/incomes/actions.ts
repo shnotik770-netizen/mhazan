@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireFinanceAdmin } from "@/lib/auth";
+import { requireFinanceAdmin, requireUser } from "@/lib/auth";
 import { safeErrorMessage } from "@/lib/safe-error";
 import type { TablesInsert } from "@/lib/supabase/database.types";
 
@@ -38,6 +38,7 @@ export type SubmitIncomeBatchResult = {
 // overlapping date-range paste), so they can be excluded before saving
 // instead of relying on the DB's unique constraint to reject them.
 export async function checkExistingTransactionRefs(refs: string[]): Promise<string[]> {
+  await requireUser();
   const unique = Array.from(new Set(refs.filter(Boolean)));
   if (unique.length === 0) return [];
 
@@ -61,6 +62,7 @@ export async function submitIncomeBatch(
   bankAccountId: string,
   rows: IncomeBatchRow[],
 ): Promise<SubmitIncomeBatchResult> {
+  await requireFinanceAdmin();
   if (!bankAccountId) return { savedCount: 0, outcomes: [], error: "יש לבחור חשבון בנק יעד" };
 
   const supabase = await createClient();
