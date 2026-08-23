@@ -249,6 +249,7 @@ export type Database = {
           created_by: string | null
           department_id: string | null
           due_date: string | null
+          has_invoice: boolean
           id: string
           internal_beneficiary: string | null
           issued_at: string | null
@@ -271,6 +272,7 @@ export type Database = {
           created_by?: string | null
           department_id?: string | null
           due_date?: string | null
+          has_invoice?: boolean
           id?: string
           internal_beneficiary?: string | null
           issued_at?: string | null
@@ -293,6 +295,7 @@ export type Database = {
           created_by?: string | null
           department_id?: string | null
           due_date?: string | null
+          has_invoice?: boolean
           id?: string
           internal_beneficiary?: string | null
           issued_at?: string | null

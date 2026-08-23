@@ -61,6 +61,7 @@ export function UnifiedCheckForm({
   const [categoryId, setCategoryId] = useState("");
   const [notes, setNotes] = useState("");
   const [skipDepartmentLedger, setSkipDepartmentLedger] = useState(false);
+  const [hasInvoice, setHasInvoice] = useState(false);
   const [isSplitting, setIsSplitting] = useState(false);
   const [rows, setRows] = useState<Row[]>([blankRow()]);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +78,7 @@ export function UnifiedCheckForm({
     setCategoryId("");
     setNotes("");
     setSkipDepartmentLedger(false);
+    setHasInvoice(false);
     setIsSplitting(false);
     setRows([blankRow()]);
     setError(null);
@@ -136,6 +138,7 @@ export function UnifiedCheckForm({
           internalBeneficiary: null,
           notes: notes || null,
           skipDepartmentLedger,
+          hasInvoice,
           allocations: isSplitting ? row.allocations : [],
         });
         if (result.error) {
@@ -154,6 +157,7 @@ export function UnifiedCheckForm({
         internalBeneficiary: null,
         notes: notes || null,
         bankAccountId,
+        hasInvoice,
         rows: rows.map((r) => ({
           date: r.date || null,
           amount: r.amount,
@@ -329,6 +333,10 @@ export function UnifiedCheckForm({
             <label className="flex items-center gap-1 text-sm">
               <input type="checkbox" checked={isSplitting} onChange={(e) => setIsSplitting(e.target.checked)} />
               פצל בין מחלקות (מתוך הסכום של כל תשלום)
+            </label>
+            <label className="flex items-center gap-1 text-sm">
+              <input type="checkbox" checked={hasInvoice} onChange={(e) => setHasInvoice(e.target.checked)} />
+              יש חשבונית
             </label>
             {!isSpread && (
               <label className="flex items-center gap-1 text-sm">

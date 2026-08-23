@@ -69,7 +69,7 @@ export default async function TransactionsPage({
   let checksQuery = supabase
     .from("checks")
     .select(
-      "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, departments(name), categories(name)",
+      "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name)",
     )
     .neq("status", "CANCELLED")
     .order("due_date", { ascending: false, nullsFirst: false })
@@ -102,7 +102,7 @@ export default async function TransactionsPage({
     checksQuery = supabase
       .from("checks")
       .select(
-        "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, departments(name), categories(name)",
+        "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name)",
       )
       .order("due_date", { ascending: false, nullsFirst: false })
       .limit(300);
@@ -146,6 +146,8 @@ export default async function TransactionsPage({
       sourceKey: "INCOME",
       source: SOURCE_LABELS.INCOME,
       status: null,
+      checkId: null,
+      hasInvoice: null,
     });
   }
 
@@ -160,6 +162,7 @@ export default async function TransactionsPage({
     department_id: string | null;
     category_id: string | null;
     spread_id: string | null;
+    has_invoice: boolean;
     departments: { name: string } | null;
     categories: { name: string } | null;
   }[]) {
@@ -178,6 +181,8 @@ export default async function TransactionsPage({
       sourceKey,
       source: SOURCE_LABELS[sourceKey],
       status: row.status,
+      checkId: row.id,
+      hasInvoice: row.has_invoice,
     });
   }
 
@@ -205,6 +210,8 @@ export default async function TransactionsPage({
       sourceKey: "MANUAL",
       source: SOURCE_LABELS.MANUAL,
       status: "APPROVED",
+      checkId: null,
+      hasInvoice: null,
     });
   }
 
@@ -311,7 +318,7 @@ export default async function TransactionsPage({
       </div>
 
       <div className="card p-4 overflow-x-auto">
-        <TransactionsTable rows={filtered} />
+        <TransactionsTable rows={filtered} isAdmin={isAdmin} />
         <p className="text-xs text-muted mt-2">
           מוצגות עד 300 תנועות אחרונות מכל סוג (הכנסות / צ׳קים-העברות / רישומים ידניים) — לצמצום התוצאות יש להשתמש
           בסינון למעלה.

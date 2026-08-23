@@ -2,6 +2,7 @@
 
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { InvoiceFlagToggle } from "@/components/invoice-flag-toggle-client";
 
 export type UnifiedRow = {
   id: string;
@@ -16,9 +17,18 @@ export type UnifiedRow = {
   sourceKey: "INCOME" | "CHECK" | "TRANSFER" | "MANUAL";
   source: string;
   status: string | null;
+  // Only checks/transfers carry an invoice flag — null for incomes/manual
+  // entries, where the concept doesn't apply.
+  checkId: string | null;
+  hasInvoice: boolean | null;
 };
 
-export function TransactionsTable({ rows }: { rows: UnifiedRow[] }) {
+function invoiceLabel(r: UnifiedRow): string {
+  if (r.hasInvoice === null) return "—";
+  return r.hasInvoice ? "יש חשבונית" : "אין חשבונית";
+}
+
+export function TransactionsTable({ rows, isAdmin }: { rows: UnifiedRow[]; isAdmin: boolean }) {
   const columns: ColumnDef<UnifiedRow>[] = [
     { key: "date", label: "תאריך", sortValue: (r) => r.date ?? "" },
     {
@@ -32,6 +42,7 @@ export function TransactionsTable({ rows }: { rows: UnifiedRow[] }) {
     { key: "category", label: "קטגוריה", sortValue: (r) => r.categoryName ?? "", filterValue: (r) => r.categoryName ?? "—" },
     { key: "department", label: "מחלקה", sortValue: (r) => r.departmentName ?? "", filterValue: (r) => r.departmentName ?? "—" },
     { key: "status", label: "סטטוס", sortValue: (r) => r.status ?? "", filterValue: (r) => r.status ?? "—" },
+    { key: "invoice", label: "חשבונית", sortValue: (r) => invoiceLabel(r), filterValue: (r) => invoiceLabel(r) },
     { key: "amount", label: "סכום", sortValue: (r) => r.amount },
   ];
   const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(rows, columns);
@@ -67,12 +78,23 @@ export function TransactionsTable({ rows }: { rows: UnifiedRow[] }) {
             <td>{r.categoryName ?? "—"}</td>
             <td>{r.departmentName ?? "—"}</td>
             <td>{r.status ?? "—"}</td>
+            <td>
+              {r.hasInvoice === null ? (
+                "—"
+              ) : isAdmin && r.checkId ? (
+                <InvoiceFlagToggle checkId={r.checkId} hasInvoice={r.hasInvoice} />
+              ) : r.hasInvoice ? (
+                "יש חשבונית"
+              ) : (
+                "אין חשבונית"
+              )}
+            </td>
             <td className={r.direction === "INCOME" ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>
           </tr>
         ))}
         {sorted.length === 0 && (
           <tr>
-            <td colSpan={8} className="text-center text-muted py-6">
+            <td colSpan={9} className="text-center text-muted py-6">
               אין תנועות התואמות את הסינון
             </td>
           </tr>

@@ -69,6 +69,7 @@ export async function createCheck(input: {
   internalBeneficiary: string | null;
   notes: string | null;
   skipDepartmentLedger: boolean;
+  hasInvoice: boolean;
   allocations: CheckAllocationInput[];
 }): Promise<{ error?: string }> {
   await requireFinanceAdmin();
@@ -94,6 +95,7 @@ export async function createCheck(input: {
       internal_beneficiary: input.internalBeneficiary || null,
       notes: input.notes,
       skip_department_ledger: input.skipDepartmentLedger,
+      has_invoice: input.hasInvoice,
       created_by: user?.id ?? null,
       // A finance admin entering an expense directly IS the approval —
       // it goes straight to the issuance queue, not through the
@@ -248,6 +250,7 @@ export async function convertPendingCheckToSpread(
     internalBeneficiary: null,
     notes: original.notes,
     bankAccountId: original.bank_account_id,
+    hasInvoice: original.has_invoice,
     rows: rowsWithAllocations,
   });
   if (spreadResult.error) return spreadResult;
@@ -268,6 +271,7 @@ export async function createPaymentSpread(input: {
   internalBeneficiary: string | null;
   notes: string | null;
   bankAccountId: string;
+  hasInvoice: boolean;
   rows: {
     date: string | null;
     amount: number;
@@ -313,6 +317,7 @@ export async function createPaymentSpread(input: {
         department_id: isSplit ? null : row.departmentId,
         internal_beneficiary: input.internalBeneficiary || null,
         spread_id: spread.id,
+        has_invoice: input.hasInvoice,
         created_by: user?.id ?? null,
         approved_at: new Date().toISOString(),
         approved_by: user?.id ?? null,
@@ -1147,6 +1152,7 @@ export async function updateCheck(
     categoryId?: string | null;
     notes: string | null;
     paymentMethod?: "CHECK" | "TRANSFER";
+    hasInvoice?: boolean;
     allocations?: CheckAllocationInput[];
   },
 ): Promise<{ error?: string }> {
@@ -1168,6 +1174,7 @@ export async function updateCheck(
       notes: input.notes,
       ...(input.categoryId !== undefined ? { category_id: input.categoryId || null } : {}),
       ...(input.paymentMethod ? { payment_method: input.paymentMethod } : {}),
+      ...(input.hasInvoice !== undefined ? { has_invoice: input.hasInvoice } : {}),
       ...(justNumbered ? { issued_at: new Date().toISOString() } : {}),
     })
     .eq("id", checkId);
@@ -1203,6 +1210,17 @@ export async function updateCheckLedgerFlag(checkId: string, skipDepartmentLedge
     .from("checks")
     .update({ skip_department_ledger: skipDepartmentLedger })
     .eq("id", checkId);
+  revalidateCheckPaths();
+  return { error: safeErrorMessage(error) };
+}
+
+// Fixes a mismarked "יש חשבונית" flag after the fact — set at creation, but
+// invoices sometimes arrive later or turn out not to exist, so this needs
+// to be editable without reopening the full check-edit form.
+export async function updateCheckInvoiceFlag(checkId: string, hasInvoice: boolean): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("checks").update({ has_invoice: hasInvoice }).eq("id", checkId);
   revalidateCheckPaths();
   return { error: safeErrorMessage(error) };
 }
