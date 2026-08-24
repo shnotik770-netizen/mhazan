@@ -13,7 +13,7 @@ type Row = {
   spreadTotal?: number | null;
   status?: string | null;
   isOld: boolean;
-  kind: "check" | "income" | "manual";
+  kind: "check" | "income" | "manual" | "commission";
 };
 
 function statusLabel(status: string) {
@@ -97,7 +97,9 @@ export function DepartmentTransactionsTable({
               )}
             </td>
             <td>
-              {isAdmin && r.kind !== "manual" && <LedgerFlagToggle id={r.id} kind={r.kind} skipDepartmentLedger={r.isOld} />}
+              {isAdmin && (r.kind === "check" || r.kind === "income") && (
+                <LedgerFlagToggle id={r.id} kind={r.kind} skipDepartmentLedger={r.isOld} />
+              )}
             </td>
           </tr>
         ))}

@@ -9,6 +9,10 @@ function addMonths(monthKey: string, n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function monthLabel(monthKey: string): string {
+  return new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(new Date(`${monthKey}-01T00:00:00`));
+}
+
 type CombinedRow = {
   id: string;
   date: string | null;
@@ -18,7 +22,7 @@ type CombinedRow = {
   spreadTotal?: number | null;
   status?: string | null;
   isOld: boolean;
-  kind: "check" | "income" | "manual";
+  kind: "check" | "income" | "manual" | "commission";
 };
 
 // Three sections, top to bottom: today's actual state (the "מצב נוכחי"
@@ -37,7 +41,7 @@ export async function DepartmentReport({
 }) {
   const supabase = await createClient();
 
-  const [{ data: incomes }, { data: expenses }, { data: manualEntries }] = await Promise.all([
+  const [{ data: incomes }, { data: expenses }, { data: manualEntries }, { data: commissionEntries }] = await Promise.all([
     supabase
       .from("incomes")
       .select("id, date, amount, donor_name, payment_method, skip_department_ledger, categories(name)")
@@ -57,6 +61,11 @@ export async function DepartmentReport({
       .eq("department_id", departmentId)
       .eq("status", "APPROVED")
       .order("entry_date", { ascending: false }),
+    supabase
+      .from("credit_commission_entries")
+      .select("id, month, qualifying_total, amount")
+      .eq("department_id", departmentId)
+      .order("month", { ascending: false }),
   ]);
 
   const incomeRows: CombinedRow[] = (incomes ?? []).map((r) => {
@@ -127,7 +136,22 @@ export async function DepartmentReport({
     };
   });
 
-  const allRows = [...incomeRows, ...expenseRows, ...manualRows].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  // One auto-computed row per month this department had qualifying
+  // card/Bit/"העברה בקליק" income — 2% of that month's total, kept in sync
+  // by a DB trigger on `incomes` rather than editable here.
+  const commissionRows: CombinedRow[] = (commissionEntries ?? []).map((c) => ({
+    id: c.id,
+    date: c.month,
+    type: "הוצאה — עמלת אשראי",
+    description: `עמלת אשראי (2% על ${formatCurrency(Number(c.qualifying_total))} מהכנסות אשראי/ביט/העברה בקליק ב${monthLabel(c.month.slice(0, 7))})`,
+    amount: -Number(c.amount),
+    isOld: false,
+    kind: "commission",
+  }));
+
+  const allRows = [...incomeRows, ...expenseRows, ...manualRows, ...commissionRows].sort((a, b) =>
+    (b.date ?? "").localeCompare(a.date ?? ""),
+  );
 
   // Split into what's already happened (or has no date) vs. what's already
   // in the system with a future date (an approved check/transfer not yet

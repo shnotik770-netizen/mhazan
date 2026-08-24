@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   checkExistingTransactionRefs,
@@ -149,6 +149,27 @@ export function PasteIncomeForm({
     return category.department_id != null && row.amount > 0;
   }
 
+  // A row that previously failed to save keeps showing that error even if
+  // its fields now look otherwise valid — it still needs a human to look at
+  // it before the next submit, not just get silently retried.
+  function rowNeedsReview(row: ParsedRow): boolean {
+    return !rowIsSavable(row) || Boolean(row.saveError);
+  }
+
+  // Every row that needs a decision (cancelled, duplicate, unassigned
+  // category, previous save failure, etc.) is grouped first, in its
+  // original relative order, followed by everything that pasted cleanly —
+  // so reviewing a big paste means working through one contiguous block at
+  // the top instead of hunting for warning-highlighted rows scattered
+  // through the whole list.
+  const orderedRows = useMemo(() => {
+    const indexed = rows.map((row, originalIndex) => ({ row, originalIndex, needsReview: rowNeedsReview(row) }));
+    const needsReview = indexed.filter((r) => r.needsReview);
+    const clean = indexed.filter((r) => !r.needsReview);
+    return [...needsReview, ...clean];
+  }, [rows, categoryList]);
+  const needsReviewCount = orderedRows.filter((r) => r.needsReview).length;
+
   const validCount = useMemo(() => rows.filter(rowIsSavable).length, [rows, categoryList]);
   const pendingCategoryCount = useMemo(
     () =>
@@ -204,7 +225,8 @@ export function PasteIncomeForm({
         if (val) rawPasteData[key] = val;
       });
 
-      const installment = parseInstallment(getField(cols, "installmentText"));
+      const typeText = getField(cols, "installmentText");
+      const installment = parseInstallment(typeText);
 
       return {
         raw: cols.join(" | "),
@@ -220,6 +242,10 @@ export function PasteIncomeForm({
         paymentMethod: getField(cols, "paymentMethod"),
         installmentCurrent: installment.current,
         installmentTotal: installment.total,
+        // Kept verbatim regardless of whether it also parsed as an
+        // installment fraction — even plain values like "העברה"/"מזומן"
+        // matter for later forecast/recurring-schedule reporting.
+        typeText,
         notes: getField(cols, "notes"),
         isCancelled: isCancelledStatus(getField(cols, "status")),
         splitAllocations: [],
@@ -452,11 +478,24 @@ export function PasteIncomeForm({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, i) => {
+              {orderedRows.map(({ row, originalIndex, needsReview }, displayIndex) => {
                 const category = row.categoryId ? categoryById(row.categoryId) : undefined;
                 const isPendingCategory = Boolean(row.categoryId) && category?.department_id == null && !category?.is_split;
+                const isFirstOfGroup =
+                  displayIndex === 0 || orderedRows[displayIndex - 1].needsReview !== needsReview;
+                const i = originalIndex;
                 return (
-                  <tr key={i} className={!rowIsSavable(row) ? "bg-warning-bg" : ""}>
+                  <Fragment key={i}>
+                    {isFirstOfGroup && (
+                      <tr>
+                        <td colSpan={9} className={`border-t-2 border-border py-1.5 text-xs font-semibold ${needsReview ? "text-warning" : "text-success"}`}>
+                          {needsReview
+                            ? `⚠ דורש בדיקה ואישור — ${needsReviewCount} שורות`
+                            : `✓ נדבק תקין — ${orderedRows.length - needsReviewCount} שורות`}
+                        </td>
+                      </tr>
+                    )}
+                    <tr className={!rowIsSavable(row) ? "bg-warning-bg" : ""}>
                     <td>
                       {row.isCancelled ? (
                         <span className="badge bg-danger-bg text-danger">בוטלה</span>
@@ -580,6 +619,7 @@ export function PasteIncomeForm({
                       />
                     </td>
                   </tr>
+                  </Fragment>
                 );
               })}
             </tbody>

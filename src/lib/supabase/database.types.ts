@@ -351,6 +351,41 @@ export type Database = {
           },
         ]
       }
+      credit_commission_entries: {
+        Row: {
+          amount: number
+          department_id: string
+          id: string
+          month: string
+          qualifying_total: number
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          department_id: string
+          id?: string
+          month: string
+          qualifying_total?: number
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          department_id?: string
+          id?: string
+          month?: string
+          qualifying_total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_commission_entries_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           code: string
@@ -449,6 +484,7 @@ export type Database = {
           skip_department_ledger: boolean
           status: string
           transaction_ref: string | null
+          type_text: string | null
         }
         Insert: {
           amount: number
@@ -474,6 +510,7 @@ export type Database = {
           skip_department_ledger?: boolean
           status?: string
           transaction_ref?: string | null
+          type_text?: string | null
         }
         Update: {
           amount?: number
@@ -499,6 +536,7 @@ export type Database = {
           skip_department_ledger?: boolean
           status?: string
           transaction_ref?: string | null
+          type_text?: string | null
         }
         Relationships: [
           {
@@ -1481,6 +1519,10 @@ export type Database = {
       create_print_label: {
         Args: { p_label_data: Json; p_secret: string }
         Returns: number
+      }
+      fn_recompute_credit_commission: {
+        Args: { p_department_id: string; p_month: string }
+        Returns: undefined
       }
       fn_sync_check_ledger: { Args: { p_check_id: string }; Returns: undefined }
       get_cash_flow_forecast: {

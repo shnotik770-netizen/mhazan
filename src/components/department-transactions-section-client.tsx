@@ -13,7 +13,7 @@ type Row = {
   spreadTotal?: number | null;
   status?: string | null;
   isOld: boolean;
-  kind: "check" | "income" | "manual";
+  kind: "check" | "income" | "manual" | "commission";
 };
 
 function monthLabel(monthStr: string): string {
