@@ -178,6 +178,16 @@ export function PasteIncomeForm({
       ).length,
     [rows, categoryList],
   );
+  // Every distinct category actually referenced by this paste that still
+  // needs a department — surfaced as one consolidated checklist at the top
+  // of the preview, right when the paste happens, instead of only a count
+  // buried below the table after scrolling past every row.
+  const pendingCategoriesInRows = useMemo(() => {
+    const ids = new Set(rows.filter((r) => !r.isCancelled && r.categoryId).map((r) => r.categoryId));
+    return [...ids]
+      .map((id) => categoryById(id))
+      .filter((c): c is Category => c != null && c.department_id == null && !c.is_split);
+  }, [rows, categoryList]);
 
   async function handlePaste(text: string) {
     const allLines = parsePastedLines(text);
@@ -352,6 +362,13 @@ export function PasteIncomeForm({
   }
 
   function handleSubmit() {
+    const remainingForReview = rows.length - validCount;
+    const confirmMessage =
+      remainingForReview > 0
+        ? `להכניס ${validCount} שורות תקינות עכשיו? ${remainingForReview} שורות שדורשות טיפול יישארו למטה להמשך עבודה.`
+        : `להכניס ${validCount} שורות הכנסה?`;
+    if (!confirm(confirmMessage)) return;
+
     setMessage(null);
     startTransition(async () => {
       const savableIndexes = rows.map((r, i) => (rowIsSavable(r) ? i : -1)).filter((i) => i >= 0);
@@ -436,8 +453,9 @@ export function PasteIncomeForm({
           </label>
         </div>
         <textarea
-          className="w-full h-28 rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-mono"
-          placeholder="הדבק כאן (Ctrl+V) שורות מודבקות..."
+          className="w-full h-28 rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+          placeholder={bankAccountId ? "הדבק כאן (Ctrl+V) שורות מודבקות..." : "יש לבחור קודם חשבון בנק למעלה"}
+          disabled={!bankAccountId}
           onPaste={(e) => {
             const text = e.clipboardData.getData("text");
             if (text) {
@@ -447,6 +465,9 @@ export function PasteIncomeForm({
           }}
           onChange={(e) => handlePaste(e.target.value)}
         />
+        {!bankAccountId && (
+          <p className="text-xs text-warning mt-1">⚠ יש לבחור חשבון בנק למעלה לפני ההדבקה.</p>
+        )}
         <p className="text-xs text-muted mt-1">
           שם קטגוריה שלא קיים במערכת ייווצר אוטומטית כקטגוריה חדשה הממתינה לשיוך מחלקה — ניתן לשייך אותה
           ישירות כאן למטה, בלי לעזוב את המסך. כל הנתונים המקוריים מההדבקה נשמרים בהיסטוריית ההכנסה.
@@ -463,6 +484,42 @@ export function PasteIncomeForm({
             </h3>
             {isResolvingCategories && <span className="text-sm text-muted">מזהה קטגוריות...</span>}
           </div>
+
+          {(isResolvingCategories || pendingCategoriesInRows.length > 0) && (
+            <div className="rounded-lg border border-warning/40 bg-warning-bg p-3 mb-3">
+              {isResolvingCategories ? (
+                <p className="text-sm text-warning">מזהה קטגוריות חדשות מתוך ההדבקה...</p>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-warning mb-2">
+                    ⚠ יש לשייך מחלקה לקטגוריות הבאות לפני שהשורות שלהן יישמרו:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {pendingCategoriesInRows.map((c) => (
+                      <div key={c.id} className="flex items-center gap-1 rounded-lg bg-background px-2 py-1 text-sm">
+                        <span>{c.name}</span>
+                        <select
+                          className="bg-transparent border-b border-border text-xs"
+                          defaultValue=""
+                          onChange={(e) => {
+                            if (e.target.value) assignCategoryDepartment(c.id, e.target.value);
+                          }}
+                        >
+                          <option value="">שייך מחלקה...</option>
+                          {departments.map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <table className="data-table">
             <thead>
               <tr>
