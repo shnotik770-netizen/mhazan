@@ -4,7 +4,7 @@ import { Fragment } from "react";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { SortFilterTh, useSortFilter, type ColumnDef } from "@/components/sortable-table";
 
-type DayEntry = {
+export type DayEntry = {
   checks: number;
   transfers: number;
   recurring: number;

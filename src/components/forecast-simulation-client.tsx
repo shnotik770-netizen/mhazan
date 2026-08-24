@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo, useState } from "react";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { ForecastDailyTable, type DayEntry } from "@/components/forecast-daily-table-client";
 
 export type MonthlyCard = {
   month: string;
@@ -162,7 +163,13 @@ export function ForecastSimulationBanner() {
   );
 }
 
-export function ForecastSimulationPanel({ monthlyCards }: { monthlyCards: MonthlyCard[] }) {
+export function ForecastSimulationPanel({
+  monthlyCards,
+  dailyRowsByMonth,
+}: {
+  monthlyCards: MonthlyCard[];
+  dailyRowsByMonth: Map<string, [string, DayEntry][]>;
+}) {
   const { items, held, heldAdjustment, hasSimulation, toggle } = useSimulation();
 
   const heldByMonth = useMemo(() => {
@@ -198,32 +205,35 @@ export function ForecastSimulationPanel({ monthlyCards }: { monthlyCards: Monthl
               const lastIdxInMonth = lastIndexByMonth.get(c.month) ?? -1;
               const simulatedClosing = lastIdxInMonth >= 0 ? c.closing - heldAdjustment[lastIdxInMonth] : c.closing;
               return (
-                <div key={c.month} className="card p-4 space-y-1">
-                  <p className="font-semibold">{monthCardLabel(c.month)}</p>
-                  <p className="text-xs text-muted">
-                    יתרת פתיחה: <span className="font-medium text-foreground">{formatCurrency(c.opening)}</span>
-                  </p>
-                  <p className="text-xs text-success">הכנסות: {formatCurrency(c.income)}</p>
-                  <p className="text-xs text-danger">הוצאות: {formatCurrency(Math.abs(c.expense))}</p>
-                  {c.oldExpense !== 0 && (
-                    <p className="text-xs text-warning">
-                      הוצאות ישנות שלא נפדו מחודשים קודמים: {formatCurrency(Math.abs(c.oldExpense))}
+                <div key={c.month} className="space-y-3">
+                  <div className="card p-4 space-y-1">
+                    <p className="font-semibold">{monthCardLabel(c.month)}</p>
+                    <p className="text-xs text-muted">
+                      יתרת פתיחה: <span className="font-medium text-foreground">{formatCurrency(c.opening)}</span>
                     </p>
-                  )}
-                  {deferred !== 0 && (
-                    <p className="text-xs text-primary">
-                      🧪 הוצאות מושהות (סימולציה): {formatCurrency(Math.abs(deferred))}
+                    <p className="text-xs text-success">הכנסות: {formatCurrency(c.income)}</p>
+                    <p className="text-xs text-danger">הוצאות: {formatCurrency(Math.abs(c.expense))}</p>
+                    {c.oldExpense !== 0 && (
+                      <p className="text-xs text-warning">
+                        הוצאות מתאריכים קודמים שלא נפדו: {formatCurrency(Math.abs(c.oldExpense))}
+                      </p>
+                    )}
+                    {deferred !== 0 && (
+                      <p className="text-xs text-primary">
+                        🧪 הוצאות מושהות (סימולציה): {formatCurrency(Math.abs(deferred))}
+                      </p>
+                    )}
+                    <p className="text-sm font-semibold pt-1 border-t border-border">
+                      יתרת סגירה:{" "}
+                      <span className={c.closing < 0 ? "text-danger" : "text-success"}>{formatCurrency(c.closing)}</span>
                     </p>
-                  )}
-                  <p className="text-sm font-semibold pt-1 border-t border-border">
-                    יתרת סגירה:{" "}
-                    <span className={c.closing < 0 ? "text-danger" : "text-success"}>{formatCurrency(c.closing)}</span>
-                  </p>
-                  {deferred !== 0 && (
-                    <p className="text-xs font-semibold text-primary">
-                      יתרת סגירה בסימולציה: {formatCurrency(simulatedClosing)}
-                    </p>
-                  )}
+                    {deferred !== 0 && (
+                      <p className="text-xs font-semibold text-primary">
+                        יתרת סגירה בסימולציה: {formatCurrency(simulatedClosing)}
+                      </p>
+                    )}
+                  </div>
+                  <ForecastDailyTable rows={dailyRowsByMonth.get(c.month) ?? []} />
                 </div>
               );
             })}

@@ -154,12 +154,17 @@ export default async function ForecastPage({
   // income/expenses, plus the balance it closes with — starting from the
   // account's current balance for the present month, or carried forward
   // from the previous month's closing balance for months further out.
+  // dailyRowsByMonth is built alongside it (same per-month grouping) so the
+  // page can render each month's card immediately followed by its own daily
+  // breakdown, instead of two separate top-level sections.
+  const dailyRowsByMonth = new Map<string, typeof dailyBreakdown>();
   const monthlyCards = selectedAccount
     ? (() => {
         const startBalance = Number(selectedAccount.current_balance);
         let openingBalance = startBalance;
         return monthsInHorizon.map((month) => {
           const monthRows = dailyBreakdown.filter(([date]) => date.startsWith(month));
+          dailyRowsByMonth.set(month, monthRows);
           const income = monthRows.reduce((sum, [, d]) => sum + d.income, 0);
           const expense = monthRows.reduce((sum, [, d]) => sum + d.checks + d.transfers + d.recurring, 0);
           // Only ever lands in the current month, since overdue rows are
@@ -294,8 +299,7 @@ export default async function ForecastPage({
             </div>
           )}
 
-          <ForecastDailyTable rows={dailyBreakdown} />
-          <ForecastSimulationPanel monthlyCards={monthlyCards} />
+          <ForecastSimulationPanel monthlyCards={monthlyCards} dailyRowsByMonth={dailyRowsByMonth} />
         </ForecastSimulationProvider>
       ) : (
         <>
