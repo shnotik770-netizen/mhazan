@@ -353,3 +353,83 @@ export async function setRecurringScheduleActive(scheduleId: string, isActive: b
   revalidatePath("/forecast");
   return {};
 }
+
+// Nedarim Plus credentials are write-only from the client's perspective —
+// the saved api_key is never selected back out for display, only
+// overwritten. Each department has its own institution/key (set up here by
+// a finance admin, one at a time, as real keys become available).
+export async function saveNedarimCredentials(formData: FormData): Promise<{ error?: string }> {
+  const admin = await requireFinanceAdmin();
+  const departmentId = String(formData.get("department_id") ?? "");
+  const mosadId = String(formData.get("mosad_id") ?? "").trim();
+  const apiKey = String(formData.get("api_key") ?? "").trim();
+  if (!departmentId || !mosadId || !apiKey) return { error: "יש למלא מחלקה, מזהה מוסד ומפתח API" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("department_nedarim_credentials").upsert({
+    department_id: departmentId,
+    mosad_id: mosadId,
+    api_key: apiKey,
+    updated_by: admin.id,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) return { error: safeErrorMessage(error) };
+
+  revalidatePath("/settings");
+  return {};
+}
+
+export async function deleteNedarimCredentials(departmentId: string): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("department_nedarim_credentials")
+    .delete()
+    .eq("department_id", departmentId);
+  if (error) return { error: safeErrorMessage(error) };
+  revalidatePath("/settings");
+  return {};
+}
+
+export type NedarimSyncResult = {
+  departmentId: string;
+  ordersFound?: number;
+  monthsProjected?: number;
+  error?: string;
+};
+
+// Invokes the sync-nedarim-standing-orders Edge Function using the calling
+// admin's own session — the function independently re-checks that session's
+// role server-side (it doesn't trust this call just because it reached the
+// function), per this app's rule that service-role access only ever lives
+// inside an Edge Function. Used for the manual "מה מצב ההוראות קבע" trigger;
+// the monthly automatic run instead goes through pg_cron with its own
+// separate shared-secret header.
+export async function syncNedarimStandingOrders(
+  departmentId?: string,
+): Promise<{ error?: string; results?: NedarimSyncResult[] }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.functions.invoke("sync-nedarim-standing-orders", {
+    body: departmentId ? { departmentId } : {},
+  });
+
+  if (error) {
+    let message = safeErrorMessage(error);
+    try {
+      const context = (error as { context?: Response }).context;
+      const body = await context?.json();
+      if (body?.error) message = body.error;
+    } catch {
+      // Fall back to the generic error message.
+    }
+    return { error: message };
+  }
+  if (data?.error) return { error: data.error };
+
+  revalidatePath("/settings");
+  if (departmentId) revalidatePath(`/reports/${departmentId}`);
+  else revalidatePath("/reports", "layout");
+  return { results: (data?.results ?? []) as NedarimSyncResult[] };
+}

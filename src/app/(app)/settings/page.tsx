@@ -3,6 +3,7 @@ import { requireFinanceAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { NewUserForm, UsersTable } from "@/components/user-access-client";
 import { BankAccountsTable } from "@/components/dashboard-tables-client";
+import { NedarimSettingsSection } from "@/components/nedarim-settings-client";
 import { createBankAccount } from "./actions";
 
 export default async function SettingsPage() {
@@ -15,12 +16,14 @@ export default async function SettingsPage() {
     { data: categories },
     { data: profiles },
     { data: accessGrants },
+    { data: nedarimCredentials },
   ] = await Promise.all([
     supabase.from("departments").select("*").order("name"),
     supabase.from("bank_accounts").select("*, departments!bank_accounts_department_id_fkey(name)").order("bank_name"),
     supabase.from("categories").select("*, departments(name)").order("name"),
     supabase.from("user_profiles").select("*").order("full_name"),
     supabase.from("user_department_access").select("user_id, department_id"),
+    supabase.from("department_nedarim_credentials").select("department_id, updated_at"),
   ]);
 
   const grantsFor = (userId: string) =>
@@ -120,6 +123,13 @@ export default async function SettingsPage() {
           ניהול צ׳קים והעברות
         </Link>
       </section>
+
+      <NedarimSettingsSection
+        departments={(departments ?? []).map((d) => {
+          const cred = (nedarimCredentials ?? []).find((c) => c.department_id === d.id);
+          return { id: d.id, name: d.name, configured: Boolean(cred), updatedAt: cred?.updated_at ?? null };
+        })}
+      />
 
       <section className="card p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">

@@ -514,6 +514,45 @@ export type Database = {
           },
         ]
       }
+      department_nedarim_credentials: {
+        Row: {
+          api_key: string
+          department_id: string
+          mosad_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          api_key: string
+          department_id: string
+          mosad_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          api_key?: string
+          department_id?: string
+          mosad_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "department_nedarim_credentials_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: true
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "department_nedarim_credentials_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           code: string
@@ -1072,6 +1111,41 @@ export type Database = {
           },
           {
             foreignKeyName: "recurring_schedules_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      standing_order_forecast: {
+        Row: {
+          amount: number
+          department_id: string
+          details: Json
+          id: number
+          month: string
+          synced_at: string
+        }
+        Insert: {
+          amount: number
+          department_id: string
+          details?: Json
+          id?: never
+          month: string
+          synced_at?: string
+        }
+        Update: {
+          amount?: number
+          department_id?: string
+          details?: Json
+          id?: never
+          month?: string
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "standing_order_forecast_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"

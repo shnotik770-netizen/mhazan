@@ -17,6 +17,11 @@ export type InstallmentForecastDetail = {
   current: number;
   total: number;
   amount: number;
+  // Only set on standing-order forecast details — the Nedarim Plus KevaId,
+  // used to detect a real income already recorded against this exact order
+  // (see order_ref matching below) so a charge that already came in doesn't
+  // also linger as a forecast line.
+  orderRef?: string;
 };
 
 export type CombinedRow = {
@@ -64,11 +69,12 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     { data: expenses, error: expensesError },
     { data: manualEntries, error: manualEntriesError },
     { data: commissionEntries, error: commissionError },
+    { data: standingOrderForecast, error: standingOrderError },
   ] = await Promise.all([
     supabase
       .from("incomes")
       .select(
-        "id, date, amount, donor_name, payment_method, installment_current, installment_total, type_text, skip_department_ledger, categories(name)",
+        "id, date, amount, donor_name, payment_method, installment_current, installment_total, type_text, skip_department_ledger, order_ref, categories(name)",
       )
       .eq("owner_department_id", departmentId)
       .order("date", { ascending: false }),
@@ -89,6 +95,10 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       .select("id, month, qualifying_total, amount")
       .eq("department_id", departmentId)
       .order("month", { ascending: false }),
+    supabase
+      .from("standing_order_forecast")
+      .select("month, amount, details")
+      .eq("department_id", departmentId),
   ]);
 
   // A failed query here would otherwise silently render as "no rows" via
@@ -100,6 +110,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     ["expenses", expensesError],
     ["manualEntries", manualEntriesError],
     ["commissionEntries", commissionError],
+    ["standingOrderForecast", standingOrderError],
   ] as const) {
     if (error) console.error(`getDepartmentReportData(${departmentId}): ${label} query failed`, error);
   }
@@ -271,9 +282,55 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     };
   });
 
-  const allRows = [...incomeRows, ...expenseRows, ...manualRows, ...commissionRows, ...installmentForecastRows].sort(
-    (a, b) => (b.date ?? "").localeCompare(a.date ?? ""),
-  );
+  // Standing orders can fail to actually charge (insufficient funds, a
+  // cancelled card, etc.) — unlike a credit-card installment, which is
+  // certain to recur — so a forecasted standing-order charge is only
+  // dropped once a real income row shows up for that *exact* order in that
+  // *exact* month, matched by order_ref (the Nedarim KevaId, captured when
+  // the month's income report is pasted in). No match yet keeps the
+  // forecast line showing; once the real charge is pasted, the forecast
+  // line for that order+month quietly disappears instead of double-counting.
+  const chargedOrderMonths = new Set<string>();
+  for (const r of incomes ?? []) {
+    if (!r.order_ref || !r.date) continue;
+    chargedOrderMonths.add(`${r.order_ref}|${r.date.slice(0, 7)}`);
+  }
+
+  // Standing-order (הוראת קבע) forecast, cached in `standing_order_forecast`
+  // by the monthly (or manually-triggered) Nedarim Plus sync — pre-computed
+  // there rather than here since it comes from an external API call, not a
+  // query against our own tables. Rendered exactly like the credit-card
+  // installment forecast above: one expandable row per month inside
+  // "תנועות עתידיות ידועות", dated to the last day of its month.
+  const standingOrderRows: CombinedRow[] = [];
+  for (const s of standingOrderForecast ?? []) {
+    const month = s.month;
+    const allDetails = (s.details ?? []) as unknown as InstallmentForecastDetail[];
+    const details = allDetails.filter((d) => !d.orderRef || !chargedOrderMonths.has(`${d.orderRef}|${month}`));
+    if (details.length === 0) continue;
+    const total = details.reduce((sum, d) => sum + d.amount, 0);
+    const [y, m] = month.split("-").map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    standingOrderRows.push({
+      id: `standing-order-forecast-${month}`,
+      date: `${month}-${String(lastDay).padStart(2, "0")}`,
+      typeDetail: "צפי הוראות קבע",
+      description: `צפי הוראות קבע (${details.length} הוראות)`,
+      amount: total,
+      isOld: false,
+      kind: "forecast",
+      forecastDetails: details,
+    });
+  }
+
+  const allRows = [
+    ...incomeRows,
+    ...expenseRows,
+    ...manualRows,
+    ...commissionRows,
+    ...installmentForecastRows,
+    ...standingOrderRows,
+  ].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 
   // Split into what's already happened (or has no date) vs. what's already
   // in the system with a future date (an approved check/transfer not yet
@@ -336,6 +393,12 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
   for (const [month, g] of installmentForecastByMonth) {
     const bucket = forecastByMonth.get(month) ?? { income: 0, expense: 0 };
     bucket.income += g.total;
+    forecastByMonth.set(month, bucket);
+  }
+  for (const row of standingOrderRows) {
+    const month = row.date!.slice(0, 7);
+    const bucket = forecastByMonth.get(month) ?? { income: 0, expense: 0 };
+    bucket.income += row.amount;
     forecastByMonth.set(month, bucket);
   }
 
