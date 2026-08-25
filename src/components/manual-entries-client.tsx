@@ -2,7 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createManualEntry, reviewManualEntry } from "@/app/(app)/manual-entries/actions";
+import {
+  createManualEntryBatch,
+  reviewManualEntry,
+  type ManualEntryBatchRow,
+} from "@/app/(app)/manual-entries/actions";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
@@ -10,6 +14,10 @@ import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
 type BankAccount = Tables<"bank_accounts">;
+
+type DraftEntryRow = ManualEntryBatchRow & { key: number; error?: string };
+
+let nextEntryKey = 1;
 
 // A top-of-page button that opens the manual-entry form in a modal,
 // instead of the form sitting permanently as its own box under the
@@ -36,7 +44,7 @@ export function NewManualEntryButton({
       {open && (
         <Modal onClose={() => setOpen(false)}>
           <div className="p-4">
-            <NewManualEntryForm departments={departments} bankAccounts={bankAccounts} onSaved={() => setOpen(false)} />
+            <NewManualEntryFormMulti departments={departments} bankAccounts={bankAccounts} onSaved={() => setOpen(false)} />
           </div>
         </Modal>
       )}
@@ -44,7 +52,23 @@ export function NewManualEntryButton({
   );
 }
 
-export function NewManualEntryForm({
+function blankEntryRow(departments: Department[]): DraftEntryRow {
+  const dept = departments[0];
+  return {
+    key: nextEntryKey++,
+    departmentId: dept?.id ?? "",
+    direction: "EXPENSE",
+    amount: 0,
+    entryDate: "",
+    notes: null,
+    bankAccountId: dept?.home_bank_account_id ?? "",
+  };
+}
+
+// Several manual entries at once — each its own amount/direction/
+// department/notes — typed in one grid and saved with a single click,
+// same pattern as the bulk check/expense-request entry forms elsewhere.
+export function NewManualEntryFormMulti({
   departments,
   bankAccounts,
   onSaved,
@@ -54,54 +78,49 @@ export function NewManualEntryForm({
   onSaved?: () => void;
 }) {
   const router = useRouter();
-  const [departmentId, setDepartmentId] = useState("");
-  const [direction, setDirection] = useState<"INCOME" | "EXPENSE">("EXPENSE");
-  const [amount, setAmount] = useState(0);
-  const [entryDate, setEntryDate] = useState("");
-  const [notes, setNotes] = useState("");
-  const [bankAccountId, setBankAccountId] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [rows, setRows] = useState<DraftEntryRow[]>(() => [blankEntryRow(departments)]);
   const [isPending, startTransition] = useTransition();
+
+  function update(key: number, patch: Partial<DraftEntryRow>) {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  }
 
   // Picking a department auto-fills its own home bank account — the
   // routine case — but stays editable: choosing a DIFFERENT account is
   // exactly what signals a cross-department transaction, and the database
   // picks that up automatically (no separate "third party" field needed).
-  function handleDepartmentChange(id: string) {
-    setDepartmentId(id);
-    const dept = departments.find((d) => d.id === id);
-    if (dept) setBankAccountId(dept.home_bank_account_id);
+  function updateDepartment(key: number, departmentId: string) {
+    const dept = departments.find((d) => d.id === departmentId);
+    update(key, { departmentId, bankAccountId: dept?.home_bank_account_id ?? "" });
   }
 
-  const selectedBankAccount = bankAccounts.find((b) => b.id === bankAccountId);
-  const selectedDepartment = departments.find((d) => d.id === departmentId);
-  const isCrossDepartment = Boolean(
-    selectedDepartment && selectedBankAccount && selectedBankAccount.department_id !== selectedDepartment.id,
-  );
+  function addRow() {
+    setRows((prev) => [...prev, blankEntryRow(departments)]);
+  }
 
-  function submit() {
-    setError(null);
-    setMessage(null);
+  function removeRow(key: number) {
+    setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.key !== key) : prev));
+  }
+
+  function saveAll() {
+    const savable = rows.filter((r) => r.departmentId && r.bankAccountId && r.amount > 0 && r.entryDate);
+    if (savable.length === 0) return;
     startTransition(async () => {
-      const result = await createManualEntry({
-        departmentId,
-        direction,
-        amount,
-        entryDate,
-        notes: notes || null,
-        bankAccountId,
+      const { outcomes } = await createManualEntryBatch(
+        savable.map(({ key: _key, error: _error, ...rest }) => rest),
+      );
+      const nextRows: DraftEntryRow[] = [];
+      savable.forEach((row, i) => {
+        const outcome = outcomes[i];
+        if (!outcome.success) nextRows.push({ ...row, error: outcome.reason });
       });
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setMessage("נשלח לאישור");
-        setAmount(0);
-        setEntryDate("");
-        setNotes("");
-        router.refresh();
-        onSaved?.();
+      for (const r of rows) {
+        if (!savable.includes(r)) nextRows.push(r);
       }
+      const allSaved = nextRows.length === 0;
+      setRows(allSaved ? [blankEntryRow(departments)] : nextRows);
+      router.refresh();
+      if (allSaved) onSaved?.();
     });
   }
 
@@ -111,70 +130,121 @@ export function NewManualEntryForm({
     <div className="card p-4 space-y-3">
       <h2 className="font-semibold">רישום ידני של הכנסה / הוצאה</h2>
       <p className="text-xs text-muted">כל רישום ממתין לאישור מנהל כספים לפני שהוא נכנס לדוחות המחלקה.</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
-        <select
-          value={departmentId}
-          onChange={(e) => handleDepartmentChange(e.target.value)}
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        >
-          <option value="">בחר מחלקה...</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={direction}
-          onChange={(e) => setDirection(e.target.value as "INCOME" | "EXPENSE")}
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        >
-          <option value="EXPENSE">הוצאה</option>
-          <option value="INCOME">הכנסה</option>
-        </select>
-        <input
-          type="number"
-          value={amount || ""}
-          onChange={(e) => setAmount(Number(e.target.value) || 0)}
-          placeholder="סכום"
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        />
-        <DateInput value={entryDate} onChange={setEntryDate} required />
-        <input
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="הערות ופירוט"
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        />
-        <select
-          value={bankAccountId}
-          onChange={(e) => setBankAccountId(e.target.value)}
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          title="ברירת המחדל היא חשבון הבית של המחלקה. שינוי לחשבון של מחלקה אחרת נרשם אוטומטית כחוב בין המחלקות."
-        >
-          <option value="">חשבון בנק...</option>
-          {bankAccounts.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.bank_name} ({b.account_number})
-            </option>
-          ))}
-        </select>
+      <div className="overflow-x-auto">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>מחלקה</th>
+              <th>סוג</th>
+              <th>סכום</th>
+              <th>תאריך</th>
+              <th>הערות</th>
+              <th>חשבון בנק</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const selectedBankAccount = bankAccounts.find((b) => b.id === row.bankAccountId);
+              const isCrossDepartment = Boolean(
+                row.departmentId && selectedBankAccount && selectedBankAccount.department_id !== row.departmentId,
+              );
+              return (
+                <tr key={row.key}>
+                  <td>
+                    <select
+                      value={row.departmentId}
+                      onChange={(e) => updateDepartment(row.key, e.target.value)}
+                      className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                    >
+                      <option value="">בחר מחלקה...</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      value={row.direction}
+                      onChange={(e) => update(row.key, { direction: e.target.value as "INCOME" | "EXPENSE" })}
+                      className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                    >
+                      <option value="EXPENSE">הוצאה</option>
+                      <option value="INCOME">הכנסה</option>
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={row.amount || ""}
+                      onChange={(e) => update(row.key, { amount: Number(e.target.value) || 0 })}
+                      className="w-20 rounded border border-border bg-transparent px-1 py-1 text-xs"
+                    />
+                  </td>
+                  <td>
+                    <DateInput
+                      value={row.entryDate}
+                      onChange={(v) => update(row.key, { entryDate: v })}
+                      className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      value={row.notes ?? ""}
+                      onChange={(e) => update(row.key, { notes: e.target.value || null })}
+                      placeholder="הערות ופירוט"
+                      className="w-28 rounded border border-border bg-transparent px-1 py-1 text-xs"
+                    />
+                  </td>
+                  <td>
+                    <select
+                      value={row.bankAccountId}
+                      onChange={(e) => update(row.key, { bankAccountId: e.target.value })}
+                      className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                      title="ברירת המחדל היא חשבון הבית של המחלקה. שינוי לחשבון של מחלקה אחרת נרשם אוטומטית כחוב בין המחלקות."
+                    >
+                      <option value="">חשבון בנק...</option>
+                      {bankAccounts.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.bank_name} ({b.account_number})
+                        </option>
+                      ))}
+                    </select>
+                    {isCrossDepartment && (
+                      <p className="text-xs text-muted">חוב בין מחלקות אוטומטי</p>
+                    )}
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() => removeRow(row.key)}
+                      disabled={rows.length === 1}
+                      className="text-xs text-danger disabled:opacity-30"
+                    >
+                      ✕
+                    </button>
+                    {row.error && <p className="text-xs text-danger">{row.error}</p>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-      {isCrossDepartment && (
-        <p className="text-xs text-muted">
-          חשבון זה שייך למחלקה אחרת — יירשם אוטומטית חוב בין המחלקות ב&quot;התחשבנות הפנימית&quot;.
-        </p>
-      )}
       <div className="flex items-center gap-2">
+        <button type="button" onClick={addRow} className="text-xs text-primary underline">
+          + שורה
+        </button>
         <button
-          disabled={isPending || !departmentId || amount <= 0 || !entryDate || !bankAccountId}
-          onClick={submit}
+          type="button"
+          disabled={isPending}
+          onClick={saveAll}
           className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
         >
-          שלח
+          {isPending ? "שומר…" : "שמור הכל"}
         </button>
-        {error && <span className="text-sm text-danger">{error}</span>}
-        {message && <span className="text-sm text-success">{message}</span>}
       </div>
     </div>
   );

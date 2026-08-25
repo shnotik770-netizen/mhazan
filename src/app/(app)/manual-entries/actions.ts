@@ -55,6 +55,69 @@ export async function createManualEntry(input: {
   return {};
 }
 
+export type ManualEntryBatchRow = {
+  departmentId: string;
+  direction: "INCOME" | "EXPENSE";
+  amount: number;
+  entryDate: string;
+  notes: string | null;
+  bankAccountId: string;
+};
+
+export type ManualEntryBatchOutcome = { success: boolean; reason?: string };
+
+// Bulk version of createManualEntry: type several rows at once (each its
+// own amount/direction/department/notes) and save them all in one click.
+// Each row is inserted individually — same as every other batch entry
+// point in the app — so one bad row never blocks the rest from saving.
+export async function createManualEntryBatch(rows: ManualEntryBatchRow[]): Promise<{ outcomes: ManualEntryBatchOutcome[] }> {
+  const user = await requireUser();
+  const supabase = await createClient();
+  const isAdmin = user.profile.role === "FINANCE_ADMIN";
+
+  const outcomes: ManualEntryBatchOutcome[] = [];
+  const departmentIds = new Set<string>();
+  for (const row of rows) {
+    if (!row.entryDate) {
+      outcomes.push({ success: false, reason: "יש להזין תאריך" });
+      continue;
+    }
+    if (!row.departmentId) {
+      outcomes.push({ success: false, reason: "יש לבחור מחלקה" });
+      continue;
+    }
+    if (!row.bankAccountId) {
+      outcomes.push({ success: false, reason: "יש לבחור חשבון בנק" });
+      continue;
+    }
+    if (!row.amount || row.amount <= 0) {
+      outcomes.push({ success: false, reason: "סכום לא תקין" });
+      continue;
+    }
+    const { error } = await supabase.from("manual_department_entries").insert({
+      department_id: row.departmentId,
+      direction: row.direction,
+      amount: row.amount,
+      entry_date: row.entryDate,
+      notes: row.notes,
+      bank_account_id: row.bankAccountId,
+      created_by: user.id,
+      status: isAdmin ? "APPROVED" : "PENDING",
+      approved_by: isAdmin ? user.id : null,
+      approved_at: isAdmin ? new Date().toISOString() : null,
+    });
+    if (error) {
+      outcomes.push({ success: false, reason: safeErrorMessage(error) });
+    } else {
+      outcomes.push({ success: true });
+      departmentIds.add(row.departmentId);
+    }
+  }
+
+  for (const id of departmentIds) revalidateEntryPaths(id);
+  return { outcomes };
+}
+
 // Lets an admin correct an already-approved manual entry (amount, date,
 // department, notes) from the /expenses screen instead of deleting and
 // re-entering it.

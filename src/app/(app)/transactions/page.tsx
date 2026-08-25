@@ -22,7 +22,6 @@ export default async function TransactionsPage({
   searchParams: Promise<{
     type?: string;
     department?: string | string[];
-    category?: string | string[];
     source?: string | string[];
     status?: string | string[];
     start?: string;
@@ -33,7 +32,6 @@ export default async function TransactionsPage({
   const {
     type: typeParam,
     department: departmentParam,
-    category: categoryParam,
     source: sourceParam,
     status: statusParam,
     start,
@@ -43,7 +41,6 @@ export default async function TransactionsPage({
   const type = typeParam === "INCOME" || typeParam === "EXPENSE" ? typeParam : "ALL";
   const search = (q ?? "").trim().toLowerCase();
   const departmentFilter = new Set(toArray(departmentParam));
-  const categoryFilter = new Set(toArray(categoryParam));
   const sourceFilter = new Set(toArray(sourceParam));
   const statusFilter = new Set(toArray(statusParam));
 
@@ -293,7 +290,6 @@ export default async function TransactionsPage({
 
   const filtered = unified
     .filter((r) => !search || r.description.toLowerCase().includes(search) || (r.departmentName ?? "").toLowerCase().includes(search))
-    .filter((r) => categoryFilter.size === 0 || (r.categoryId && categoryFilter.has(r.categoryId)))
     .filter((r) => sourceFilter.size === 0 || sourceFilter.has(r.sourceKey))
     .filter((r) => statusFilter.size === 0 || (r.status && statusFilter.has(r.status)))
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
@@ -310,71 +306,68 @@ export default async function TransactionsPage({
         </p>
       </div>
 
-      <form className="card p-4 flex flex-wrap items-start gap-4" method="get">
-        <div>
-          <label className="block text-sm font-medium mb-1">סוג</label>
-          <select name="type" defaultValue={type} className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm">
-            <option value="ALL">הכל</option>
-            <option value="INCOME">הכנסות</option>
-            <option value="EXPENSE">הוצאות</option>
-          </select>
-        </div>
-        <MultiSelectFilter
-          name="source"
-          label="מקור"
-          options={Object.entries(SOURCE_LABELS).map(([id, label]) => ({ id, label }))}
-          defaultSelected={[...sourceFilter]}
-        />
-        {myDepartments.length > 0 && (
+      <details className="card p-4" open>
+        <summary className="cursor-pointer font-semibold">סינון</summary>
+        <form className="flex flex-wrap items-start gap-4 mt-3" method="get">
+          <div>
+            <label className="block text-sm font-medium mb-1">סוג</label>
+            <select name="type" defaultValue={type} className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm">
+              <option value="ALL">הכל</option>
+              <option value="INCOME">הכנסות</option>
+              <option value="EXPENSE">הוצאות</option>
+            </select>
+          </div>
           <MultiSelectFilter
-            name="department"
-            label="מחלקות"
-            options={myDepartments.map((d) => ({ id: d.id, label: d.name }))}
-            defaultSelected={[...departmentFilter]}
+            name="source"
+            label="מקור"
+            options={Object.entries(SOURCE_LABELS).map(([id, label]) => ({ id, label }))}
+            defaultSelected={[...sourceFilter]}
           />
-        )}
-        <MultiSelectFilter
-          name="category"
-          label="קטגוריות"
-          options={(categories ?? []).map((c) => ({ id: c.id, label: c.name }))}
-          defaultSelected={[...categoryFilter]}
-        />
-        <MultiSelectFilter
-          name="status"
-          label="סטטוס (צ׳קים/העברות)"
-          options={[
-            { id: "UNPAID", label: "לא נפרע" },
-            { id: "CLEARED", label: "נפרע" },
-            { id: "CANCELLED", label: "בוטל" },
-          ]}
-          defaultSelected={[...statusFilter]}
-        />
-        <div>
-          <label className="block text-sm font-medium mb-1">מתאריך</label>
-          <input type="date" name="start" defaultValue={start} className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">עד תאריך</label>
-          <input type="date" name="end" defaultValue={end} className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">חיפוש חופשי</label>
-          <input
-            name="q"
-            defaultValue={q}
-            placeholder="שם, תיאור, מחלקה..."
-            className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+          {myDepartments.length > 0 && (
+            <MultiSelectFilter
+              name="department"
+              label="מחלקות"
+              options={myDepartments.map((d) => ({ id: d.id, label: d.name }))}
+              defaultSelected={[...departmentFilter]}
+            />
+          )}
+          <MultiSelectFilter
+            name="status"
+            label="סטטוס (צ׳קים/העברות)"
+            options={[
+              { id: "UNPAID", label: "לא נפרע" },
+              { id: "CLEARED", label: "נפרע" },
+              { id: "CANCELLED", label: "בוטל" },
+            ]}
+            defaultSelected={[...statusFilter]}
           />
-        </div>
-        <div className="flex items-center gap-2 self-end">
-          <button type="submit" className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold">
-            סנן
-          </button>
-          <a href="/transactions" className="text-sm text-muted underline">
-            נקה סינון
-          </a>
-        </div>
-      </form>
+          <div>
+            <label className="block text-sm font-medium mb-1">מתאריך</label>
+            <input type="date" name="start" defaultValue={start} className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">עד תאריך</label>
+            <input type="date" name="end" defaultValue={end} className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">חיפוש חופשי</label>
+            <input
+              name="q"
+              defaultValue={q}
+              placeholder="שם, תיאור, מחלקה..."
+              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2 self-end">
+            <button type="submit" className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold">
+              סנן
+            </button>
+            <a href="/transactions" className="text-sm text-muted underline">
+              נקה סינון
+            </a>
+          </div>
+        </form>
+      </details>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card p-4">
