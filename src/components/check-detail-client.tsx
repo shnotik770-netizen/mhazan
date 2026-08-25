@@ -224,8 +224,10 @@ function SpreadRowsTable({ rows, highlightId, isSpread }: { rows: CheckSpreadRow
 }
 
 // Payee name rendered as a link — opens every approved expense for that
-// payee across the whole system, not just the current table/section.
-export function PayeeLink({ payee }: { payee: string }) {
+// payee. `departmentId`, when passed (e.g. from inside one department's
+// report), narrows this to that department only, even for an admin who
+// could otherwise see it across the whole system.
+export function PayeeLink({ payee, departmentId }: { payee: string; departmentId?: string }) {
   const [open, setOpen] = useState(false);
   if (!payee) return null;
   return (
@@ -237,12 +239,12 @@ export function PayeeLink({ payee }: { payee: string }) {
       >
         {payee}
       </button>
-      {open && <PayeeExpensesModal payee={payee} onClose={() => setOpen(false)} />}
+      {open && <PayeeExpensesModal payee={payee} departmentId={departmentId} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-function PayeeExpensesModal({ payee, onClose }: { payee: string; onClose: () => void }) {
+function PayeeExpensesModal({ payee, departmentId, onClose }: { payee: string; departmentId?: string; onClose: () => void }) {
   const [rows, setRows] = useState<PayeeExpenseRow[]>([]);
   const [departments, setDepartments] = useState<Tables<"departments">[]>([]);
   const [allocationsByCheck, setAllocationsByCheck] = useState<Record<string, CheckAllocationInput[]>>({});
@@ -252,7 +254,7 @@ function PayeeExpensesModal({ payee, onClose }: { payee: string; onClose: () => 
     let cancelled = false;
     async function load() {
       setLoading(true);
-      const result = await getExpensesByPayee(payee);
+      const result = await getExpensesByPayee(payee, departmentId);
       if (cancelled) return;
       setRows(result.rows);
       setDepartments(result.departments);
@@ -263,7 +265,7 @@ function PayeeExpensesModal({ payee, onClose }: { payee: string; onClose: () => 
     return () => {
       cancelled = true;
     };
-  }, [payee]);
+  }, [payee, departmentId]);
 
   const total = rows.reduce((sum, r) => sum + r.amount, 0);
   const spreadTotals = new Map<string, number>();

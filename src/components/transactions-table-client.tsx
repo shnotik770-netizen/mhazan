@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { InvoiceFlagToggle } from "@/components/invoice-flag-toggle-client";
+import { Modal } from "@/components/modal";
+import { EditExpenseForm, type ExpenseRow, type Option } from "@/components/expenses-client";
+import { EditIncomeForm, type IncomeEditRow } from "@/components/income-edit-form-client";
 
 export type UnifiedRow = {
   id: string;
@@ -21,6 +25,11 @@ export type UnifiedRow = {
   // entries, where the concept doesn't apply.
   checkId: string | null;
   hasInvoice: boolean | null;
+  // Exactly one of these is set, matching sourceKey — the full raw data
+  // an admin's edit form needs, which the display columns above don't
+  // carry (e.g. the composed `description` isn't the raw donor/payee name).
+  incomeEdit: IncomeEditRow | null;
+  expenseEdit: ExpenseRow | null;
 };
 
 function invoiceLabel(r: UnifiedRow): string {
@@ -28,7 +37,18 @@ function invoiceLabel(r: UnifiedRow): string {
   return r.hasInvoice ? "יש חשבונית" : "אין חשבונית";
 }
 
-export function TransactionsTable({ rows, isAdmin }: { rows: UnifiedRow[]; isAdmin: boolean }) {
+export function TransactionsTable({
+  rows,
+  isAdmin,
+  departments,
+  categories,
+}: {
+  rows: UnifiedRow[];
+  isAdmin: boolean;
+  departments: Option[];
+  categories: Option[];
+}) {
+  const [editRow, setEditRow] = useState<UnifiedRow | null>(null);
   const columns: ColumnDef<UnifiedRow>[] = [
     { key: "date", label: "תאריך", sortValue: (r) => r.date ?? "" },
     {
@@ -48,58 +68,84 @@ export function TransactionsTable({ rows, isAdmin }: { rows: UnifiedRow[]; isAdm
   const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(rows, columns);
 
   return (
-    <table className="data-table">
-      <thead>
-        <tr>
-          {columns.map((col) => (
-            <SortFilterTh
-              key={col.key}
-              col={col}
-              allRows={rows}
-              sort={sort}
-              toggleSort={toggleSort}
-              activeFilter={filters[col.key]}
-              setColumnFilter={setColumnFilter}
-            />
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {sorted.map((r) => (
-          <tr key={r.id}>
-            <td>{r.date ? formatDate(r.date) : <span className="text-muted">ללא תאריך</span>}</td>
-            <td>
-              <span className={r.direction === "INCOME" ? "text-success" : "text-danger"}>
-                {r.direction === "INCOME" ? "הכנסה" : "הוצאה"}
-              </span>
-            </td>
-            <td>{r.source}</td>
-            <td>{r.description}</td>
-            <td>{r.categoryName ?? "—"}</td>
-            <td>{r.departmentName ?? "—"}</td>
-            <td>{r.status ?? "—"}</td>
-            <td>
-              {r.hasInvoice === null ? (
-                "—"
-              ) : isAdmin && r.checkId ? (
-                <InvoiceFlagToggle checkId={r.checkId} hasInvoice={r.hasInvoice} />
-              ) : r.hasInvoice ? (
-                "יש חשבונית"
-              ) : (
-                "אין חשבונית"
-              )}
-            </td>
-            <td className={r.direction === "INCOME" ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>
-          </tr>
-        ))}
-        {sorted.length === 0 && (
+    <>
+      <table className="data-table">
+        <thead>
           <tr>
-            <td colSpan={9} className="text-center text-muted py-6">
-              אין תנועות התואמות את הסינון
-            </td>
+            {columns.map((col) => (
+              <SortFilterTh
+                key={col.key}
+                col={col}
+                allRows={rows}
+                sort={sort}
+                toggleSort={toggleSort}
+                activeFilter={filters[col.key]}
+                setColumnFilter={setColumnFilter}
+              />
+            ))}
+            {isAdmin && <th></th>}
           </tr>
-        )}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {sorted.map((r) => (
+            <tr key={r.id}>
+              <td>{r.date ? formatDate(r.date) : <span className="text-muted">ללא תאריך</span>}</td>
+              <td>
+                <span className={r.direction === "INCOME" ? "text-success" : "text-danger"}>
+                  {r.direction === "INCOME" ? "הכנסה" : "הוצאה"}
+                </span>
+              </td>
+              <td>{r.source}</td>
+              <td>{r.description}</td>
+              <td>{r.categoryName ?? "—"}</td>
+              <td>{r.departmentName ?? "—"}</td>
+              <td>{r.status ?? "—"}</td>
+              <td>
+                {r.hasInvoice === null ? (
+                  "—"
+                ) : isAdmin && r.checkId ? (
+                  <InvoiceFlagToggle checkId={r.checkId} hasInvoice={r.hasInvoice} />
+                ) : r.hasInvoice ? (
+                  "יש חשבונית"
+                ) : (
+                  "אין חשבונית"
+                )}
+              </td>
+              <td className={r.direction === "INCOME" ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>
+              {isAdmin && (
+                <td>
+                  <button type="button" onClick={() => setEditRow(r)} className="text-xs text-primary underline">
+                    עריכה
+                  </button>
+                </td>
+              )}
+            </tr>
+          ))}
+          {sorted.length === 0 && (
+            <tr>
+              <td colSpan={isAdmin ? 10 : 9} className="text-center text-muted py-6">
+                אין תנועות התואמות את הסינון
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {editRow && editRow.incomeEdit && (
+        <Modal onClose={() => setEditRow(null)}>
+          <EditIncomeForm row={editRow.incomeEdit} categories={categories} onClose={() => setEditRow(null)} />
+        </Modal>
+      )}
+      {editRow && editRow.expenseEdit && (
+        <Modal onClose={() => setEditRow(null)}>
+          <EditExpenseForm
+            row={editRow.expenseEdit}
+            departments={departments}
+            categories={categories}
+            onClose={() => setEditRow(null)}
+          />
+        </Modal>
+      )}
+    </>
   );
 }

@@ -28,12 +28,14 @@ export function DepartmentTransactionsSection({
   title,
   rows,
   isAdmin,
+  departmentId,
   monthOptions,
   defaultSortDir = "desc",
 }: {
   title: string;
   rows: Row[];
   isAdmin: boolean;
+  departmentId: string;
   monthOptions: string[];
   defaultSortDir?: "asc" | "desc";
 }) {
@@ -132,7 +134,7 @@ export function DepartmentTransactionsSection({
       </div>
 
       <div className="overflow-x-auto">
-        <DepartmentTransactionsTable rows={filtered} isAdmin={isAdmin} defaultSortDir={defaultSortDir} />
+        <DepartmentTransactionsTable rows={filtered} isAdmin={isAdmin} departmentId={departmentId} defaultSortDir={defaultSortDir} />
       </div>
     </div>
   );

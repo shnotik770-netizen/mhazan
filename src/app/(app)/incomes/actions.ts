@@ -147,18 +147,23 @@ export async function submitIncomeBatch(
 export async function deleteIncome(incomeId: string): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const supabase = await createClient();
+  const { data: existing } = await supabase.from("incomes").select("owner_department_id").eq("id", incomeId).single();
   const { error } = await supabase.from("incomes").delete().eq("id", incomeId);
-  revalidatePath("/incomes");
-  revalidatePath("/");
-  revalidatePath("/ledger");
+  revalidateIncomePaths(existing?.owner_department_id);
   return { error: safeErrorMessage(error) };
 }
 
-function revalidateIncomePaths() {
+// An income also affects its department's own report page, not just the
+// global incomes/ledger/transactions lists — missing this (the same class
+// of bug fixed for manual entries) left an edited/reassigned/deleted
+// income showing everywhere except its own /reports/[departmentId] until
+// something else happened to bust that page's cache.
+function revalidateIncomePaths(departmentId?: string | null) {
   revalidatePath("/incomes");
   revalidatePath("/");
   revalidatePath("/ledger");
   revalidatePath("/transactions");
+  if (departmentId) revalidatePath(`/reports/${departmentId}`);
 }
 
 // Reassigns a single (non-split) income to a different department. Sets
@@ -171,7 +176,7 @@ export async function updateIncomeDepartment(incomeId: string, departmentId: str
 
   const { data: income, error: fetchError } = await supabase
     .from("incomes")
-    .select("issuing_department_id")
+    .select("owner_department_id, issuing_department_id")
     .eq("id", incomeId)
     .single();
   if (fetchError || !income) return { error: safeErrorMessage(fetchError) ?? "ההכנסה לא נמצאה" };
@@ -185,7 +190,64 @@ export async function updateIncomeDepartment(incomeId: string, departmentId: str
     .eq("id", incomeId);
   if (error) return { error: safeErrorMessage(error) };
 
-  revalidateIncomePaths();
+  revalidateIncomePaths(income.owner_department_id);
+  if (departmentId !== income.owner_department_id) revalidateIncomePaths(departmentId);
+  return {};
+}
+
+export type IncomeEditInput = {
+  date: string;
+  amount: number;
+  donorName: string;
+  categoryId: string;
+  paymentMethod: string;
+  typeText: string;
+  receiptNumber: string;
+  orderRef: string;
+  notes: string;
+};
+
+// General edit of an income row's own details, from the unified
+// transactions view. Department is deliberately not editable here: a
+// DB trigger (fn_income_before_write) re-derives owner_department_id from
+// category_id on every update that touches it, for any non-split category
+// — the same rule the paste flow relies on — so setting both in one
+// statement would just have the trigger silently overwrite whatever
+// department this call sent. Use updateIncomeDepartment (its own,
+// narrower call site) for a manual department override instead.
+export async function updateIncome(incomeId: string, input: IncomeEditInput): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  if (!input.date) return { error: "יש להזין תאריך" };
+  if (!input.amount || input.amount <= 0) return { error: "סכום לא תקין" };
+  if (!input.categoryId) return { error: "יש לבחור קטגוריה" };
+  const supabase = await createClient();
+
+  const { data: before } = await supabase.from("incomes").select("owner_department_id").eq("id", incomeId).single();
+
+  const { data: updated, error } = await supabase
+    .from("incomes")
+    .update({
+      date: input.date,
+      amount: input.amount,
+      donor_name: input.donorName || null,
+      category_id: input.categoryId,
+      payment_method: input.paymentMethod || null,
+      type_text: input.typeText || null,
+      receipt_number: input.receiptNumber || null,
+      order_ref: input.orderRef || null,
+      notes: input.notes || null,
+    })
+    .eq("id", incomeId)
+    .select("owner_department_id")
+    .single();
+  if (error) return { error: safeErrorMessage(error) };
+
+  // A category change can move owner_department_id via the DB trigger
+  // above, so both the old and new department's report might need it.
+  revalidateIncomePaths(before?.owner_department_id);
+  if (updated && updated.owner_department_id !== before?.owner_department_id) {
+    revalidateIncomePaths(updated.owner_department_id);
+  }
   return {};
 }
 
@@ -196,11 +258,13 @@ export async function updateIncomeDepartment(incomeId: string, departmentId: str
 export async function updateIncomeLedgerFlag(incomeId: string, skipDepartmentLedger: boolean): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("incomes")
     .update({ skip_department_ledger: skipDepartmentLedger })
-    .eq("id", incomeId);
-  revalidateIncomePaths();
+    .eq("id", incomeId)
+    .select("owner_department_id")
+    .single();
+  revalidateIncomePaths(updated?.owner_department_id);
   return { error: safeErrorMessage(error) };
 }
 
@@ -376,18 +440,23 @@ export type DonorIncomeRow = {
 // — RLS already scopes this to whatever departments the caller can see,
 // same as every other incomes query — so a click on a donor's name can
 // answer "has this donor given before?" without leaving the report.
-export async function getIncomesByDonor(donorName: string): Promise<{ rows: DonorIncomeRow[] }> {
+// `departmentId`, when passed (e.g. from inside one department's report),
+// narrows this to that department only, even for an admin who could
+// otherwise see the donor's history across the whole system.
+export async function getIncomesByDonor(donorName: string, departmentId?: string): Promise<{ rows: DonorIncomeRow[] }> {
   await requireUser();
   const trimmed = donorName.trim();
   if (!trimmed) return { rows: [] };
   const supabase = await createClient();
-  const { data } = await supabase
+  let query = supabase
     .from("incomes")
     .select(
       "id, date, amount, payment_method, installment_current, installment_total, type_text, receipt_number, categories(name), owner:owner_department_id(name)",
     )
     .ilike("donor_name", trimmed)
     .order("date", { ascending: false });
+  if (departmentId) query = query.eq("owner_department_id", departmentId);
+  const { data } = await query;
 
   return {
     rows: ((data ?? []) as unknown as {

@@ -8,11 +8,18 @@ import type { Tables } from "@/lib/supabase/database.types";
 
 export type CheckAllocationInput = { departmentId: string; amount: number };
 
-function revalidateCheckPaths() {
+// `departmentId` additionally revalidates that department's own report
+// page (/reports/[id]) — otherwise an edited/moved/deleted check kept
+// showing everywhere except the department report it actually belongs to,
+// the same class of stale-cache bug fixed for incomes and manual entries.
+function revalidateCheckPaths(departmentId?: string | null) {
   revalidatePath("/checks");
   revalidatePath("/");
   revalidatePath("/forecast");
   revalidatePath("/expenses");
+  revalidatePath("/ledger");
+  revalidatePath("/transactions");
+  if (departmentId) revalidatePath(`/reports/${departmentId}`);
 }
 
 // idx_checks_unique_number_per_bank enforces one check number per bank
@@ -733,23 +740,30 @@ export type PayeeExpenseRow = {
 // caller can see, same as every other checks query. Also returns the
 // department list and each check's split allocations so the payee-history
 // modal can offer full inline editing per row, not just a read-only list.
-export async function getExpensesByPayee(payee: string): Promise<{
+// `departmentId`, when passed (e.g. opened from inside one department's
+// report), narrows this to that department only — otherwise an admin
+// would see the payee's history across every department, even from a
+// screen that's supposed to be scoped to just this one.
+export async function getExpensesByPayee(payee: string, departmentId?: string): Promise<{
   rows: PayeeExpenseRow[];
   departments: Tables<"departments">[];
   allocationsByCheck: Record<string, CheckAllocationInput[]>;
 }> {
   await requireUser();
   const supabase = await createClient();
+  let checksQuery = supabase
+    .from("checks")
+    .select(
+      "id, due_date, amount, payment_method, check_number, status, department_id, notes, spread_id, departments(name), categories(name)",
+    )
+    .ilike("payee", payee)
+    .not("due_date", "is", null)
+    .neq("status", "CANCELLED")
+    .order("due_date", { ascending: false });
+  if (departmentId) checksQuery = checksQuery.eq("department_id", departmentId);
+
   const [{ data }, { data: departments }] = await Promise.all([
-    supabase
-      .from("checks")
-      .select(
-        "id, due_date, amount, payment_method, check_number, status, department_id, notes, spread_id, departments(name), categories(name)",
-      )
-      .ilike("payee", payee)
-      .not("due_date", "is", null)
-      .neq("status", "CANCELLED")
-      .order("due_date", { ascending: false }),
+    checksQuery,
     supabase.from("departments").select("*").order("name"),
   ]);
 
@@ -1161,7 +1175,7 @@ export async function updateCheck(
   const supabase = await createClient();
   const isSplit = (input.allocations ?? []).some((a) => a.departmentId && a.amount > 0);
 
-  const { data: existing } = await supabase.from("checks").select("check_number").eq("id", checkId).single();
+  const { data: existing } = await supabase.from("checks").select("check_number, department_id").eq("id", checkId).single();
   const justNumbered = !existing?.check_number && !!input.checkNumber;
 
   const { error } = await supabase
@@ -1181,7 +1195,7 @@ export async function updateCheck(
     })
     .eq("id", checkId);
   if (error) {
-    revalidateCheckPaths();
+    revalidateCheckPaths(existing?.department_id);
     return { error: friendlyCheckError(error, input.checkNumber) };
   }
 
@@ -1190,13 +1204,18 @@ export async function updateCheck(
     if (isSplit) {
       const allocError = await insertAllocations(supabase, checkId, input.allocations!);
       if (allocError) {
-        revalidateCheckPaths();
+        revalidateCheckPaths(existing?.department_id);
         return { error: allocError };
       }
     }
   }
 
-  revalidateCheckPaths();
+  revalidateCheckPaths(existing?.department_id);
+  if (isSplit) {
+    for (const a of input.allocations ?? []) revalidateCheckPaths(a.departmentId);
+  } else if (input.departmentId && input.departmentId !== existing?.department_id) {
+    revalidateCheckPaths(input.departmentId);
+  }
   return {};
 }
 

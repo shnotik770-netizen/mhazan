@@ -133,8 +133,10 @@ function IncomeDetailModal({ incomeId, onClose }: { incomeId: string; onClose: (
 }
 
 // Donor name rendered as a link — opens every income recorded under that
-// exact name across the whole system, not just the current table/section.
-export function DonorLink({ donorName }: { donorName: string }) {
+// exact name. `departmentId`, when passed (e.g. from inside one
+// department's report), narrows this to that department only, even for
+// an admin who could otherwise see it across the whole system.
+export function DonorLink({ donorName, departmentId }: { donorName: string; departmentId?: string }) {
   const [open, setOpen] = useState(false);
   if (!donorName || donorName === "—") return <>{donorName}</>;
   return (
@@ -146,12 +148,20 @@ export function DonorLink({ donorName }: { donorName: string }) {
       >
         {donorName}
       </button>
-      {open && <DonorIncomesModal donorName={donorName} onClose={() => setOpen(false)} />}
+      {open && <DonorIncomesModal donorName={donorName} departmentId={departmentId} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-function DonorIncomesModal({ donorName, onClose }: { donorName: string; onClose: () => void }) {
+function DonorIncomesModal({
+  donorName,
+  departmentId,
+  onClose,
+}: {
+  donorName: string;
+  departmentId?: string;
+  onClose: () => void;
+}) {
   const [rows, setRows] = useState<DonorIncomeRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -159,7 +169,7 @@ function DonorIncomesModal({ donorName, onClose }: { donorName: string; onClose:
     let cancelled = false;
     async function load() {
       setLoading(true);
-      const result = await getIncomesByDonor(donorName);
+      const result = await getIncomesByDonor(donorName, departmentId);
       if (cancelled) return;
       setRows(result.rows);
       setLoading(false);
@@ -168,7 +178,7 @@ function DonorIncomesModal({ donorName, onClose }: { donorName: string; onClose:
     return () => {
       cancelled = true;
     };
-  }, [donorName]);
+  }, [donorName, departmentId]);
 
   const total = rows.reduce((sum, r) => sum + r.amount, 0);
 

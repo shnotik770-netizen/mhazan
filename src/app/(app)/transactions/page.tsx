@@ -62,14 +62,14 @@ export default async function TransactionsPage({
   let incomesQuery = supabase
     .from("incomes")
     .select(
-      "id, date, amount, donor_name, order_ref, notes, category_id, categories(name), owner_department_id, departments:owner_department_id(name)",
+      "id, date, amount, donor_name, order_ref, notes, category_id, categories(name), owner_department_id, departments:owner_department_id(name), payment_method, type_text, receipt_number",
     )
     .order("date", { ascending: false })
     .limit(300);
   let checksQuery = supabase
     .from("checks")
     .select(
-      "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name)",
+      "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name), check_number, skip_department_ledger",
     )
     .neq("status", "CANCELLED")
     .order("due_date", { ascending: false, nullsFirst: false })
@@ -102,7 +102,7 @@ export default async function TransactionsPage({
     checksQuery = supabase
       .from("checks")
       .select(
-        "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name)",
+        "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name), check_number, skip_department_ledger",
       )
       .order("due_date", { ascending: false, nullsFirst: false })
       .limit(300);
@@ -117,6 +117,18 @@ export default async function TransactionsPage({
     Promise.resolve(manualQuery),
   ]);
 
+  const checkIds = (checks ?? []).map((c) => c.id);
+  const { data: allocations } =
+    checkIds.length > 0
+      ? await supabase.from("check_allocations").select("check_id, department_id, amount").in("check_id", checkIds)
+      : { data: [] as { check_id: string; department_id: string; amount: number }[] };
+  const allocationsByCheckId = new Map<string, { departmentId: string; amount: number }[]>();
+  for (const a of allocations ?? []) {
+    const arr = allocationsByCheckId.get(a.check_id) ?? [];
+    arr.push({ departmentId: a.department_id, amount: Number(a.amount) });
+    allocationsByCheckId.set(a.check_id, arr);
+  }
+
   const unified: UnifiedRow[] = [];
 
   for (const row of (incomes ?? []) as unknown as {
@@ -130,6 +142,9 @@ export default async function TransactionsPage({
     categories: { name: string } | null;
     owner_department_id: string | null;
     departments: { name: string } | null;
+    payment_method: string | null;
+    type_text: string | null;
+    receipt_number: string | null;
   }[]) {
     unified.push({
       id: `income-${row.id}`,
@@ -148,6 +163,19 @@ export default async function TransactionsPage({
       status: null,
       checkId: null,
       hasInvoice: null,
+      incomeEdit: {
+        id: row.id,
+        date: row.date,
+        amount: Number(row.amount),
+        donorName: row.donor_name,
+        categoryId: row.category_id,
+        paymentMethod: row.payment_method,
+        typeText: row.type_text,
+        receiptNumber: row.receipt_number,
+        orderRef: row.order_ref,
+        notes: row.notes,
+      },
+      expenseEdit: null,
     });
   }
 
@@ -165,6 +193,8 @@ export default async function TransactionsPage({
     has_invoice: boolean;
     departments: { name: string } | null;
     categories: { name: string } | null;
+    check_number: string | null;
+    skip_department_ledger: boolean;
   }[]) {
     if (type === "INCOME") continue;
     const sourceKey = row.payment_method === "TRANSFER" ? "TRANSFER" : "CHECK";
@@ -183,6 +213,29 @@ export default async function TransactionsPage({
       status: row.status,
       checkId: row.id,
       hasInvoice: row.has_invoice,
+      incomeEdit: null,
+      expenseEdit: {
+        id: row.id,
+        isCheck: true,
+        date: row.due_date,
+        source: SOURCE_LABELS[sourceKey],
+        description: row.payee,
+        payeeName: row.payee,
+        notes: row.notes,
+        amount: Number(row.amount),
+        departmentId: row.department_id,
+        departmentName: row.departments?.name ?? null,
+        categoryId: row.category_id,
+        categoryName: row.categories?.name ?? null,
+        bankAccountName: null,
+        status: row.status,
+        checkNumber: row.check_number,
+        paymentMethod: row.payment_method,
+        spreadId: row.spread_id,
+        isOld: row.skip_department_ledger,
+        hasInvoice: row.has_invoice,
+        allocations: allocationsByCheckId.get(row.id) ?? [],
+      },
     });
   }
 
@@ -209,6 +262,29 @@ export default async function TransactionsPage({
       categoryName: null,
       sourceKey: "MANUAL",
       source: SOURCE_LABELS.MANUAL,
+      incomeEdit: null,
+      expenseEdit: {
+        id: row.id,
+        isCheck: false,
+        date: row.entry_date,
+        source: SOURCE_LABELS.MANUAL,
+        description: row.notes ?? "רישום ידני",
+        payeeName: "",
+        notes: row.notes,
+        amount: Number(row.amount),
+        departmentId: row.department_id,
+        departmentName: row.departments?.name ?? null,
+        categoryId: null,
+        categoryName: null,
+        bankAccountName: null,
+        status: "APPROVED",
+        checkNumber: null,
+        paymentMethod: null,
+        spreadId: null,
+        isOld: false,
+        hasInvoice: false,
+        allocations: [],
+      },
       status: "APPROVED",
       checkId: null,
       hasInvoice: null,
@@ -318,7 +394,12 @@ export default async function TransactionsPage({
       </div>
 
       <div className="card p-4 overflow-x-auto">
-        <TransactionsTable rows={filtered} isAdmin={isAdmin} />
+        <TransactionsTable
+          rows={filtered}
+          isAdmin={isAdmin}
+          departments={(departments ?? []).map((d) => ({ id: d.id, name: d.name }))}
+          categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name }))}
+        />
         <p className="text-xs text-muted mt-2">
           מוצגות עד 300 תנועות אחרונות מכל סוג (הכנסות / צ׳קים-העברות / רישומים ידניים) — לצמצום התוצאות יש להשתמש
           בסינון למעלה.

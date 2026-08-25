@@ -52,6 +52,7 @@ export async function DepartmentReport({
         title="תנועות עתידיות ידועות"
         rows={futureRows}
         isAdmin={isAdmin}
+        departmentId={departmentId}
         monthOptions={futureMonths}
         defaultSortDir="asc"
       />
@@ -61,6 +62,7 @@ export async function DepartmentReport({
         title="תנועות עד היום"
         rows={pastRows}
         isAdmin={isAdmin}
+        departmentId={departmentId}
         monthOptions={pastMonths}
         defaultSortDir="desc"
       />

@@ -23,7 +23,7 @@ import {
 } from "@/app/(app)/checks/actions";
 import { updateManualEntry, deleteManualEntry } from "@/app/(app)/manual-entries/actions";
 
-type ExpenseRow = {
+export type ExpenseRow = {
   id: string;
   isCheck: boolean;
   date: string | null;
@@ -46,7 +46,7 @@ type ExpenseRow = {
   allocations: { departmentId: string; amount: number }[];
 };
 
-type Option = { id: string; name: string };
+export type Option = { id: string; name: string };
 
 const statusLabel = (s: string | null) =>
   s === "CLEARED" ? "נפרע" : s === "APPROVED" ? "מאושר" : s === "CANCELLED" ? "בוטל" : "לא נפרע";
@@ -631,7 +631,7 @@ function DeleteExpenseButton({ row }: { row: ExpenseRow }) {
   );
 }
 
-function EditExpenseForm({
+export function EditExpenseForm({
   row,
   departments,
   categories,

@@ -27,10 +27,12 @@ function statusLabel(status: string) {
 export function DepartmentTransactionsTable({
   rows,
   isAdmin,
+  departmentId,
   defaultSortDir = "desc",
 }: {
   rows: Row[];
   isAdmin: boolean;
+  departmentId: string;
   defaultSortDir?: "asc" | "desc";
 }) {
   const columns: ColumnDef<Row>[] = [
@@ -75,9 +77,9 @@ export function DepartmentTransactionsTable({
             <td>{r.type}</td>
             <td>
               {r.kind === "check" ? (
-                <PayeeLink payee={r.description} />
+                <PayeeLink payee={r.description} departmentId={departmentId} />
               ) : r.kind === "income" ? (
-                <DonorLink donorName={r.description} />
+                <DonorLink donorName={r.description} departmentId={departmentId} />
               ) : (
                 r.description
               )}
