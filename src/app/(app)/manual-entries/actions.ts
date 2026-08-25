@@ -5,10 +5,17 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser, requireFinanceAdmin } from "@/lib/auth";
 import { safeErrorMessage } from "@/lib/safe-error";
 
-function revalidateEntryPaths() {
+// A manual entry also affects the department's own report page and the
+// inter-department ledger, not just the global transactions/expenses
+// lists — both were missing here, so an approved manual entry kept
+// showing on /transactions while the department's own /reports/[id] page
+// kept serving its stale cached render until something else revalidated it.
+function revalidateEntryPaths(departmentId?: string | null) {
   revalidatePath("/");
   revalidatePath("/expenses");
   revalidatePath("/transactions");
+  revalidatePath("/ledger");
+  if (departmentId) revalidatePath(`/reports/${departmentId}`);
 }
 
 export async function createManualEntry(input: {
@@ -44,7 +51,7 @@ export async function createManualEntry(input: {
   });
 
   if (error) return { error: safeErrorMessage(error) };
-  revalidateEntryPaths();
+  revalidateEntryPaths(input.departmentId);
   return {};
 }
 
@@ -58,6 +65,11 @@ export async function updateManualEntry(
   await requireFinanceAdmin();
   if (!input.entryDate) return { error: "יש להזין תאריך" };
   const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("manual_department_entries")
+    .select("department_id")
+    .eq("id", entryId)
+    .single();
   const { error } = await supabase
     .from("manual_department_entries")
     .update({
@@ -69,26 +81,37 @@ export async function updateManualEntry(
     })
     .eq("id", entryId);
   if (error) return { error: safeErrorMessage(error) };
-  revalidateEntryPaths();
+  revalidateEntryPaths(input.departmentId);
+  if (existing && existing.department_id !== input.departmentId) revalidateEntryPaths(existing.department_id);
   return {};
 }
 
 export async function deleteManualEntry(entryId: string): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("manual_department_entries")
+    .select("department_id")
+    .eq("id", entryId)
+    .single();
   const { error } = await supabase.from("manual_department_entries").delete().eq("id", entryId);
   if (error) return { error: safeErrorMessage(error) };
-  revalidateEntryPaths();
+  revalidateEntryPaths(existing?.department_id);
   return {};
 }
 
 export async function reviewManualEntry(entryId: string, decision: "APPROVED" | "REJECTED"): Promise<void> {
   await requireFinanceAdmin();
   const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("manual_department_entries")
+    .select("department_id")
+    .eq("id", entryId)
+    .single();
   // RPC (not a plain update) since it must run with elevated privileges to
   // let the after-write trigger create the auto-ledger entry regardless of
   // who originally submitted the (possibly non-admin) pending entry.
   const { error } = await supabase.rpc("review_manual_entry", { p_entry_id: entryId, p_decision: decision });
   if (error) throw new Error(error.message);
-  revalidateEntryPaths();
+  revalidateEntryPaths(existing?.department_id);
 }
