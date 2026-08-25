@@ -256,6 +256,43 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     forecastByMonth.set(m, g);
   }
 
+  // Credit-card installment income (e.g. "7/12", captured via
+  // installment_current/installment_total on a paste) repeats as its own
+  // income row every month as it's paid off — so the most recent occurrence
+  // per donor+total+category tells the real remaining count, and only that
+  // one should project forward: an older row for the same commitment would
+  // otherwise project the same future months a second time. Only this
+  // department's own incomes participate (the query above is already
+  // scoped to owner_department_id), and "old"/excluded income never drives
+  // a live projection.
+  type InstallmentGroup = { amount: number; total: number; current: number; date: string };
+  const installmentGroups = new Map<string, InstallmentGroup>();
+  for (const r of incomes ?? []) {
+    if (r.skip_department_ledger) continue;
+    if (r.payment_method !== "אשראי" || r.installment_current == null || r.installment_total == null) continue;
+    if (r.installment_current >= r.installment_total) continue;
+    const categoryName = (r as unknown as { categories: { name: string } | null }).categories?.name ?? "";
+    const key = `${r.donor_name ?? ""}|${r.installment_total}|${categoryName}`;
+    // incomes is already ordered newest-first, so the first occurrence of
+    // a key is its latest progress.
+    if (installmentGroups.has(key)) continue;
+    installmentGroups.set(key, {
+      amount: Number(r.amount),
+      total: r.installment_total,
+      current: r.installment_current,
+      date: r.date,
+    });
+  }
+  for (const g of installmentGroups.values()) {
+    const remaining = g.total - g.current;
+    for (let i = 1; i <= remaining; i++) {
+      const m = addMonths(g.date.slice(0, 7), i);
+      const bucket = forecastByMonth.get(m) ?? { income: 0, expense: 0 };
+      bucket.income += g.amount;
+      forecastByMonth.set(m, bucket);
+    }
+  }
+
   const touchedMonths = [...new Set([...historicalByMonth.keys(), ...forecastByMonth.keys()])].sort();
   let running = 0;
   const monthlyFlow: MonthlyFlowRow[] =
