@@ -3,13 +3,15 @@
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { LedgerFlagToggle } from "@/components/ledger-flag-toggle-client";
+import { RowActionsMenu } from "@/components/row-actions-menu";
 import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
 import { DonorLink, IncomeDetailLink } from "@/components/income-detail-client";
 
 type Row = {
   id: string;
   date: string | null;
-  type: string;
+  typeDetail: string;
+  category?: string | null;
   description: string;
   amount: number;
   spreadTotal?: number | null;
@@ -37,7 +39,13 @@ export function DepartmentTransactionsTable({
 }) {
   const columns: ColumnDef<Row>[] = [
     { key: "date", label: "תאריך", sortValue: (r) => r.date ?? "" },
-    { key: "type", label: "סוג", sortValue: (r) => r.type, filterValue: (r) => r.type },
+    {
+      key: "direction",
+      label: "הכנסה / הוצאה",
+      sortValue: (r) => (r.amount >= 0 ? "הכנסה" : "הוצאה"),
+      filterValue: (r) => (r.amount >= 0 ? "הכנסה" : "הוצאה"),
+    },
+    { key: "typeDetail", label: "סוג", sortValue: (r) => r.typeDetail, filterValue: (r) => r.typeDetail },
     { key: "description", label: "תיאור", sortValue: (r) => r.description, filterValue: (r) => r.description },
     { key: "amount", label: "סכום", sortValue: (r) => r.amount },
     {
@@ -74,7 +82,8 @@ export function DepartmentTransactionsTable({
         {filtered.map((r) => (
           <tr key={r.id} className={r.isOld ? "opacity-60" : undefined}>
             <td>{r.date ? formatDate(r.date) : "—"}</td>
-            <td>{r.type}</td>
+            <td className={r.amount >= 0 ? "text-success" : "text-danger"}>{r.amount >= 0 ? "הכנסה" : "הוצאה"}</td>
+            <td>{r.typeDetail}</td>
             <td>
               {r.kind === "check" ? (
                 <PayeeLink payee={r.description} departmentId={departmentId} />
@@ -83,6 +92,7 @@ export function DepartmentTransactionsTable({
               ) : (
                 r.description
               )}
+              {r.category && <span className="badge bg-background text-muted mr-1">{r.category}</span>}
               {r.spreadTotal != null && (
                 <span className="badge bg-background text-muted mr-1">פריסה · סה״כ {formatCurrency(r.spreadTotal)}</span>
               )}
@@ -118,14 +128,16 @@ export function DepartmentTransactionsTable({
             </td>
             <td>
               {isAdmin && (r.kind === "check" || r.kind === "income") && (
-                <LedgerFlagToggle id={r.id} kind={r.kind} skipDepartmentLedger={r.isOld} />
+                <RowActionsMenu>
+                  <LedgerFlagToggle id={r.id} kind={r.kind} skipDepartmentLedger={r.isOld} />
+                </RowActionsMenu>
               )}
             </td>
           </tr>
         ))}
         {filtered.length === 0 && (
           <tr>
-            <td colSpan={6} className="text-center text-muted py-6">
+            <td colSpan={7} className="text-center text-muted py-6">
               אין תנועות
             </td>
           </tr>

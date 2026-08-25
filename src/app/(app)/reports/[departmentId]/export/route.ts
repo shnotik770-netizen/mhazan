@@ -28,7 +28,7 @@ function addRowsSheet(workbook: ExcelJS.Workbook, title: string, rows: CombinedR
     sheet.addRow({
       date: r.date ? formatDate(r.date) : "",
       kind: kindLabel(r.kind),
-      type: r.type,
+      type: r.typeDetail,
       description: r.description,
       amount: r.amount,
       status: r.status ?? "",

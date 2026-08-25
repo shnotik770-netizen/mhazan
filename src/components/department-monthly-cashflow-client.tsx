@@ -16,13 +16,11 @@ function monthLabel(monthStr: string): string {
   return new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(new Date(`${monthStr}-01T00:00:00`));
 }
 
-// Collapsed by default — the cards + transaction list above stay exactly as
-// they were before this existed. Opening this shows the same continuous
-// month-by-month balance a bank cash-flow report shows: real history up to
-// today, seamlessly continuing into the forecast from recurring schedules
-// and known checks/transfers. Picking a past month adds a summary line for
-// "how much was owed by the end of that month" and trims the table to start
-// there.
+// Always shown open — this is the same continuous month-by-month balance a
+// bank cash-flow report shows: real history up to today, seamlessly
+// continuing into the forecast from recurring schedules and known
+// checks/transfers. Picking a past month adds a summary line for "how much
+// was owed by the end of that month" and trims the table to start there.
 export function DepartmentMonthlyCashFlow({ rows }: { rows: MonthlyFlow[] }) {
   const [fromMonth, setFromMonth] = useState("");
 
@@ -34,8 +32,8 @@ export function DepartmentMonthlyCashFlow({ rows }: { rows: MonthlyFlow[] }) {
   const summaryRow = startIndex > 0 ? rows[startIndex - 1] : null;
 
   return (
-    <details className="card p-4">
-      <summary className="cursor-pointer font-semibold">תזרים חודשי מלא — עבר ותחזית (כולל הוראות קבע)</summary>
+    <div className="card p-4">
+      <h2 className="font-semibold">תזרים חודשי מלא — עבר ותחזית (כולל הוראות קבע)</h2>
       <div className="mt-3 space-y-3">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <label className="text-muted">הצג החל מחודש:</label>
@@ -92,6 +90,6 @@ export function DepartmentMonthlyCashFlow({ rows }: { rows: MonthlyFlow[] }) {
           </table>
         </div>
       </div>
-    </details>
+    </div>
   );
 }

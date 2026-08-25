@@ -7,7 +7,8 @@ import { DepartmentTransactionsTable } from "@/components/department-report-tabl
 type Row = {
   id: string;
   date: string | null;
-  type: string;
+  typeDetail: string;
+  category?: string | null;
   description: string;
   amount: number;
   spreadTotal?: number | null;

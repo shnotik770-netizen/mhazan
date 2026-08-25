@@ -14,7 +14,8 @@ export function monthLabel(monthKey: string): string {
 export type CombinedRow = {
   id: string;
   date: string | null;
-  type: string;
+  typeDetail: string;
+  category?: string | null;
   description: string;
   amount: number;
   spreadTotal?: number | null;
@@ -104,7 +105,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
   }
 
   const incomeRows: CombinedRow[] = (incomes ?? []).map((r) => {
-    const category = (r as unknown as { categories: { name: string } | null }).categories?.name;
+    const category = (r as unknown as { categories: { name: string } | null }).categories?.name ?? null;
     // "סוג" (e.g. "1/2" for an installment, or free text like "הו״ק"/"מזומן")
     // matters just as much as the payment method for identifying a
     // transaction — shown alongside it instead of only the method.
@@ -116,7 +117,8 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     return {
       id: r.id,
       date: r.date,
-      type: "הכנסה" + (category ? ` — ${category}` : "") + (parenParts.length > 0 ? ` (${parenParts.join(" · ")})` : ""),
+      typeDetail: parenParts.length > 0 ? parenParts.join(" · ") : "—",
+      category,
       description: r.donor_name || "—",
       amount: Number(r.amount),
       isOld: r.skip_department_ledger,
@@ -144,7 +146,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     return {
       id: r.check_id as string,
       date: r.due_date,
-      type: r.payment_method === "TRANSFER" ? "הוצאה — העברה" : "הוצאה — צ׳ק",
+      typeDetail: r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק",
       description: r.payee ?? "הוצאה",
       amount: -Number(r.amount),
       spreadTotal: group && group.count > 1 ? group.total : null,
@@ -166,12 +168,11 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       : e.direction === "INCOME"
         ? "רישום ידני — הכנסה"
         : "רישום ידני — הוצאה";
-    const directionLabel = e.direction === "INCOME" ? "הכנסה" : "הוצאה";
     const kindLabel = e.recurring_schedule_id ? "קבוע (אושר)" : "ידני";
     return {
       id: e.id,
       date: e.entry_date,
-      type: `${directionLabel} — ${kindLabel}`,
+      typeDetail: kindLabel,
       description: e.notes ? `${label} (${e.notes})` : label,
       amount: e.direction === "INCOME" ? Number(e.amount) : -Number(e.amount),
       isOld: false,
@@ -189,7 +190,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
   const commissionRows: CombinedRow[] = (commissionEntries ?? []).map((c) => ({
     id: c.id,
     date: `${addMonths(c.month.slice(0, 7), 1)}-01`,
-    type: "הוצאה — עמלת אשראי",
+    typeDetail: "עמלת אשראי",
     description: `עמלת אשראי (2% על ${formatCurrency(Number(c.qualifying_total))} מהכנסות אשראי/ביט/העברה בקליק ב${monthLabel(c.month.slice(0, 7))})`,
     amount: -Number(c.amount),
     isOld: false,

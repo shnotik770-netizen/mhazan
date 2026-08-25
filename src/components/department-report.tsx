@@ -3,11 +3,13 @@ import { getDepartmentReportData } from "@/lib/department-report-data";
 import { DepartmentTransactionsSection } from "@/components/department-transactions-section-client";
 import { DepartmentMonthlyCashFlow } from "@/components/department-monthly-cashflow-client";
 
-// Three sections, top to bottom: today's actual state (the "מצב נוכחי"
-// cards, past-only), known future commitments (checks/transfers already in
-// the system with a date that hasn't come yet), then full transaction
-// history — each of the latter two filterable by month or an exact date,
-// with its own income/expense/net summary for whatever's currently shown.
+// Top to bottom: today's actual state (the "מצב נוכחי" cards, past-only),
+// the full monthly cash-flow history/forecast, full past transaction
+// history, then known future commitments last — those are still pending and
+// least "final", so they read as an appendix rather than competing with the
+// department's actual history for top billing. The two transaction
+// sections are each filterable by month or an exact date, with their own
+// income/expense/net summary for whatever's currently shown.
 export async function DepartmentReport({
   departmentId,
   departmentName,
@@ -32,7 +34,7 @@ export async function DepartmentReport({
             ייצוא לאקסל ⇩
           </a>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="summary-cards-grid grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="card p-4">
             <p className="text-sm text-muted mb-1">סה״כ הכנסות</p>
             <p className="text-2xl font-bold text-success">{formatCurrency(totalIncome)}</p>
@@ -48,14 +50,6 @@ export async function DepartmentReport({
         </div>
       </div>
 
-      <DepartmentTransactionsSection
-        title="תנועות עתידיות ידועות"
-        rows={futureRows}
-        isAdmin={isAdmin}
-        departmentId={departmentId}
-        monthOptions={futureMonths}
-        defaultSortDir="asc"
-      />
       <DepartmentMonthlyCashFlow rows={monthlyFlow} />
 
       <DepartmentTransactionsSection
@@ -65,6 +59,15 @@ export async function DepartmentReport({
         departmentId={departmentId}
         monthOptions={pastMonths}
         defaultSortDir="desc"
+      />
+
+      <DepartmentTransactionsSection
+        title="תנועות עתידיות ידועות"
+        rows={futureRows}
+        isAdmin={isAdmin}
+        departmentId={departmentId}
+        monthOptions={futureMonths}
+        defaultSortDir="asc"
       />
     </div>
   );
