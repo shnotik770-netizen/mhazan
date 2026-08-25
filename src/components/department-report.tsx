@@ -44,7 +44,9 @@ export async function DepartmentReport({
   const [{ data: incomes }, { data: expenses }, { data: manualEntries }, { data: commissionEntries }] = await Promise.all([
     supabase
       .from("incomes")
-      .select("id, date, amount, donor_name, payment_method, skip_department_ledger, categories(name)")
+      .select(
+        "id, date, amount, donor_name, payment_method, installment_current, installment_total, type_text, skip_department_ledger, categories(name)",
+      )
       .eq("owner_department_id", departmentId)
       .order("date", { ascending: false }),
     supabase
@@ -70,10 +72,18 @@ export async function DepartmentReport({
 
   const incomeRows: CombinedRow[] = (incomes ?? []).map((r) => {
     const category = (r as unknown as { categories: { name: string } | null }).categories?.name;
+    // "סוג" (e.g. "1/2" for an installment, or free text like "הו״ק"/"מזומן")
+    // matters just as much as the payment method for identifying a
+    // transaction — shown alongside it instead of only the method.
+    const typeSuffix =
+      r.installment_current != null && r.installment_total != null
+        ? `${r.installment_current}/${r.installment_total}`
+        : r.type_text || null;
+    const parenParts = [r.payment_method, typeSuffix].filter(Boolean);
     return {
       id: r.id,
       date: r.date,
-      type: "הכנסה" + (category ? ` — ${category}` : "") + (r.payment_method ? ` (${r.payment_method})` : ""),
+      type: "הכנסה" + (category ? ` — ${category}` : "") + (parenParts.length > 0 ? ` (${parenParts.join(" · ")})` : ""),
       description: r.donor_name || "—",
       amount: Number(r.amount),
       isOld: r.skip_department_ledger,

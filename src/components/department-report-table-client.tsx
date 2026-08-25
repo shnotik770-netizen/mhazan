@@ -3,6 +3,8 @@
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { LedgerFlagToggle } from "@/components/ledger-flag-toggle-client";
+import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
+import { DonorLink, IncomeDetailLink } from "@/components/income-detail-client";
 
 type Row = {
   id: string;
@@ -72,11 +74,27 @@ export function DepartmentTransactionsTable({
             <td>{r.date ? formatDate(r.date) : "—"}</td>
             <td>{r.type}</td>
             <td>
-              {r.description}
+              {r.kind === "check" ? (
+                <PayeeLink payee={r.description} />
+              ) : r.kind === "income" ? (
+                <DonorLink donorName={r.description} />
+              ) : (
+                r.description
+              )}
               {r.spreadTotal != null && (
                 <span className="badge bg-background text-muted mr-1">פריסה · סה״כ {formatCurrency(r.spreadTotal)}</span>
               )}
               {r.isOld && <span className="badge bg-warning-bg text-warning mr-1">ישן — לא נכלל במאזן</span>}
+              {r.kind === "check" && (
+                <span className="mr-2">
+                  <CheckDetailLink checkId={r.id} />
+                </span>
+              )}
+              {r.kind === "income" && (
+                <span className="mr-2">
+                  <IncomeDetailLink incomeId={r.id} />
+                </span>
+              )}
             </td>
             <td className={r.amount >= 0 ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>
             <td>

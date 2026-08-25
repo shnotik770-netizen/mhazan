@@ -283,3 +283,135 @@ export async function splitIncome(
   revalidateIncomePaths();
   return {};
 }
+
+export type IncomeDetail = {
+  id: string;
+  date: string;
+  amount: number;
+  donorName: string | null;
+  donorIdNumber: string | null;
+  categoryName: string | null;
+  departmentName: string | null;
+  paymentMethod: string | null;
+  installmentCurrent: number | null;
+  installmentTotal: number | null;
+  typeText: string | null;
+  receiptNumber: string | null;
+  orderRef: string | null;
+  transactionRef: string | null;
+  notes: string | null;
+  bankName: string | null;
+  accountNumber: string | null;
+};
+
+// Full detail for one income row — everything captured at paste time
+// (donor, category, payment method/type, receipt/order/transaction
+// numbers, bank account, notes), for the "פרטים" link on a report row.
+export async function getIncomeDetail(incomeId: string): Promise<{ error?: string; detail?: IncomeDetail }> {
+  await requireUser();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("incomes")
+    .select("*, categories(name), bank_accounts(bank_name, account_number), owner:owner_department_id(name)")
+    .eq("id", incomeId)
+    .single();
+  if (error || !data) return { error: error ? safeErrorMessage(error) : "ההכנסה לא נמצאה" };
+
+  const row = data as unknown as {
+    id: string;
+    date: string;
+    amount: number;
+    donor_name: string | null;
+    donor_id_number: string | null;
+    payment_method: string | null;
+    installment_current: number | null;
+    installment_total: number | null;
+    type_text: string | null;
+    receipt_number: string | null;
+    order_ref: string | null;
+    transaction_ref: string | null;
+    notes: string | null;
+    categories: { name: string } | null;
+    bank_accounts: { bank_name: string; account_number: string } | null;
+    owner: { name: string } | null;
+  };
+
+  return {
+    detail: {
+      id: row.id,
+      date: row.date,
+      amount: Number(row.amount),
+      donorName: row.donor_name,
+      donorIdNumber: row.donor_id_number,
+      categoryName: row.categories?.name ?? null,
+      departmentName: row.owner?.name ?? null,
+      paymentMethod: row.payment_method,
+      installmentCurrent: row.installment_current,
+      installmentTotal: row.installment_total,
+      typeText: row.type_text,
+      receiptNumber: row.receipt_number,
+      orderRef: row.order_ref,
+      transactionRef: row.transaction_ref,
+      notes: row.notes,
+      bankName: row.bank_accounts?.bank_name ?? null,
+      accountNumber: row.bank_accounts?.account_number ?? null,
+    },
+  };
+}
+
+export type DonorIncomeRow = {
+  id: string;
+  date: string;
+  amount: number;
+  paymentMethod: string | null;
+  installmentCurrent: number | null;
+  installmentTotal: number | null;
+  typeText: string | null;
+  categoryName: string | null;
+  departmentName: string | null;
+  receiptNumber: string | null;
+};
+
+// Every income recorded under the exact same donor name (case-insensitive)
+// — RLS already scopes this to whatever departments the caller can see,
+// same as every other incomes query — so a click on a donor's name can
+// answer "has this donor given before?" without leaving the report.
+export async function getIncomesByDonor(donorName: string): Promise<{ rows: DonorIncomeRow[] }> {
+  await requireUser();
+  const trimmed = donorName.trim();
+  if (!trimmed) return { rows: [] };
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("incomes")
+    .select(
+      "id, date, amount, payment_method, installment_current, installment_total, type_text, receipt_number, categories(name), owner:owner_department_id(name)",
+    )
+    .ilike("donor_name", trimmed)
+    .order("date", { ascending: false });
+
+  return {
+    rows: ((data ?? []) as unknown as {
+      id: string;
+      date: string;
+      amount: number;
+      payment_method: string | null;
+      installment_current: number | null;
+      installment_total: number | null;
+      type_text: string | null;
+      receipt_number: string | null;
+      categories: { name: string } | null;
+      owner: { name: string } | null;
+    }[]).map((row) => ({
+      id: row.id,
+      date: row.date,
+      amount: Number(row.amount),
+      paymentMethod: row.payment_method,
+      installmentCurrent: row.installment_current,
+      installmentTotal: row.installment_total,
+      typeText: row.type_text,
+      categoryName: row.categories?.name ?? null,
+      departmentName: row.owner?.name ?? null,
+      receiptNumber: row.receipt_number,
+    })),
+  };
+}

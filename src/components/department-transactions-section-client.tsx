@@ -39,12 +39,16 @@ export function DepartmentTransactionsSection({
 }) {
   const [month, setMonth] = useState("");
   const [exactDate, setExactDate] = useState("");
+  const [kindFilter, setKindFilter] = useState<"all" | "income" | "expense">("all");
 
   const filtered = useMemo(() => {
-    if (exactDate) return rows.filter((r) => r.date === exactDate);
-    if (month) return rows.filter((r) => r.date?.slice(0, 7) === month);
-    return rows;
-  }, [rows, month, exactDate]);
+    let result = rows;
+    if (exactDate) result = result.filter((r) => r.date === exactDate);
+    else if (month) result = result.filter((r) => r.date?.slice(0, 7) === month);
+    if (kindFilter === "income") result = result.filter((r) => r.amount > 0);
+    else if (kindFilter === "expense") result = result.filter((r) => r.amount < 0);
+    return result;
+  }, [rows, month, exactDate, kindFilter]);
 
   const counted = filtered.filter((r) => !r.isOld);
   const income = counted.filter((r) => r.amount > 0).reduce((sum, r) => sum + r.amount, 0);
@@ -56,6 +60,26 @@ export function DepartmentTransactionsSection({
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="font-semibold">{title}</h2>
         <div className="flex items-center gap-2 text-sm flex-wrap">
+          <div className="flex items-center rounded-lg border border-border overflow-hidden text-xs">
+            {(
+              [
+                { key: "all", label: "כל התנועות" },
+                { key: "income", label: "הכנסות בלבד" },
+                { key: "expense", label: "הוצאות בלבד" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setKindFilter(opt.key)}
+                className={`px-2 py-1 ${
+                  kindFilter === opt.key ? "bg-primary text-primary-foreground" : "bg-transparent text-muted"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <select
             value={month}
             onChange={(e) => {
