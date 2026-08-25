@@ -284,17 +284,25 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
 
   // Standing orders can fail to actually charge (insufficient funds, a
   // cancelled card, etc.) — unlike a credit-card installment, which is
-  // certain to recur — so a forecasted standing-order charge is only
-  // dropped once a real income row shows up for that *exact* order in that
-  // *exact* month, matched by order_ref (the Nedarim KevaId, captured when
-  // the month's income report is pasted in). No match yet keeps the
-  // forecast line showing; once the real charge is pasted, the forecast
-  // line for that order+month quietly disappears instead of double-counting.
+  // certain to recur — so a forecasted standing-order charge is dropped in
+  // either of two cases:
+  //  1. A real income row shows up for that *exact* order in that *exact*
+  //     month, matched by order_ref (the Nedarim KevaId, captured when the
+  //     month's income report is pasted in) — the charge happened, no need
+  //     to also show it as a forecast.
+  //  2. The forecasted month has already fully elapsed with no such match.
+  //     Once a manager has moved past a month, that month's income paste is
+  //     assumed complete — if the order still isn't there, it simply didn't
+  //     charge that month for whatever reason, and the forecast line for it
+  //     should quietly disappear rather than linger as a stale "future" row
+  //     for a month that's already over. (A later Nedarim sync will pick up
+  //     wherever the order's schedule actually continues from.)
   const chargedOrderMonths = new Set<string>();
   for (const r of incomes ?? []) {
     if (!r.order_ref || !r.date) continue;
     chargedOrderMonths.add(`${r.order_ref}|${r.date.slice(0, 7)}`);
   }
+  const currentMonth = todayIso().slice(0, 7);
 
   // Standing-order (הוראת קבע) forecast, cached in `standing_order_forecast`
   // by the monthly (or manually-triggered) Nedarim Plus sync — pre-computed
@@ -305,6 +313,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
   const standingOrderRows: CombinedRow[] = [];
   for (const s of standingOrderForecast ?? []) {
     const month = s.month;
+    if (month < currentMonth) continue;
     const allDetails = (s.details ?? []) as unknown as InstallmentForecastDetail[];
     const details = allDetails.filter((d) => !d.orderRef || !chargedOrderMonths.has(`${d.orderRef}|${month}`));
     if (details.length === 0) continue;
