@@ -72,7 +72,13 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     supabase
       .from("manual_department_entries")
       .select(
-        "id, entry_date, amount, direction, notes, recurring_schedule_id, bank_accounts(department_id, departments(name))",
+        // departments!bank_accounts_department_id_fkey: bank_accounts and
+        // departments have two FKs between them (this one, plus
+        // departments.home_bank_account_id) — PostgREST needs the explicit
+        // hint or it refuses the whole embed as ambiguous (PGRST201),
+        // which silently zeroed out every manual entry in every department
+        // report until this was caught via the query-failure logging.
+        "id, entry_date, amount, direction, notes, recurring_schedule_id, bank_accounts(department_id, departments!bank_accounts_department_id_fkey(name))",
       )
       .eq("department_id", departmentId)
       .eq("status", "APPROVED")
