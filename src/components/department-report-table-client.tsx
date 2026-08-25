@@ -7,17 +7,19 @@ import { RowActionsMenu } from "@/components/row-actions-menu";
 import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
 import { DonorLink, IncomeDetailLink } from "@/components/income-detail-client";
 
+type ForecastDetail = { donorName: string; categoryName: string; current: number; total: number; amount: number };
+
 type Row = {
   id: string;
   date: string | null;
   typeDetail: string;
-  category?: string | null;
   description: string;
   amount: number;
   spreadTotal?: number | null;
   status?: string | null;
   isOld: boolean;
-  kind: "check" | "income" | "manual" | "commission";
+  kind: "check" | "income" | "manual" | "commission" | "forecast";
+  forecastDetails?: ForecastDetail[];
 };
 
 function statusLabel(status: string) {
@@ -85,14 +87,25 @@ export function DepartmentTransactionsTable({
             <td className={r.amount >= 0 ? "text-success" : "text-danger"}>{r.amount >= 0 ? "הכנסה" : "הוצאה"}</td>
             <td>{r.typeDetail}</td>
             <td>
-              {r.kind === "check" ? (
+              {r.kind === "forecast" && r.forecastDetails && r.forecastDetails.length > 0 ? (
+                <details>
+                  <summary className="cursor-pointer inline">{r.description}</summary>
+                  <ul className="mt-1 space-y-0.5 text-xs text-muted">
+                    {r.forecastDetails.map((d, i) => (
+                      <li key={i}>
+                        {d.donorName} — {d.current}/{d.total} · {formatCurrency(d.amount)}
+                        {d.categoryName ? ` (${d.categoryName})` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : r.kind === "check" ? (
                 <PayeeLink payee={r.description} departmentId={departmentId} />
               ) : r.kind === "income" ? (
                 <DonorLink donorName={r.description} departmentId={departmentId} />
               ) : (
                 r.description
               )}
-              {r.category && <span className="badge bg-background text-muted mr-1">{r.category}</span>}
               {r.spreadTotal != null && (
                 <span className="badge bg-background text-muted mr-1">פריסה · סה״כ {formatCurrency(r.spreadTotal)}</span>
               )}

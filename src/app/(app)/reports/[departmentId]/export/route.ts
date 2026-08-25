@@ -9,6 +9,7 @@ function kindLabel(kind: CombinedRow["kind"]): string {
   if (kind === "income") return "הכנסה";
   if (kind === "check") return "הוצאה";
   if (kind === "commission") return "עמלת אשראי";
+  if (kind === "forecast") return "צפי הכנסה";
   return "רישום ידני";
 }
 

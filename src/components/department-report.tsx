@@ -25,8 +25,8 @@ export async function DepartmentReport({
   return (
     <div className="space-y-4">
       <div>
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-          <h2 className="font-semibold">מצב נוכחי — {departmentName}</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h2 className="text-lg font-bold">מצב נוכחי — {departmentName}</h2>
           <a
             href={`/reports/${departmentId}/export`}
             className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold no-print"
@@ -34,6 +34,10 @@ export async function DepartmentReport({
             ייצוא לאקסל ⇩
           </a>
         </div>
+        <p className="text-xs text-muted mb-3">
+          לפי תנועות שכבר נרשמו בפועל עד היום בלבד — לא כולל צפי הכנסות עתידי (ראו את &quot;תזרים חודשי מלא&quot; ו-
+          &quot;תנועות עתידיות ידועות&quot; למטה לתמונה כוללת).
+        </p>
         <div className="summary-cards-grid grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="card p-4">
             <p className="text-sm text-muted mb-1">סה״כ הכנסות</p>

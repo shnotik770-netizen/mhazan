@@ -11,17 +11,25 @@ export function monthLabel(monthKey: string): string {
   return new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(new Date(`${monthKey}-01T00:00:00`));
 }
 
+export type InstallmentForecastDetail = {
+  donorName: string;
+  categoryName: string;
+  current: number;
+  total: number;
+  amount: number;
+};
+
 export type CombinedRow = {
   id: string;
   date: string | null;
   typeDetail: string;
-  category?: string | null;
   description: string;
   amount: number;
   spreadTotal?: number | null;
   status?: string | null;
   isOld: boolean;
-  kind: "check" | "income" | "manual" | "commission";
+  kind: "check" | "income" | "manual" | "commission" | "forecast";
+  forecastDetails?: InstallmentForecastDetail[];
 };
 
 export type MonthlyFlowRow = {
@@ -105,10 +113,12 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
   }
 
   const incomeRows: CombinedRow[] = (incomes ?? []).map((r) => {
-    const category = (r as unknown as { categories: { name: string } | null }).categories?.name ?? null;
     // "סוג" (e.g. "1/2" for an installment, or free text like "הו״ק"/"מזומן")
     // matters just as much as the payment method for identifying a
-    // transaction — shown alongside it instead of only the method.
+    // transaction — shown alongside it instead of only the method. The
+    // income's category isn't shown here: in this org categories are named
+    // per department, so on a single department's own report it almost
+    // always just repeats the department's own name back.
     const typeSuffix =
       r.installment_current != null && r.installment_total != null
         ? `${r.installment_current}/${r.installment_total}`
@@ -118,7 +128,6 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       id: r.id,
       date: r.date,
       typeDetail: parenParts.length > 0 ? parenParts.join(" · ") : "—",
-      category,
       description: r.donor_name || "—",
       amount: Number(r.amount),
       isOld: r.skip_department_ledger,
@@ -168,7 +177,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       : e.direction === "INCOME"
         ? "רישום ידני — הכנסה"
         : "רישום ידני — הוצאה";
-    const kindLabel = e.recurring_schedule_id ? "קבוע (אושר)" : "ידני";
+    const kindLabel = isCrossDepartment ? "העברה בין מחלקות" : e.recurring_schedule_id ? "קבוע (אושר)" : "ידני";
     return {
       id: e.id,
       date: e.entry_date,
@@ -197,8 +206,80 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     kind: "commission",
   }));
 
-  const allRows = [...incomeRows, ...expenseRows, ...manualRows, ...commissionRows].sort((a, b) =>
-    (b.date ?? "").localeCompare(a.date ?? ""),
+  // Credit-card installment income (e.g. "7/12", captured via
+  // installment_current/installment_total on a paste) repeats as its own
+  // income row every month as it's paid off — so the most recent occurrence
+  // per donor+total+category tells the real remaining count, and only that
+  // one should project forward: an older row for the same commitment would
+  // otherwise project the same future months a second time. This also
+  // means a mid-month paste can never double-count itself: the moment a
+  // real row for a given month is entered, it becomes each commitment's
+  // new "latest" and the projection window simply starts the month after
+  // it, whatever day of the month it was pasted on. "Old"/excluded income
+  // never drives a live projection.
+  type InstallmentGroup = { donorName: string; categoryName: string; amount: number; total: number; current: number; date: string };
+  const installmentGroups = new Map<string, InstallmentGroup>();
+  for (const r of incomes ?? []) {
+    if (r.skip_department_ledger) continue;
+    if (r.payment_method !== "אשראי" || r.installment_current == null || r.installment_total == null) continue;
+    if (r.installment_current >= r.installment_total) continue;
+    const categoryName = (r as unknown as { categories: { name: string } | null }).categories?.name ?? "";
+    const key = `${r.donor_name ?? ""}|${r.installment_total}|${categoryName}`;
+    // incomes is already ordered newest-first, so the first occurrence of a
+    // key is its latest progress.
+    if (installmentGroups.has(key)) continue;
+    installmentGroups.set(key, {
+      donorName: r.donor_name ?? "—",
+      categoryName,
+      amount: Number(r.amount),
+      total: r.installment_total,
+      current: r.installment_current,
+      date: r.date,
+    });
+  }
+
+  // One combined row per month (not one per commitment) — reads as an
+  // ordinary future income line inside "תנועות עתידיות ידועות", so it
+  // folds straight into that section's own income/net summary instead of
+  // being a separate number a manager has to reconcile by hand against the
+  // rest of the report. Dated on the last day of its month so it always
+  // sorts as "future", even when the month in question is the current one.
+  // Each month also keeps the list of commitments behind its total, so the
+  // row can be expanded to show exactly which payments it's counting.
+  const installmentForecastByMonth = new Map<string, { total: number; details: InstallmentForecastDetail[] }>();
+  for (const g of installmentGroups.values()) {
+    const remaining = g.total - g.current;
+    for (let i = 1; i <= remaining; i++) {
+      const m = addMonths(g.date.slice(0, 7), i);
+      const bucket = installmentForecastByMonth.get(m) ?? { total: 0, details: [] };
+      bucket.total += g.amount;
+      bucket.details.push({
+        donorName: g.donorName,
+        categoryName: g.categoryName,
+        current: g.current + i,
+        total: g.total,
+        amount: g.amount,
+      });
+      installmentForecastByMonth.set(m, bucket);
+    }
+  }
+  const installmentForecastRows: CombinedRow[] = [...installmentForecastByMonth.entries()].map(([month, g]) => {
+    const [y, m] = month.split("-").map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    return {
+      id: `installment-forecast-${month}`,
+      date: `${month}-${String(lastDay).padStart(2, "0")}`,
+      typeDetail: "צפי המשך תשלומים",
+      description: `צפי המשך תשלומי אשראי (${g.details.length} תורמים)`,
+      amount: g.total,
+      isOld: false,
+      kind: "forecast",
+      forecastDetails: g.details,
+    };
+  });
+
+  const allRows = [...incomeRows, ...expenseRows, ...manualRows, ...commissionRows, ...installmentForecastRows].sort(
+    (a, b) => (b.date ?? "").localeCompare(a.date ?? ""),
   );
 
   // Split into what's already happened (or has no date) vs. what's already
@@ -256,41 +337,13 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     forecastByMonth.set(m, g);
   }
 
-  // Credit-card installment income (e.g. "7/12", captured via
-  // installment_current/installment_total on a paste) repeats as its own
-  // income row every month as it's paid off — so the most recent occurrence
-  // per donor+total+category tells the real remaining count, and only that
-  // one should project forward: an older row for the same commitment would
-  // otherwise project the same future months a second time. Only this
-  // department's own incomes participate (the query above is already
-  // scoped to owner_department_id), and "old"/excluded income never drives
-  // a live projection.
-  type InstallmentGroup = { amount: number; total: number; current: number; date: string };
-  const installmentGroups = new Map<string, InstallmentGroup>();
-  for (const r of incomes ?? []) {
-    if (r.skip_department_ledger) continue;
-    if (r.payment_method !== "אשראי" || r.installment_current == null || r.installment_total == null) continue;
-    if (r.installment_current >= r.installment_total) continue;
-    const categoryName = (r as unknown as { categories: { name: string } | null }).categories?.name ?? "";
-    const key = `${r.donor_name ?? ""}|${r.installment_total}|${categoryName}`;
-    // incomes is already ordered newest-first, so the first occurrence of
-    // a key is its latest progress.
-    if (installmentGroups.has(key)) continue;
-    installmentGroups.set(key, {
-      amount: Number(r.amount),
-      total: r.installment_total,
-      current: r.installment_current,
-      date: r.date,
-    });
-  }
-  for (const g of installmentGroups.values()) {
-    const remaining = g.total - g.current;
-    for (let i = 1; i <= remaining; i++) {
-      const m = addMonths(g.date.slice(0, 7), i);
-      const bucket = forecastByMonth.get(m) ?? { income: 0, expense: 0 };
-      bucket.income += g.amount;
-      forecastByMonth.set(m, bucket);
-    }
+  // Same installment-forecast totals as the "תנועות עתידיות ידועות" row
+  // above — folded in here too so the monthly cash-flow table always
+  // agrees with that section instead of needing its own separate figure.
+  for (const [month, g] of installmentForecastByMonth) {
+    const bucket = forecastByMonth.get(month) ?? { income: 0, expense: 0 };
+    bucket.income += g.total;
+    forecastByMonth.set(month, bucket);
   }
 
   const touchedMonths = [...new Set([...historicalByMonth.keys(), ...forecastByMonth.keys()])].sort();

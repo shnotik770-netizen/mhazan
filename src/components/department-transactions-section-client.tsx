@@ -4,17 +4,19 @@ import { useMemo, useState } from "react";
 import { formatCurrency } from "@/lib/format";
 import { DepartmentTransactionsTable } from "@/components/department-report-table-client";
 
+type ForecastDetail = { donorName: string; categoryName: string; current: number; total: number; amount: number };
+
 type Row = {
   id: string;
   date: string | null;
   typeDetail: string;
-  category?: string | null;
   description: string;
   amount: number;
   spreadTotal?: number | null;
   status?: string | null;
   isOld: boolean;
-  kind: "check" | "income" | "manual" | "commission";
+  kind: "check" | "income" | "manual" | "commission" | "forecast";
+  forecastDetails?: ForecastDetail[];
 };
 
 function monthLabel(monthStr: string): string {
