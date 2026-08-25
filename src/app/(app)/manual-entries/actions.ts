@@ -148,7 +148,7 @@ export async function createInterDepartmentTransfer(input: {
 
   const { data: departments, error: fetchError } = await supabase
     .from("departments")
-    .select("id, home_bank_account_id")
+    .select("id, name, home_bank_account_id")
     .in("id", [input.debtorDepartmentId, input.creditorDepartmentId]);
   if (fetchError || !departments || departments.length !== 2) {
     return { error: fetchError ? safeErrorMessage(fetchError) : "מחלקה לא נמצאה" };
@@ -159,17 +159,36 @@ export async function createInterDepartmentTransfer(input: {
   const baseRow = {
     amount: input.amount,
     entry_date: input.entryDate,
-    notes: input.notes,
     created_by: user.id,
     status: "APPROVED" as const,
     approved_by: user.id,
     approved_at: new Date().toISOString(),
+    is_inter_department_transfer: true,
   };
+  // Written from each side's own perspective ("transfer to/from department
+  // X") rather than inferred later from which bank account the entry
+  // happens to post through — most departments share one central account,
+  // so that inference used to misfire on completely ordinary manual
+  // entries too.
+  const debtorNote = `העברה למחלקת ${creditor.name}${input.notes ? ` — ${input.notes}` : ""}`;
+  const creditorNote = `העברה ממחלקת ${debtor.name}${input.notes ? ` — ${input.notes}` : ""}`;
 
   if (debtor.home_bank_account_id === creditor.home_bank_account_id) {
     const { error } = await supabase.from("manual_department_entries").insert([
-      { ...baseRow, department_id: debtor.id, direction: "EXPENSE", bank_account_id: debtor.home_bank_account_id },
-      { ...baseRow, department_id: creditor.id, direction: "INCOME", bank_account_id: debtor.home_bank_account_id },
+      {
+        ...baseRow,
+        department_id: debtor.id,
+        direction: "EXPENSE",
+        bank_account_id: debtor.home_bank_account_id,
+        notes: debtorNote,
+      },
+      {
+        ...baseRow,
+        department_id: creditor.id,
+        direction: "INCOME",
+        bank_account_id: debtor.home_bank_account_id,
+        notes: creditorNote,
+      },
     ]);
     if (error) return { error: safeErrorMessage(error) };
   } else {
@@ -178,6 +197,7 @@ export async function createInterDepartmentTransfer(input: {
       department_id: debtor.id,
       direction: "EXPENSE",
       bank_account_id: creditor.home_bank_account_id,
+      notes: debtorNote,
     });
     if (error) return { error: safeErrorMessage(error) };
   }

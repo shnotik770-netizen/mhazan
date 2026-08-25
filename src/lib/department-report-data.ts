@@ -80,15 +80,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       .order("due_date", { ascending: false }),
     supabase
       .from("manual_department_entries")
-      .select(
-        // departments!bank_accounts_department_id_fkey: bank_accounts and
-        // departments have two FKs between them (this one, plus
-        // departments.home_bank_account_id) — PostgREST needs the explicit
-        // hint or it refuses the whole embed as ambiguous (PGRST201),
-        // which silently zeroed out every manual entry in every department
-        // report until this was caught via the query-failure logging.
-        "id, entry_date, amount, direction, notes, recurring_schedule_id, bank_accounts(department_id, departments!bank_accounts_department_id_fkey(name))",
-      )
+      .select("id, entry_date, amount, direction, notes, recurring_schedule_id, is_inter_department_transfer")
       .eq("department_id", departmentId)
       .eq("status", "APPROVED")
       .order("entry_date", { ascending: false }),
@@ -166,23 +158,24 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
   });
 
   const manualRows: CombinedRow[] = (manualEntries ?? []).map((e) => {
-    const bankAccount = (e as unknown as { bank_accounts: { department_id: string; departments: { name: string } | null } | null })
-      .bank_accounts;
-    const isCrossDepartment = bankAccount && bankAccount.department_id !== departmentId;
-    const otherDeptName = isCrossDepartment ? bankAccount.departments?.name : null;
-    const label = otherDeptName
-      ? e.direction === "INCOME"
-        ? `העברה מ-${otherDeptName}`
-        : `העברה ל-${otherDeptName}`
-      : e.direction === "INCOME"
-        ? "רישום ידני — הכנסה"
-        : "רישום ידני — הוצאה";
-    const kindLabel = isCrossDepartment ? "העברה בין מחלקות" : e.recurring_schedule_id ? "קבוע (אושר)" : "ידני";
+    // "סוג" reflects only what was actually recorded (a deliberate
+    // inter-department transfer vs. a plain manual entry) — never inferred
+    // from which bank account it happens to post through, since most
+    // departments share one central account and that used to misfire on
+    // completely ordinary entries. The description shows exactly what was
+    // typed at the time, including the transfer's own from/to wording for
+    // a real transfer.
+    const kindLabel = e.is_inter_department_transfer
+      ? "העברה בין מחלקות"
+      : e.recurring_schedule_id
+        ? "קבוע (אושר)"
+        : "ידני";
+    const fallbackLabel = e.direction === "INCOME" ? "רישום ידני — הכנסה" : "רישום ידני — הוצאה";
     return {
       id: e.id,
       date: e.entry_date,
       typeDetail: kindLabel,
-      description: e.notes ? `${label} (${e.notes})` : label,
+      description: e.notes || fallbackLabel,
       amount: e.direction === "INCOME" ? Number(e.amount) : -Number(e.amount),
       isOld: false,
       kind: "manual",
