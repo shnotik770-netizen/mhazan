@@ -13,11 +13,6 @@ export default async function DepartmentsPage() {
     supabase.from("categories").select("id, department_id"),
   ]);
 
-  const usageFor = (departmentId: string) => ({
-    bankAccounts: (bankAccounts ?? []).filter((b) => b.department_id === departmentId).length,
-    categories: (categories ?? []).filter((c) => c.department_id === departmentId).length,
-  });
-
   return (
     <div className="space-y-4">
       <div>
@@ -30,7 +25,11 @@ export default async function DepartmentsPage() {
 
       <div className="card p-4">
         <div className="overflow-x-auto">
-          <DepartmentsTable departments={departments ?? []} usageFor={usageFor} bankAccounts={bankAccounts ?? []} />
+          <DepartmentsTable
+            departments={departments ?? []}
+            categories={categories ?? []}
+            bankAccounts={bankAccounts ?? []}
+          />
         </div>
         <NewDepartmentForm bankAccounts={bankAccounts ?? []} />
       </div>

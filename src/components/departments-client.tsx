@@ -19,13 +19,17 @@ type DepartmentTableRow = Department & { usage: { bankAccounts: number; categori
 
 export function DepartmentsTable({
   departments,
-  usageFor,
+  categories,
   bankAccounts,
 }: {
   departments: Department[];
-  usageFor: (departmentId: string) => { bankAccounts: number; categories: number };
+  categories: { department_id: string | null }[];
   bankAccounts: BankAccountOption[];
 }) {
+  const usageFor = (departmentId: string) => ({
+    bankAccounts: bankAccounts.filter((b) => b.department_id === departmentId).length,
+    categories: categories.filter((c) => c.department_id === departmentId).length,
+  });
   const rows: DepartmentTableRow[] = departments.map((d) => ({ ...d, usage: usageFor(d.id) }));
   const homeAccountLabel = (r: DepartmentTableRow) => {
     const acc = bankAccounts.find((b) => b.id === r.home_bank_account_id);

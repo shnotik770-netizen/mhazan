@@ -89,11 +89,22 @@ function isCancelledStatus(text: string): boolean {
   return /בוטל/.test(text);
 }
 
+// Tab-delimited rows are split on tabs only — never also on commas, since a
+// free-text field (an address, "עפולה,גבעת המורה") can legitimately contain
+// one, and splitting there would shift every column after it by one and
+// silently corrupt the row (e.g. an email column landing where "קטגוריה"
+// was expected). Comma-splitting only kicks in as a fallback for a genuine
+// comma-separated paste that has no tabs at all.
+function splitPastedLine(line: string): string[] {
+  if (line.includes("\t")) return line.split("\t");
+  return line.split(/,(?!\d{3})/);
+}
+
 function parsePastedLines(text: string): string[][] {
   return text
     .trim()
     .split("\n")
-    .map((line) => line.split(/\t|,(?!\d{3})/).map((c) => c.trim()))
+    .map((line) => splitPastedLine(line).map((c) => c.trim()))
     .filter((cols) => cols.some((c) => c.length > 0));
 }
 
