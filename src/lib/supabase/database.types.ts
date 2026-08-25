@@ -514,45 +514,6 @@ export type Database = {
           },
         ]
       }
-      department_nedarim_credentials: {
-        Row: {
-          api_key: string
-          department_id: string
-          mosad_id: string
-          updated_at: string
-          updated_by: string | null
-        }
-        Insert: {
-          api_key: string
-          department_id: string
-          mosad_id: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          api_key?: string
-          department_id?: string
-          mosad_id?: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "department_nedarim_credentials_department_id_fkey"
-            columns: ["department_id"]
-            isOneToOne: true
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "department_nedarim_credentials_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "user_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       departments: {
         Row: {
           code: string
@@ -1149,6 +1110,60 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      standing_order_missed_charges: {
+        Row: {
+          amount: number
+          category_name: string | null
+          department_id: string
+          detected_at: string
+          dismissed_at: string | null
+          dismissed_by: string | null
+          donor_name: string
+          id: number
+          month: string
+          order_ref: string
+        }
+        Insert: {
+          amount: number
+          category_name?: string | null
+          department_id: string
+          detected_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          donor_name: string
+          id?: never
+          month: string
+          order_ref: string
+        }
+        Update: {
+          amount?: number
+          category_name?: string | null
+          department_id?: string
+          detected_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          donor_name?: string
+          id?: never
+          month?: string
+          order_ref?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "standing_order_missed_charges_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "standing_order_missed_charges_dismissed_by_fkey"
+            columns: ["dismissed_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
             referencedColumns: ["id"]
           },
         ]

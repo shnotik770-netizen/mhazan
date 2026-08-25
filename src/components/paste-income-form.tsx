@@ -10,6 +10,7 @@ import {
 } from "@/app/(app)/incomes/actions";
 import { findOrCreateCategoryByName, updateCategory } from "@/app/(app)/categories/actions";
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
+import { formatCurrency } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | null };
@@ -144,7 +145,7 @@ export function PasteIncomeForm({
   const [hasHeaderRow, setHasHeaderRow] = useState(true);
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [headerWarning, setHeaderWarning] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: "error" | "success" | "warning"; text: string } | null>(null);
   const [isResolvingCategories, setIsResolvingCategories] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -399,11 +400,23 @@ export function PasteIncomeForm({
       });
 
       const failedCount = result.outcomes.filter((o) => !o.success).length;
+      const missed = result.missedStandingOrders ?? [];
+      const missedText =
+        missed.length > 0
+          ? "\n\nשים לב: " +
+            missed
+              .map(
+                (m) =>
+                  `הוראת קבע ${m.orderRef} (${m.donorName}${m.categoryName ? `, ${m.categoryName}` : ""}, ${formatCurrency(m.amount)}) לא נמצאה בהכנסות ${m.departmentName} לחודש ${m.month} — ראה הערה בדוח המחלקה`,
+              )
+              .join("\n")
+          : "";
       setMessage({
-        type: failedCount > 0 ? "error" : "success",
+        type: failedCount > 0 ? "error" : missed.length > 0 ? "warning" : "success",
         text:
           `נשמרו ${result.savedCount} שורות הכנסה בהצלחה` +
-          (failedCount > 0 ? ` — ${failedCount} שורות נכשלו ונשארו למטה לטיפול (הסיבה מוצגת ליד כל שורה)` : ""),
+          (failedCount > 0 ? ` — ${failedCount} שורות נכשלו ונשארו למטה לטיפול (הסיבה מוצגת ליד כל שורה)` : "") +
+          missedText,
       });
       // Rows that weren't part of this save (still need review) are kept
       // completely untouched here — they stay in the list waiting for the
@@ -738,8 +751,12 @@ export function PasteIncomeForm({
 
       {message && (
         <div
-          className={`card px-4 py-3 text-sm ${
-            message.type === "error" ? "bg-danger-bg text-danger" : "bg-success-bg text-success"
+          className={`card px-4 py-3 text-sm whitespace-pre-line ${
+            message.type === "error"
+              ? "bg-danger-bg text-danger"
+              : message.type === "warning"
+                ? "bg-warning-bg text-warning"
+                : "bg-success-bg text-success"
           }`}
         >
           {message.text}

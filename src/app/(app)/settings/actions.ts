@@ -354,43 +354,6 @@ export async function setRecurringScheduleActive(scheduleId: string, isActive: b
   return {};
 }
 
-// Nedarim Plus credentials are write-only from the client's perspective —
-// the saved api_key is never selected back out for display, only
-// overwritten. Each department has its own institution/key (set up here by
-// a finance admin, one at a time, as real keys become available).
-export async function saveNedarimCredentials(formData: FormData): Promise<{ error?: string }> {
-  const admin = await requireFinanceAdmin();
-  const departmentId = String(formData.get("department_id") ?? "");
-  const mosadId = String(formData.get("mosad_id") ?? "").trim();
-  const apiKey = String(formData.get("api_key") ?? "").trim();
-  if (!departmentId || !mosadId || !apiKey) return { error: "יש למלא מחלקה, מזהה מוסד ומפתח API" };
-
-  const supabase = await createClient();
-  const { error } = await supabase.from("department_nedarim_credentials").upsert({
-    department_id: departmentId,
-    mosad_id: mosadId,
-    api_key: apiKey,
-    updated_by: admin.id,
-    updated_at: new Date().toISOString(),
-  });
-  if (error) return { error: safeErrorMessage(error) };
-
-  revalidatePath("/settings");
-  return {};
-}
-
-export async function deleteNedarimCredentials(departmentId: string): Promise<{ error?: string }> {
-  await requireFinanceAdmin();
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("department_nedarim_credentials")
-    .delete()
-    .eq("department_id", departmentId);
-  if (error) return { error: safeErrorMessage(error) };
-  revalidatePath("/settings");
-  return {};
-}
-
 export type NedarimSyncResult = {
   departmentId: string;
   ordersFound?: number;
@@ -404,7 +367,11 @@ export type NedarimSyncResult = {
 // function), per this app's rule that service-role access only ever lives
 // inside an Edge Function. Used for the manual "מה מצב ההוראות קבע" trigger;
 // the monthly automatic run instead goes through pg_cron with its own
-// separate shared-secret header.
+// separate shared-secret header. The actual Nedarim Plus mosad-id/api-key
+// pairs are never entered through this app or stored in the database — by
+// design, they live only as an Edge Function secret (NEDARIM_CREDENTIALS_JSON,
+// keyed by department code) that only whoever manages the Supabase project
+// can set.
 export async function syncNedarimStandingOrders(
   departmentId?: string,
 ): Promise<{ error?: string; results?: NedarimSyncResult[] }> {

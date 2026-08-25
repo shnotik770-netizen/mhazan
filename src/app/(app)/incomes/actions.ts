@@ -26,11 +26,27 @@ export type IncomeBatchRow = {
   rawPasteData?: Record<string, string>;
 };
 
+export type MissedStandingOrderAlert = {
+  departmentId: string;
+  departmentName: string;
+  orderRef: string;
+  month: string;
+  donorName: string;
+  categoryName: string | null;
+  amount: number;
+};
+
 export type SubmitIncomeBatchResult = {
   savedCount: number;
   // Same order/length as the rows passed in, so the client can zip them
   // back together and know exactly which original rows to keep visible.
   outcomes: { success: boolean; reason?: string }[];
+  // Standing orders that were forecasted for a month this batch just
+  // covered, but that never showed up among the actual incomes for that
+  // department+month — surfaced right when the gap is discoverable (the
+  // moment that month's income is fully pasted in), instead of only
+  // quietly dropping out of the department report's forecast later.
+  missedStandingOrders?: MissedStandingOrderAlert[];
   error?: string;
 };
 
@@ -74,6 +90,9 @@ export async function submitIncomeBatch(
   const today = new Date().toISOString().slice(0, 10);
   let savedCount = 0;
   const outcomes: { success: boolean; reason?: string }[] = [];
+  // (departmentId, month) pairs actually touched by this batch — used
+  // afterward to check which forecasted standing orders never showed up.
+  const touchedDepartmentMonths = new Set<string>();
 
   for (const r of rows) {
     // owner_department_id/issuing_department_id are sent as real NULL, not
@@ -128,20 +147,128 @@ export async function submitIncomeBatch(
       continue;
     }
 
-    const { error } = await supabase.from("incomes").insert(rowPayload);
+    const { data: inserted, error } = await supabase.from("incomes").insert(rowPayload).select("owner_department_id, date");
     if (error) {
       const reason = error.code === "23505" ? "מספר עסקה כפול — כבר קיים במערכת" : safeErrorMessage(error);
       outcomes.push({ success: false, reason });
     } else {
       savedCount += 1;
       outcomes.push({ success: true });
+      for (const row of inserted ?? []) {
+        if (row.owner_department_id) touchedDepartmentMonths.add(`${row.owner_department_id}|${row.date.slice(0, 7)}`);
+      }
     }
   }
+
+  const missedStandingOrders = await detectMissedStandingOrders(supabase, touchedDepartmentMonths);
 
   revalidatePath("/incomes");
   revalidatePath("/");
   revalidatePath("/ledger");
-  return { savedCount, outcomes };
+  for (const key of touchedDepartmentMonths) revalidatePath(`/reports/${key.split("|")[0]}`);
+  return { savedCount, outcomes, missedStandingOrders };
+}
+
+// For every (department, month) this batch actually touched, checks the
+// cached Nedarim standing-order forecast for that same month against the
+// full set of incomes now on file for that department+month (matched by
+// order_ref) — anything forecasted but still unmatched is flagged as
+// "missed" (unique per department+order+month, so re-pasting the same
+// month twice never creates duplicate alerts). Only ever *adds* rows —
+// never touches dismissed_at — so an admin's dismissal is never silently
+// undone by a later paste.
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+async function detectMissedStandingOrders(
+  supabase: SupabaseServerClient,
+  departmentMonths: Set<string>,
+): Promise<MissedStandingOrderAlert[]> {
+  if (departmentMonths.size === 0) return [];
+  const flagged: MissedStandingOrderAlert[] = [];
+
+  for (const key of departmentMonths) {
+    const [departmentId, month] = key.split("|");
+
+    const { data: forecast } = await supabase
+      .from("standing_order_forecast")
+      .select("details")
+      .eq("department_id", departmentId)
+      .eq("month", month)
+      .maybeSingle();
+    const details = (forecast?.details ?? []) as unknown as { donorName: string; categoryName: string; amount: number; orderRef?: string }[];
+    if (details.length === 0) continue;
+
+    const { data: monthIncomes } = await supabase
+      .from("incomes")
+      .select("order_ref")
+      .eq("owner_department_id", departmentId)
+      .gte("date", `${month}-01`)
+      .lt("date", `${addOneMonth(month)}-01`);
+    const chargedRefs = new Set((monthIncomes ?? []).map((r) => r.order_ref).filter(Boolean));
+
+    const missing = details.filter((d) => d.orderRef && !chargedRefs.has(d.orderRef));
+    if (missing.length === 0) continue;
+
+    const { data: department } = await supabase.from("departments").select("name").eq("id", departmentId).single();
+
+    const { data: newlyInserted } = await supabase
+      .from("standing_order_missed_charges")
+      .upsert(
+        missing.map((d) => ({
+          department_id: departmentId,
+          order_ref: d.orderRef as string,
+          month,
+          donor_name: d.donorName,
+          category_name: d.categoryName || null,
+          amount: d.amount,
+        })),
+        { onConflict: "department_id,order_ref,month", ignoreDuplicates: true },
+      )
+      .select("order_ref, donor_name, category_name, amount");
+
+    for (const row of newlyInserted ?? []) {
+      flagged.push({
+        departmentId,
+        departmentName: department?.name ?? departmentId,
+        orderRef: row.order_ref,
+        month,
+        donorName: row.donor_name,
+        categoryName: row.category_name,
+        amount: Number(row.amount),
+      });
+    }
+  }
+
+  return flagged;
+}
+
+function addOneMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(y, m, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Lets an admin archive a "missed standing order" note once it's been
+// reviewed (the charge really didn't happen, or was found and recorded
+// under a different reference) — it stays in the table for history, just
+// no longer shown as an open item on the department report.
+export async function dismissMissedStandingOrder(id: number): Promise<{ error?: string }> {
+  const admin = await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { data: existing, error: fetchError } = await supabase
+    .from("standing_order_missed_charges")
+    .select("department_id")
+    .eq("id", id)
+    .single();
+  if (fetchError || !existing) return { error: safeErrorMessage(fetchError) ?? "הרשומה לא נמצאה" };
+
+  const { error } = await supabase
+    .from("standing_order_missed_charges")
+    .update({ dismissed_at: new Date().toISOString(), dismissed_by: admin.id })
+    .eq("id", id);
+  if (error) return { error: safeErrorMessage(error) };
+
+  revalidatePath(`/reports/${existing.department_id}`);
+  return {};
 }
 
 export async function deleteIncome(incomeId: string): Promise<{ error?: string }> {

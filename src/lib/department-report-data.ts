@@ -46,6 +46,15 @@ export type MonthlyFlowRow = {
   isFuture: boolean;
 };
 
+export type MissedStandingOrderNote = {
+  id: number;
+  orderRef: string;
+  month: string;
+  donorName: string;
+  categoryName: string | null;
+  amount: number;
+};
+
 export type DepartmentReportData = {
   totalIncome: number;
   totalExpense: number;
@@ -55,6 +64,7 @@ export type DepartmentReportData = {
   pastMonths: string[];
   futureMonths: string[];
   monthlyFlow: MonthlyFlowRow[];
+  missedStandingOrders: MissedStandingOrderNote[];
 };
 
 // All the data assembly behind a department's report — shared by the
@@ -434,5 +444,35 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
           return rows;
         })();
 
-  return { totalIncome, totalExpense, net, pastRows, futureRows, pastMonths, futureMonths, monthlyFlow };
+  // Open (undismissed) "missed standing order" notes — detected once, at
+  // the moment a month's income paste was found to be missing an expected
+  // order, and kept here until an admin explicitly archives them (see
+  // dismissMissedStandingOrder). Shown as a dismissible note rather than
+  // folded into the transaction list, since it's a flag about an absence,
+  // not a transaction itself.
+  const { data: missedStandingOrders } = await supabase
+    .from("standing_order_missed_charges")
+    .select("id, order_ref, month, donor_name, category_name, amount")
+    .eq("department_id", departmentId)
+    .is("dismissed_at", null)
+    .order("month", { ascending: false });
+
+  return {
+    totalIncome,
+    totalExpense,
+    net,
+    pastRows,
+    futureRows,
+    pastMonths,
+    futureMonths,
+    monthlyFlow,
+    missedStandingOrders: (missedStandingOrders ?? []).map((m) => ({
+      id: m.id,
+      orderRef: m.order_ref,
+      month: m.month,
+      donorName: m.donor_name,
+      categoryName: m.category_name,
+      amount: Number(m.amount),
+    })),
+  };
 }
