@@ -15,6 +15,71 @@ type BalanceRow = {
   owedToHub: boolean;
 };
 
+type NetPositionRow = {
+  departmentId: string;
+  departmentName: string;
+  // Positive = other departments owe this one overall; negative = this
+  // department owes overall — a single figure per department instead of
+  // the full pairwise breakdown, so "who's in the red" reads at a glance.
+  netAmount: number;
+};
+
+export function LedgerNetPositionTable({ rows }: { rows: NetPositionRow[] }) {
+  const columns: ColumnDef<NetPositionRow>[] = [
+    { key: "department", label: "מחלקה", sortValue: (r) => r.departmentName, filterValue: (r) => r.departmentName },
+    { key: "amount", label: "סכום שהיא חייבת / חייבים לה", sortValue: (r) => r.netAmount },
+  ];
+  const { rows: filtered, sort, toggleSort, filters, setColumnFilter } = useSortFilter(rows, columns, {
+    key: "amount",
+    dir: "asc",
+  });
+
+  return (
+    <table className="data-table">
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <SortFilterTh
+              key={col.key}
+              col={col}
+              allRows={rows}
+              sort={sort}
+              toggleSort={toggleSort}
+              activeFilter={filters[col.key]}
+              setColumnFilter={setColumnFilter}
+            />
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {filtered.map((row) => (
+          <tr key={row.departmentId}>
+            <td>
+              <Link href={`/ledger?department=${row.departmentId}`} className="underline decoration-dotted hover:decoration-solid">
+                {row.departmentName}
+              </Link>
+            </td>
+            <td className={`font-semibold ${row.netAmount > 0 ? "text-success" : row.netAmount < 0 ? "text-danger" : ""}`}>
+              {row.netAmount > 0
+                ? `זכאית ${formatCurrency(row.netAmount)}`
+                : row.netAmount < 0
+                  ? `חייבת ${formatCurrency(-row.netAmount)}`
+                  : "מאוזן"}
+            </td>
+          </tr>
+        ))}
+        {filtered.length === 0 && (
+          <tr>
+            <td colSpan={2} className="text-center text-muted py-6">
+              אין יתרות פתוחות בין מחלקות
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
+
 export function LedgerBalancesTable({ rows }: { rows: BalanceRow[] }) {
   const columns: ColumnDef<BalanceRow>[] = [
     { key: "debtor", label: "חייב", sortValue: (r) => r.debtorName, filterValue: (r) => r.debtorName },

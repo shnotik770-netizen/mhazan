@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { DepartmentReport } from "@/components/department-report";
 import { NewManualEntryButton } from "@/components/manual-entries-client";
-import { LedgerBalancesTable } from "@/components/ledger-tables-client";
+import { LedgerBalancesTable, LedgerNetPositionTable } from "@/components/ledger-tables-client";
 import { DepartmentPickerSelect } from "@/components/department-picker-select-client";
 
 export default async function LedgerPage({
@@ -29,6 +29,25 @@ export default async function LedgerPage({
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
 
   const deptName = (id: string | null) => departments?.find((d) => d.id === id)?.name ?? "—";
+
+  // Collapses the pairwise debtor→creditor breakdown into one net figure
+  // per department (positive = owed to it overall, negative = it owes
+  // overall) — the at-a-glance summary; the pairwise table stays below it
+  // for whoever needs the full "who owes whom" detail.
+  const netByDepartment = new Map<string, number>();
+  for (const row of balances ?? []) {
+    const amount = Number(row.net_amount);
+    if (row.debtor_department_id) {
+      netByDepartment.set(row.debtor_department_id, (netByDepartment.get(row.debtor_department_id) ?? 0) - amount);
+    }
+    if (row.creditor_department_id) {
+      netByDepartment.set(row.creditor_department_id, (netByDepartment.get(row.creditor_department_id) ?? 0) + amount);
+    }
+  }
+  const netPositionRows = [...netByDepartment.entries()]
+    .map(([departmentId, netAmount]) => ({ departmentId, departmentName: deptName(departmentId), netAmount }))
+    .filter((r) => Math.abs(r.netAmount) > 0.005)
+    .sort((a, b) => a.netAmount - b.netAmount);
 
   // The "hub" department — whichever department's own bank account most
   // other departments use as their home account — is the one everyone
@@ -93,6 +112,11 @@ export default async function LedgerPage({
 
           <div className="card p-4 overflow-x-auto">
             <h3 className="font-semibold mb-3">מטריצת יתרות נטו</h3>
+            <LedgerNetPositionTable rows={netPositionRows} />
+          </div>
+
+          <div className="card p-4 overflow-x-auto">
+            <h3 className="font-semibold mb-3">פירוט — מי חייב למי</h3>
             <LedgerBalancesTable
               rows={(balances ?? []).map((row) => ({
                 debtorId: row.debtor_department_id,
