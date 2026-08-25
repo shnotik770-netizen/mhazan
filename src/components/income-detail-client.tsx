@@ -8,6 +8,7 @@ import {
   type IncomeDetail,
 } from "@/app/(app)/incomes/actions";
 import { Modal } from "@/components/modal";
+import { rowActionButtonClass } from "@/components/row-actions-menu";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate } from "@/lib/format";
 
@@ -19,14 +20,17 @@ function installmentLabel(current: number | null, total: number | null, typeText
 // A "פרטים" trigger next to an income row — opens every field captured for
 // that income (donor, category, payment method/type, receipt/order/
 // transaction numbers, bank account, notes), not just what fits the table.
-export function IncomeDetailLink({ incomeId }: { incomeId: string }) {
+// `variant="menu"` renders it as a full-width row-action-menu button
+// instead of the default small underlined link, for callers that place it
+// inside RowActionsMenu (mirrors CheckDetailLink's same variant).
+export function IncomeDetailLink({ incomeId, variant = "link" }: { incomeId: string; variant?: "link" | "menu" }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs text-primary underline whitespace-nowrap"
+        className={variant === "menu" ? rowActionButtonClass("primary") : "text-xs text-primary underline whitespace-nowrap"}
       >
         פרטים
       </button>

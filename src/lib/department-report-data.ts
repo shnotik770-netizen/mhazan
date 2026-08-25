@@ -28,6 +28,12 @@ export type CombinedRow = {
   id: string;
   date: string | null;
   typeDetail: string;
+  // A small, fixed set of buckets ("אשראי רגיל", "אשראי תשלומים", "הוראת
+  // קבע", "מזומן", "ביט", "העברה", "צ׳ק", ...) for the "סוג" column's
+  // filter dropdown — typeDetail itself is too granular to filter by
+  // (a credit installment's own "X/Y" progress makes every row's
+  // typeDetail unique), so filtering needs a coarser, separate value.
+  typeCategory: string;
   description: string;
   amount: number;
   spreadTotal?: number | null;
@@ -36,6 +42,22 @@ export type CombinedRow = {
   kind: "check" | "income" | "manual" | "commission" | "forecast";
   forecastDetails?: InstallmentForecastDetail[];
 };
+
+// Buckets an income's payment method + installment/type-text info into the
+// small fixed set of categories shown in the "סוג" column filter — kept
+// separate from typeDetail (which stays fully specific, e.g. "אשראי ·
+// 6/12") so the filter dropdown lists a handful of options instead of one
+// per distinct installment progress.
+function incomeTypeCategory(
+  paymentMethod: string | null,
+  installmentCurrent: number | null,
+  installmentTotal: number | null,
+  typeText: string | null,
+): string {
+  if (installmentCurrent != null && installmentTotal != null) return "אשראי תשלומים";
+  if (typeText === "הו״ק" || typeText === "הוק" || paymentMethod === "הו״ק") return "הוראת קבע";
+  return paymentMethod || "אחר";
+}
 
 export type MonthlyFlowRow = {
   month: string;
@@ -141,6 +163,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       id: r.id,
       date: r.date,
       typeDetail: parenParts.length > 0 ? parenParts.join(" · ") : "—",
+      typeCategory: incomeTypeCategory(r.payment_method, r.installment_current, r.installment_total, r.type_text),
       description: r.donor_name || "—",
       amount: Number(r.amount),
       isOld: r.skip_department_ledger,
@@ -165,10 +188,12 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
 
   const expenseRows: CombinedRow[] = allExpenses.map((r) => {
     const group = r.spread_id ? spreadTotals.get(r.spread_id) : undefined;
+    const expenseType = r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק";
     return {
       id: r.check_id as string,
       date: r.due_date,
-      typeDetail: r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק",
+      typeDetail: expenseType,
+      typeCategory: expenseType,
       description: r.payee ?? "הוצאה",
       amount: -Number(r.amount),
       spreadTotal: group && group.count > 1 ? group.total : null,
@@ -196,6 +221,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       id: e.id,
       date: e.entry_date,
       typeDetail: kindLabel,
+      typeCategory: kindLabel,
       description: e.notes || fallbackLabel,
       amount: e.direction === "INCOME" ? Number(e.amount) : -Number(e.amount),
       isOld: false,
@@ -214,6 +240,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     id: c.id,
     date: `${addMonths(c.month.slice(0, 7), 1)}-01`,
     typeDetail: "עמלת אשראי",
+    typeCategory: "עמלת אשראי",
     description: `עמלת אשראי (2% על ${formatCurrency(Number(c.qualifying_total))} מהכנסות אשראי/ביט/העברה בקליק ב${monthLabel(c.month.slice(0, 7))})`,
     amount: -Number(c.amount),
     isOld: false,
@@ -284,6 +311,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       id: `installment-forecast-${month}`,
       date: `${month}-${String(lastDay).padStart(2, "0")}`,
       typeDetail: "צפי המשך תשלומים",
+      typeCategory: "צפי המשך תשלומים",
       description: `צפי המשך תשלומי אשראי (${g.details.length} תורמים)`,
       amount: g.total,
       isOld: false,
@@ -334,6 +362,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       id: `standing-order-forecast-${month}`,
       date: `${month}-${String(lastDay).padStart(2, "0")}`,
       typeDetail: "צפי הוראות קבע",
+      typeCategory: "צפי הוראות קבע",
       description: `צפי הוראות קבע (${details.length} הוראות)`,
       amount: total,
       isOld: false,

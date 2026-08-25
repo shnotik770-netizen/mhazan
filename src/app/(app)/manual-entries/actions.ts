@@ -238,6 +238,28 @@ export async function updateManualEntry(
   return {};
 }
 
+// A narrow "fix a typo" edit for a manual entry's description, offered
+// directly from a department report row — deliberately touches only this
+// one field rather than reusing the full updateManualEntry (which expects
+// amount/date/department together) so a quick correction can never
+// accidentally overwrite something else.
+export async function updateManualEntryNotes(entryId: string, notes: string): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("manual_department_entries")
+    .select("department_id")
+    .eq("id", entryId)
+    .single();
+  const { error } = await supabase
+    .from("manual_department_entries")
+    .update({ notes: notes.trim() || null })
+    .eq("id", entryId);
+  if (error) return { error: safeErrorMessage(error) };
+  revalidateEntryPaths(existing?.department_id);
+  return {};
+}
+
 export async function deleteManualEntry(entryId: string): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const supabase = await createClient();

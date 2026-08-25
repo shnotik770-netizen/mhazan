@@ -271,6 +271,23 @@ export async function dismissMissedStandingOrder(id: number): Promise<{ error?: 
   return {};
 }
 
+// A narrow "fix a typo" edit for a donor's name, offered directly from a
+// department report row — deliberately touches only this one field rather
+// than reusing the full updateIncome (which expects date/amount/category/
+// payment method together) so a quick spelling correction can never
+// accidentally overwrite something else.
+export async function updateIncomeDonorName(incomeId: string, donorName: string): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const trimmed = donorName.trim();
+  if (!trimmed) return { error: "שם תורם לא יכול להיות ריק" };
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("incomes").select("owner_department_id").eq("id", incomeId).single();
+  const { error } = await supabase.from("incomes").update({ donor_name: trimmed }).eq("id", incomeId);
+  if (error) return { error: safeErrorMessage(error) };
+  revalidateIncomePaths(existing?.owner_department_id);
+  return {};
+}
+
 export async function deleteIncome(incomeId: string): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const supabase = await createClient();

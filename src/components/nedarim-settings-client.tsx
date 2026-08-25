@@ -15,18 +15,23 @@ export type NedarimDepartmentRow = {
 // directly on the server by whoever manages the Supabase project. This
 // section only ever triggers a sync and shows its result; it has no way to
 // know which departments actually have a key configured.
-export function NedarimSettingsSection({ departments }: { departments: NedarimDepartmentRow[] }) {
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
+export function NedarimSettingsSection({
+  departments,
+  lastSyncedAt,
+}: {
+  departments: NedarimDepartmentRow[];
+  lastSyncedAt: string | null;
+}) {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncResults, setSyncResults] = useState<NedarimSyncResult[] | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  const runSync = (departmentId?: string) => {
+  const runSync = () => {
     setSyncError(null);
     setSyncResults(null);
     startTransition(async () => {
-      const result = await syncNedarimStandingOrders(departmentId);
+      const result = await syncNedarimStandingOrders();
       if (result.error) setSyncError(result.error);
       else setSyncResults(result.results ?? []);
       router.refresh();
@@ -38,43 +43,21 @@ export function NedarimSettingsSection({ departments }: { departments: NedarimDe
       <div>
         <h2 className="font-semibold">הוראות קבע — נדרים פלוס (סנכרון אוטומטי)</h2>
         <p className="text-sm text-muted">
-          סנכרון חודשי אוטומטי מול נדרים פלוס לכל מחלקה שיש לה מפתח מוגדר, בתוספת הפעלה ידנית כאן. התוצאה מוצגת כשורת
-          &quot;צפי הוראות קבע&quot; בתוך תנועות עתידיות ידועות בדוח כל מחלקה. מפתחות ה-API עצמם אינם מוזנים דרך המסך הזה —
-          הם מוגדרים ישירות כ-Secret בפונקציית ה-Edge בשרת (לא בבסיס הנתונים ולא דרך האפליקציה), ורק מי שמנהל את הגדרות
-          השרת יכול לעדכן אותם.
+          מוזן אוטומטית כל 1 לחודש.{" "}
+          {lastSyncedAt
+            ? `סונכרן לאחרונה: ${new Intl.DateTimeFormat("he-IL", { dateStyle: "short", timeStyle: "short" }).format(new Date(lastSyncedAt))}.`
+            : "טרם בוצע סנכרון."}
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={isPending}
-          onClick={() => runSync()}
-          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold whitespace-nowrap disabled:opacity-60"
-        >
-          {isPending ? "מסנכרן..." : "מה מצב ההוראות קבע (כל המחלקות)"}
-        </button>
-        <select
-          value={selectedDepartmentId}
-          onChange={(e) => setSelectedDepartmentId(e.target.value)}
-          className="rounded border border-border bg-transparent px-2 py-1.5 text-sm"
-        >
-          <option value="">מחלקה בודדת...</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          disabled={isPending || !selectedDepartmentId}
-          onClick={() => runSync(selectedDepartmentId)}
-          className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
-        >
-          סנכרן מחלקה זו בלבד
-        </button>
-      </div>
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={runSync}
+        className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold whitespace-nowrap disabled:opacity-60"
+      >
+        {isPending ? "מסנכרן..." : "מה מצב ההוראות קבע"}
+      </button>
 
       {syncError && <p className="text-sm text-danger">{syncError}</p>}
       {syncResults && (

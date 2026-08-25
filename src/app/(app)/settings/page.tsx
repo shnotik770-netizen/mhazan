@@ -16,12 +16,14 @@ export default async function SettingsPage() {
     { data: categories },
     { data: profiles },
     { data: accessGrants },
+    { data: lastNedarimSync },
   ] = await Promise.all([
     supabase.from("departments").select("*").order("name"),
     supabase.from("bank_accounts").select("*, departments!bank_accounts_department_id_fkey(name)").order("bank_name"),
     supabase.from("categories").select("*, departments(name)").order("name"),
     supabase.from("user_profiles").select("*").order("full_name"),
     supabase.from("user_department_access").select("user_id, department_id"),
+    supabase.from("standing_order_forecast").select("synced_at").order("synced_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   const grantsFor = (userId: string) =>
@@ -122,7 +124,10 @@ export default async function SettingsPage() {
         </Link>
       </section>
 
-      <NedarimSettingsSection departments={(departments ?? []).map((d) => ({ id: d.id, name: d.name }))} />
+      <NedarimSettingsSection
+        departments={(departments ?? []).map((d) => ({ id: d.id, name: d.name }))}
+        lastSyncedAt={lastNedarimSync?.synced_at ?? null}
+      />
 
       <section className="card p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">

@@ -1282,6 +1282,23 @@ export async function updateCheckInvoiceFlag(checkId: string, hasInvoice: boolea
   return { error: safeErrorMessage(error) };
 }
 
+// A narrow "fix a typo" edit for a check/transfer's payee name, offered
+// directly from a department report row — deliberately touches only this
+// one field rather than reusing the full updateCheck (which expects the
+// entire record: amount, due date, department, allocations...) so a quick
+// spelling correction can never accidentally overwrite something else.
+export async function updateCheckPayeeName(checkId: string, payee: string): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const trimmed = payee.trim();
+  if (!trimmed) return { error: "שם מוטב לא יכול להיות ריק" };
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("checks").select("department_id").eq("id", checkId).single();
+  const { error } = await supabase.from("checks").update({ payee: trimmed }).eq("id", checkId);
+  if (error) return { error: safeErrorMessage(error) };
+  revalidateCheckPaths(existing?.department_id);
+  return {};
+}
+
 // Bulk-toggles the "old, excluded from department ledger" flag on several
 // checks/transfers at once — e.g. clearing a backlog of old expenses from
 // the /expenses screen without editing each one individually.

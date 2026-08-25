@@ -10,6 +10,7 @@ type Row = {
   id: string;
   date: string | null;
   typeDetail: string;
+  typeCategory: string;
   description: string;
   amount: number;
   spreadTotal?: number | null;
@@ -42,18 +43,34 @@ export function DepartmentTransactionsSection({
   monthOptions: string[];
   defaultSortDir?: "asc" | "desc";
 }) {
+  const [search, setSearch] = useState("");
   const [month, setMonth] = useState("");
-  const [exactDate, setExactDate] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [kindFilter, setKindFilter] = useState<"all" | "income" | "expense">("all");
 
   const filtered = useMemo(() => {
     let result = rows;
-    if (exactDate) result = result.filter((r) => r.date === exactDate);
-    else if (month) result = result.filter((r) => r.date?.slice(0, 7) === month);
+    if (fromDate || toDate) {
+      result = result.filter((r) => {
+        if (!r.date) return false;
+        if (fromDate && r.date < fromDate) return false;
+        if (toDate && r.date > toDate) return false;
+        return true;
+      });
+    } else if (month) {
+      result = result.filter((r) => r.date?.slice(0, 7) === month);
+    }
     if (kindFilter === "income") result = result.filter((r) => r.amount > 0);
     else if (kindFilter === "expense") result = result.filter((r) => r.amount < 0);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(
+        (r) => r.description.toLowerCase().includes(q) || r.typeDetail.toLowerCase().includes(q),
+      );
+    }
     return result;
-  }, [rows, month, exactDate, kindFilter]);
+  }, [rows, month, fromDate, toDate, kindFilter, search]);
 
   const counted = filtered.filter((r) => !r.isOld);
   const income = counted.filter((r) => r.amount > 0).reduce((sum, r) => sum + r.amount, 0);
@@ -65,6 +82,13 @@ export function DepartmentTransactionsSection({
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="font-semibold">{title}</h2>
         <div className="flex items-center gap-2 text-sm flex-wrap">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="חיפוש (תיאור / סוג)..."
+            className="rounded border border-border bg-transparent px-2 py-1 text-sm w-40"
+          />
           <div className="flex items-center rounded-lg border border-border overflow-hidden text-xs">
             {(
               [
@@ -89,7 +113,8 @@ export function DepartmentTransactionsSection({
             value={month}
             onChange={(e) => {
               setMonth(e.target.value);
-              setExactDate("");
+              setFromDate("");
+              setToDate("");
             }}
             className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           >
@@ -100,21 +125,36 @@ export function DepartmentTransactionsSection({
               </option>
             ))}
           </select>
-          <input
-            type="date"
-            value={exactDate}
-            onChange={(e) => {
-              setExactDate(e.target.value);
-              setMonth("");
-            }}
-            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          />
-          {(month || exactDate) && (
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-muted">מתאריך</span>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => {
+                setFromDate(e.target.value);
+                setMonth("");
+              }}
+              className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+            />
+            <span className="text-xs text-muted">עד תאריך</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => {
+                setToDate(e.target.value);
+                setMonth("");
+              }}
+              className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+            />
+          </div>
+          {(month || fromDate || toDate || search) && (
             <button
               type="button"
               onClick={() => {
                 setMonth("");
-                setExactDate("");
+                setFromDate("");
+                setToDate("");
+                setSearch("");
               }}
               className="text-xs text-primary underline"
             >
