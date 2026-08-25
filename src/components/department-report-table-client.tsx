@@ -13,7 +13,14 @@ import { updateCheckPayeeName } from "@/app/(app)/checks/actions";
 import { updateIncomeDonorName } from "@/app/(app)/incomes/actions";
 import { updateManualEntryNotes } from "@/app/(app)/manual-entries/actions";
 
-type ForecastDetail = { donorName: string; categoryName: string; current: number; total: number; amount: number };
+type ForecastDetail = {
+  donorName: string;
+  categoryName: string;
+  current: number;
+  total: number | null;
+  amount: number;
+  unlimited?: boolean;
+};
 
 type Row = {
   id: string;
@@ -55,7 +62,8 @@ function ForecastDetailButton({ title, details }: { title: string; details: Fore
                 <li key={i} className="flex items-center justify-between gap-2 border-b border-border pb-1">
                   <span>
                     {d.donorName}
-                    {d.categoryName ? ` (${d.categoryName})` : ""} — {d.current}/{d.total}
+                    {d.categoryName ? ` (${d.categoryName})` : ""} —{" "}
+                    {d.unlimited ? `חיוב מס׳ ${d.current} (הוראה ללא הגבלת זמן)` : `${d.current}/${d.total}`}
                   </span>
                   <span className="font-medium whitespace-nowrap">{formatCurrency(d.amount)}</span>
                 </li>

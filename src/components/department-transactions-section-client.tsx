@@ -4,7 +4,14 @@ import { useMemo, useState } from "react";
 import { formatCurrency } from "@/lib/format";
 import { DepartmentTransactionsTable } from "@/components/department-report-table-client";
 
-type ForecastDetail = { donorName: string; categoryName: string; current: number; total: number; amount: number };
+type ForecastDetail = {
+  donorName: string;
+  categoryName: string;
+  current: number;
+  total: number | null;
+  amount: number;
+  unlimited?: boolean;
+};
 
 type Row = {
   id: string;

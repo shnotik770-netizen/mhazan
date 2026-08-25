@@ -15,13 +15,18 @@ export type InstallmentForecastDetail = {
   donorName: string;
   categoryName: string;
   current: number;
-  total: number;
+  // null on a standing order with no fixed end date (Nedarim sends a blank
+  // Itra for these) — the sync caps its projection at a fixed number of
+  // months instead of a real remaining count, so there's no true "total"
+  // to show.
+  total: number | null;
   amount: number;
   // Only set on standing-order forecast details — the Nedarim Plus KevaId,
   // used to detect a real income already recorded against this exact order
   // (see order_ref matching below) so a charge that already came in doesn't
   // also linger as a forecast line.
   orderRef?: string;
+  unlimited?: boolean;
 };
 
 export type CombinedRow = {
