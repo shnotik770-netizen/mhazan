@@ -236,6 +236,90 @@ export type Database = {
           },
         ]
       }
+      check_status_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          check_id: string
+          id: string
+          new_status: string
+          old_status: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          check_id: string
+          id?: string
+          new_status: string
+          old_status?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          check_id?: string
+          id?: string
+          new_status?: string
+          old_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "check_status_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_status_history_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "checks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_status_history_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_checks_issued"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_status_history_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_checks_needing_issuance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_status_history_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_checks_pending_approval"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_status_history_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_checks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_status_history_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_transfers_needing_verification"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_status_history_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_transfers_pending_execution"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checks: {
         Row: {
           amount: number

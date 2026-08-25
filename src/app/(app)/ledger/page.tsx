@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { DepartmentReport } from "@/components/department-report";
-import { NewManualEntryButton } from "@/components/manual-entries-client";
+import { InterDepartmentTransferButton, NewManualEntryButton } from "@/components/manual-entries-client";
 import { LedgerBalancesTable, LedgerNetPositionTable } from "@/components/ledger-tables-client";
 import { DepartmentPickerSelect } from "@/components/department-picker-select-client";
 
@@ -83,7 +83,10 @@ export default async function LedgerPage({
           <h1 className="text-xl font-bold">דוחות מחלקות</h1>
           <p className="text-sm text-muted">בחרו מחלקה כדי לראות את הדוח שלה. ניתן להוסיף הכנסה/הוצאה ידנית לכל מחלקה, לא רק לזו שפתוחה כרגע.</p>
         </div>
-        <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} />
+          {isAdmin && <InterDepartmentTransferButton departments={departments ?? []} />}
+        </div>
       </div>
 
       <div className="card p-4 flex flex-wrap items-center gap-2 no-print">

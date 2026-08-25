@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  createInterDepartmentTransfer,
   createManualEntryBatch,
   reviewManualEntry,
   type ManualEntryBatchRow,
@@ -49,6 +50,139 @@ export function NewManualEntryButton({
         </Modal>
       )}
     </>
+  );
+}
+
+// Records that one department owes another — e.g. "חבד לנוער חייבת 800 ₪
+// לבית הספר" — instead of the admin having to work out the right
+// department/bank-account combination themselves via the plain manual
+// entry form. See createInterDepartmentTransfer for exactly what gets
+// written depending on whether the two departments share a home account.
+export function InterDepartmentTransferButton({ departments }: { departments: Department[] }) {
+  const [open, setOpen] = useState(false);
+  if (departments.length < 2) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
+      >
+        העברה בין מחלקות
+      </button>
+      {open && (
+        <Modal onClose={() => setOpen(false)}>
+          <div className="p-4">
+            <InterDepartmentTransferForm departments={departments} onSaved={() => setOpen(false)} />
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+function InterDepartmentTransferForm({ departments, onSaved }: { departments: Department[]; onSaved?: () => void }) {
+  const router = useRouter();
+  const [debtorDepartmentId, setDebtorDepartmentId] = useState("");
+  const [creditorDepartmentId, setCreditorDepartmentId] = useState("");
+  const [amount, setAmount] = useState(0);
+  const [entryDate, setEntryDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function submit() {
+    setError(null);
+    startTransition(async () => {
+      const result = await createInterDepartmentTransfer({
+        debtorDepartmentId,
+        creditorDepartmentId,
+        amount,
+        entryDate,
+        notes: notes || null,
+      });
+      if (result.error) {
+        setError(result.error);
+      } else {
+        router.refresh();
+        onSaved?.();
+      }
+    });
+  }
+
+  return (
+    <div className="card p-4 space-y-3">
+      <h2 className="font-semibold">העברה בין מחלקות</h2>
+      <p className="text-xs text-muted">
+        רישום שמחלקה אחת חייבת לשנייה. אם לשתי המחלקות אותו חשבון בית — זו הקצאה פנימית בלבד (מינוס לחייבת, פלוס
+        לזכאית, בלי תנועת בנק אמיתית). אם החשבונות שונים, נרשמת הוצאה לחייבת דרך חשבון הבנק של הזכאית, וחוב בין
+        המחלקות נוצר אוטומטית ב&quot;התחשבנות הפנימית&quot;.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div>
+          <label className="block text-sm text-muted mb-1">מחלקה חייבת</label>
+          <select
+            value={debtorDepartmentId}
+            onChange={(e) => setDebtorDepartmentId(e.target.value)}
+            className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm"
+          >
+            <option value="">בחר מחלקה...</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm text-muted mb-1">מחלקה זכאית</label>
+          <select
+            value={creditorDepartmentId}
+            onChange={(e) => setCreditorDepartmentId(e.target.value)}
+            className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm"
+          >
+            <option value="">בחר מחלקה...</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm text-muted mb-1">סכום</label>
+          <input
+            type="number"
+            value={amount || ""}
+            onChange={(e) => setAmount(Number(e.target.value) || 0)}
+            className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-sm text-muted mb-1">תאריך</label>
+          <DateInput value={entryDate} onChange={setEntryDate} required className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm" />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-sm text-muted mb-1">הערות</label>
+          <input
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm"
+          />
+        </div>
+      </div>
+      {error && <p className="text-sm text-danger">{error}</p>}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={isPending || !debtorDepartmentId || !creditorDepartmentId || amount <= 0 || !entryDate}
+          onClick={submit}
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+        >
+          {isPending ? "שומר…" : "שמור"}
+        </button>
+      </div>
+    </div>
   );
 }
 

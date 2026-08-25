@@ -721,6 +721,42 @@ export async function getCheckSpreadDetail(checkId: string): Promise<{ error?: s
   };
 }
 
+export type CheckStatusHistoryRow = {
+  id: string;
+  oldStatus: string | null;
+  newStatus: string;
+  changedAt: string;
+  changedByName: string | null;
+};
+
+// Who changed this check's status, to what, and when — the audit trail a
+// live financial system needs for exactly the question "I don't remember
+// marking this cleared, how did that happen?". Only covers changes made
+// after check_status_history existed; nothing earlier was ever recorded.
+export async function getCheckStatusHistory(checkId: string): Promise<CheckStatusHistoryRow[]> {
+  await requireUser();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("check_status_history")
+    .select("id, old_status, new_status, changed_at, user_profiles(full_name)")
+    .eq("check_id", checkId)
+    .order("changed_at", { ascending: false });
+
+  return ((data ?? []) as unknown as {
+    id: string;
+    old_status: string | null;
+    new_status: string;
+    changed_at: string;
+    user_profiles: { full_name: string | null } | null;
+  }[]).map((r) => ({
+    id: r.id,
+    oldStatus: r.old_status,
+    newStatus: r.new_status,
+    changedAt: r.changed_at,
+    changedByName: r.user_profiles?.full_name ?? null,
+  }));
+}
+
 export type PayeeExpenseRow = {
   id: string;
   due_date: string | null;

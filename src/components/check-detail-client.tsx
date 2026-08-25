@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import {
   getCheckSpreadDetail,
+  getCheckStatusHistory,
   getExpensesByPayee,
   type CheckAllocationInput,
   type CheckSpreadDetail,
   type CheckSpreadRow,
+  type CheckStatusHistoryRow,
   type PayeeExpenseRow,
 } from "@/app/(app)/checks/actions";
 import { EditDeleteCheckRow } from "@/components/checks-client";
@@ -46,6 +48,7 @@ export function CheckDetailLink({ checkId, variant = "link" }: { checkId: string
 
 function CheckDetailModal({ checkId, onClose }: { checkId: string; onClose: () => void }) {
   const [detail, setDetail] = useState<CheckSpreadDetail | null>(null);
+  const [history, setHistory] = useState<CheckStatusHistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,10 +56,11 @@ function CheckDetailModal({ checkId, onClose }: { checkId: string; onClose: () =
     let cancelled = false;
     async function load() {
       setLoading(true);
-      const result = await getCheckSpreadDetail(checkId);
+      const [result, historyRows] = await Promise.all([getCheckSpreadDetail(checkId), getCheckStatusHistory(checkId)]);
       if (cancelled) return;
       if (result.error) setError(result.error);
       else setDetail(result.detail ?? null);
+      setHistory(historyRows);
       setLoading(false);
     }
     load();
@@ -152,6 +156,35 @@ function CheckDetailModal({ checkId, onClose }: { checkId: string; onClose: () =
               <div className="overflow-x-auto">
                 <SpreadRowsTable rows={detail.spreadRows} highlightId={checkId} isSpread={isSpread} />
               </div>
+              {history.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold mb-1">היסטוריית סטטוס</p>
+                  <div className="overflow-x-auto">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>מתי</th>
+                          <th>שינוי</th>
+                          <th>מי</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {history.map((h) => (
+                          <tr key={h.id}>
+                            <td className="text-xs">{new Date(h.changedAt).toLocaleString("he-IL")}</td>
+                            <td className="text-xs">
+                              {h.oldStatus
+                                ? `מ"${statusLabel(h.oldStatus)}" ל"${statusLabel(h.newStatus)}"`
+                                : `נוצר כ"${statusLabel(h.newStatus)}"`}
+                            </td>
+                            <td className="text-xs">{h.changedByName ?? "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

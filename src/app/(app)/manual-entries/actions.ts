@@ -118,6 +118,75 @@ export async function createManualEntryBatch(rows: ManualEntryBatchRow[]): Promi
   return { outcomes };
 }
 
+// Records that one department owes another (e.g. "חבד לנוער חייבת 800 ₪
+// לבית הספר") without an actual bank-to-bank wire needing to happen for
+// every such adjustment:
+//
+// - Same home bank account for both departments: two linked manual
+//   entries through that one shared account (EXPENSE for the debtor,
+//   INCOME for the creditor) — a pure internal reallocation, since no
+//   real money moves between two different physical accounts.
+// - Different home accounts: a single EXPENSE entry for the debtor,
+//   posted through the *creditor's* own bank account. The existing
+//   cross-department trigger on manual_department_entries then creates
+//   the inter-department ledger row itself (debtor owes creditor) —
+//   exactly the debt relationship being recorded — without a second
+//   entry or any new database logic.
+export async function createInterDepartmentTransfer(input: {
+  debtorDepartmentId: string;
+  creditorDepartmentId: string;
+  amount: number;
+  entryDate: string;
+  notes: string | null;
+}): Promise<{ error?: string }> {
+  const user = await requireFinanceAdmin();
+  if (!input.entryDate) return { error: "יש להזין תאריך" };
+  if (!input.debtorDepartmentId || !input.creditorDepartmentId) return { error: "יש לבחור שתי מחלקות" };
+  if (input.debtorDepartmentId === input.creditorDepartmentId) return { error: "יש לבחור שתי מחלקות שונות" };
+  if (!input.amount || input.amount <= 0) return { error: "סכום לא תקין" };
+  const supabase = await createClient();
+
+  const { data: departments, error: fetchError } = await supabase
+    .from("departments")
+    .select("id, home_bank_account_id")
+    .in("id", [input.debtorDepartmentId, input.creditorDepartmentId]);
+  if (fetchError || !departments || departments.length !== 2) {
+    return { error: fetchError ? safeErrorMessage(fetchError) : "מחלקה לא נמצאה" };
+  }
+  const debtor = departments.find((d) => d.id === input.debtorDepartmentId)!;
+  const creditor = departments.find((d) => d.id === input.creditorDepartmentId)!;
+
+  const baseRow = {
+    amount: input.amount,
+    entry_date: input.entryDate,
+    notes: input.notes,
+    created_by: user.id,
+    status: "APPROVED" as const,
+    approved_by: user.id,
+    approved_at: new Date().toISOString(),
+  };
+
+  if (debtor.home_bank_account_id === creditor.home_bank_account_id) {
+    const { error } = await supabase.from("manual_department_entries").insert([
+      { ...baseRow, department_id: debtor.id, direction: "EXPENSE", bank_account_id: debtor.home_bank_account_id },
+      { ...baseRow, department_id: creditor.id, direction: "INCOME", bank_account_id: debtor.home_bank_account_id },
+    ]);
+    if (error) return { error: safeErrorMessage(error) };
+  } else {
+    const { error } = await supabase.from("manual_department_entries").insert({
+      ...baseRow,
+      department_id: debtor.id,
+      direction: "EXPENSE",
+      bank_account_id: creditor.home_bank_account_id,
+    });
+    if (error) return { error: safeErrorMessage(error) };
+  }
+
+  revalidateEntryPaths(debtor.id);
+  revalidateEntryPaths(creditor.id);
+  return {};
+}
+
 // Lets an admin correct an already-approved manual entry (amount, date,
 // department, notes) from the /expenses screen instead of deleting and
 // re-entering it.
