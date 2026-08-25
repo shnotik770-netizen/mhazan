@@ -354,10 +354,17 @@ export async function setRecurringScheduleActive(scheduleId: string, isActive: b
   return {};
 }
 
+// Each result is per Nedarim *institution* (one per real bank account/
+// clearing terminal), not per department — most departments here share an
+// institution with several others, distinguished only by each standing
+// order's own Groupe field (matched against categories.name to find the
+// department). unmatchedGroups surfaces any Groupe text that didn't match
+// a known category, so a finance admin can fix a category name instead of
+// that money silently vanishing from every department's forecast.
 export type NedarimSyncResult = {
-  departmentId: string;
+  label: string;
   ordersFound?: number;
-  monthsProjected?: number;
+  unmatchedGroups?: { groupe: string; count: number; amount: number }[];
   error?: string;
 };
 
@@ -369,18 +376,16 @@ export type NedarimSyncResult = {
 // the monthly automatic run instead goes through pg_cron with its own
 // separate shared-secret header. The actual Nedarim Plus mosad-id/api-key
 // pairs are never entered through this app or stored in the database — by
-// design, they live only as an Edge Function secret (NEDARIM_CREDENTIALS_JSON,
-// keyed by department code) that only whoever manages the Supabase project
-// can set.
-export async function syncNedarimStandingOrders(
-  departmentId?: string,
-): Promise<{ error?: string; results?: NedarimSyncResult[] }> {
+// design, they live only as an Edge Function secret (NEDARIM_CREDENTIALS_JSON)
+// that only whoever manages the Supabase project can set.
+export async function syncNedarimStandingOrders(): Promise<{
+  error?: string;
+  results?: NedarimSyncResult[];
+}> {
   await requireFinanceAdmin();
   const supabase = await createClient();
 
-  const { data, error } = await supabase.functions.invoke("sync-nedarim-standing-orders", {
-    body: departmentId ? { departmentId } : {},
-  });
+  const { data, error } = await supabase.functions.invoke("sync-nedarim-standing-orders", { body: {} });
 
   if (error) {
     let message = safeErrorMessage(error);
@@ -399,10 +404,8 @@ export async function syncNedarimStandingOrders(
   // There's no layout.tsx under /reports itself (only the dynamic
   // [departmentId] page), so revalidatePath("/reports", "layout") is a
   // no-op — it doesn't reach the per-department pages at all. Revalidate
-  // each department the sync actually touched instead, so a "sync all"
-  // run doesn't leave every report page showing stale (pre-sync) forecast
-  // data until something else happens to bust its cache.
-  const results = (data?.results ?? []) as NedarimSyncResult[];
-  for (const r of results) revalidatePath(`/reports/${r.departmentId}`);
-  return { results };
+  // exactly the departments the sync actually touched instead.
+  const departmentIdsUpdated = (data?.departmentIdsUpdated ?? []) as string[];
+  for (const id of departmentIdsUpdated) revalidatePath(`/reports/${id}`);
+  return { results: (data?.results ?? []) as NedarimSyncResult[] };
 }

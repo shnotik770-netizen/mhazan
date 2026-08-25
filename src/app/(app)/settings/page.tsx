@@ -124,10 +124,7 @@ export default async function SettingsPage() {
         </Link>
       </section>
 
-      <NedarimSettingsSection
-        departments={(departments ?? []).map((d) => ({ id: d.id, name: d.name }))}
-        lastSyncedAt={lastNedarimSync?.synced_at ?? null}
-      />
+      <NedarimSettingsSection lastSyncedAt={lastNedarimSync?.synced_at ?? null} />
 
       <section className="card p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
