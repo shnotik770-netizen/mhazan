@@ -128,19 +128,6 @@ export default async function DashboardPage() {
       )}
 
       {myDepartments.length > 0 && (
-        <div className="card p-4">
-          <h2 className="font-semibold mb-3">דוחות מחלקתיים</h2>
-          <div className="flex flex-wrap gap-2">
-            {myDepartments.map((d) => (
-              <Link key={d.id} href={`/reports/${d.id}`} className="rounded-lg border border-border px-3 py-1.5 text-sm">
-                דוח — {d.name}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {myDepartments.length > 0 && (
         <div>
           <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} />
         </div>

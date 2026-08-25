@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createDepartment, deleteDepartment, updateDepartment } from "@/app/(app)/settings/actions";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -139,7 +140,9 @@ export function DepartmentRow({
             className="rounded border border-border bg-transparent px-2 py-1 text-sm w-40"
           />
         ) : (
-          department.name
+          <Link href={`/reports/${department.id}`} className="text-primary underline" title="לדוח המחלקה">
+            {department.name}
+          </Link>
         )}
       </td>
       <td>
