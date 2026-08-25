@@ -396,7 +396,13 @@ export async function syncNedarimStandingOrders(
   if (data?.error) return { error: data.error };
 
   revalidatePath("/settings");
-  if (departmentId) revalidatePath(`/reports/${departmentId}`);
-  else revalidatePath("/reports", "layout");
-  return { results: (data?.results ?? []) as NedarimSyncResult[] };
+  // There's no layout.tsx under /reports itself (only the dynamic
+  // [departmentId] page), so revalidatePath("/reports", "layout") is a
+  // no-op — it doesn't reach the per-department pages at all. Revalidate
+  // each department the sync actually touched instead, so a "sync all"
+  // run doesn't leave every report page showing stale (pre-sync) forecast
+  // data until something else happens to bust its cache.
+  const results = (data?.results ?? []) as NedarimSyncResult[];
+  for (const r of results) revalidatePath(`/reports/${r.departmentId}`);
+  return { results };
 }
