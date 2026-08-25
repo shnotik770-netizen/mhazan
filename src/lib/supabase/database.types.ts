@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          changed_columns: string[] | null
+          id: number
+          new_data: Json | null
+          occurred_at: string
+          old_data: Json | null
+          row_id: string | null
+          table_name: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          changed_columns?: string[] | null
+          id?: never
+          new_data?: Json | null
+          occurred_at?: string
+          old_data?: Json | null
+          row_id?: string | null
+          table_name: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          changed_columns?: string[] | null
+          id?: never
+          new_data?: Json | null
+          occurred_at?: string
+          old_data?: Json | null
+          row_id?: string | null
+          table_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bank_accounts: {
         Row: {
           account_number: string

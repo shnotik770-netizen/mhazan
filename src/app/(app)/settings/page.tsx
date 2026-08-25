@@ -143,6 +143,21 @@ export default async function SettingsPage() {
           />
         </div>
       </section>
+
+      <section className="card p-4 flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold">יומן ביקורת</h2>
+          <p className="text-sm text-muted">
+            תיעוד מלא (מי, מתי, מה השתנה) של כל יצירה/עדכון/מחיקה בטבלאות הפיננסיות ובהרשאות, מהרגע שהיומן הופעל.
+          </p>
+        </div>
+        <Link
+          href="/audit-log"
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold whitespace-nowrap"
+        >
+          פתיחת יומן הביקורת
+        </Link>
+      </section>
     </div>
   );
 }
