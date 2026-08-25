@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   groupChecksIntoSpread,
@@ -92,11 +92,13 @@ type QuickRow = {
   include: boolean;
   isSkip: boolean;
   bankAccountId: string;
+  bankName: string;
+  accountNumber: string;
 };
 
 let nextSkipKey = 1;
 
-function blankSkipRow(bankAccountId: string): QuickRow {
+function blankSkipRow(bankAccountId: string, bankName: string, accountNumber: string): QuickRow {
   return {
     id: `skip-${nextSkipKey++}`,
     payee: "דילוג — צ׳ק תקול",
@@ -106,6 +108,8 @@ function blankSkipRow(bankAccountId: string): QuickRow {
     include: true,
     isSkip: true,
     bankAccountId,
+    bankName,
+    accountNumber,
   };
 }
 
@@ -115,20 +119,38 @@ function blankSkipRow(bankAccountId: string): QuickRow {
 // always consumes the next number (a real, physical check blank was
 // burned); an unchecked real row consumes none and shows no number at all
 // — its physical blank was never used, so nothing after it should skip a
-// number on its account.
+// number on its account. Runs independently per bank account: checks from
+// different accounts are physically different checkbooks, so one
+// account's typed-in number must never bleed a sequence into another
+// account's checks just because they sit next to each other in the list.
 function recomputeSequence(rows: QuickRow[]): QuickRow[] {
-  const anchorIdx = rows.findIndex((r) => r.checkNumber.trim() !== "" && !Number.isNaN(Number(r.checkNumber)));
-  if (anchorIdx === -1) return rows;
-  let next = Number(rows[anchorIdx].checkNumber) + 1;
-  return rows.map((r, i) => {
-    if (i <= anchorIdx) return r;
-    if (r.isSkip || r.include) {
-      const assigned = String(next);
-      next += 1;
-      return { ...r, checkNumber: assigned };
-    }
-    return { ...r, checkNumber: "" };
+  const indicesByAccount = new Map<string, number[]>();
+  rows.forEach((r, i) => {
+    const list = indicesByAccount.get(r.bankAccountId) ?? [];
+    list.push(i);
+    indicesByAccount.set(r.bankAccountId, list);
   });
+
+  const result = [...rows];
+  for (const indices of indicesByAccount.values()) {
+    const anchorPos = indices.findIndex((i) => {
+      const r = rows[i];
+      return r.checkNumber.trim() !== "" && !Number.isNaN(Number(r.checkNumber));
+    });
+    if (anchorPos === -1) continue;
+    let next = Number(rows[indices[anchorPos]].checkNumber) + 1;
+    for (let p = anchorPos + 1; p < indices.length; p++) {
+      const i = indices[p];
+      const r = rows[i];
+      if (r.isSkip || r.include) {
+        result[i] = { ...r, checkNumber: String(next) };
+        next += 1;
+      } else {
+        result[i] = { ...r, checkNumber: "" };
+      }
+    }
+  }
+  return result;
 }
 
 // Selecting several pending-issuance rows lets an admin either merge them
@@ -245,6 +267,8 @@ export function IssuanceQueueTable({
         include: true,
         isSkip: false,
         bankAccountId: r.bank_account_id ?? "",
+        bankName: r.bank_name ?? "",
+        accountNumber: r.account_number ?? "",
       })),
     );
     setQuickError(null);
@@ -265,9 +289,12 @@ export function IssuanceQueueTable({
   // consume no number (see recomputeSequence), so this also frees up the
   // rest of the sequence instead of reserving it for nothing.
   function markIssuedFromHere(idx: number) {
-    setQuickRows((prev) =>
-      recomputeSequence(prev.map((r, i) => (i >= idx && !r.isSkip ? { ...r, include: false } : r))),
-    );
+    setQuickRows((prev) => {
+      const bankAccountId = prev[idx]?.bankAccountId;
+      return recomputeSequence(
+        prev.map((r, i) => (i >= idx && r.bankAccountId === bankAccountId && !r.isSkip ? { ...r, include: false } : r)),
+      );
+    });
   }
 
   // "דלג על מספר (צ׳ק תקול)": the physical check blank meant for THIS row
@@ -278,9 +305,17 @@ export function IssuanceQueueTable({
   // on submit for the audit trail.
   function insertSkipAfter(idx: number) {
     setQuickRows((prev) => {
-      const bankAccountId = prev[idx]?.bankAccountId || prev.find((r) => !r.isSkip)?.bankAccountId || "";
-      const anchorIdx = prev.findIndex((r) => r.checkNumber.trim() !== "" && !Number.isNaN(Number(r.checkNumber)));
-      const skipRow = blankSkipRow(bankAccountId);
+      const anchorRow = prev[idx]?.isSkip ? undefined : prev[idx];
+      const bankAccountId = anchorRow?.bankAccountId || prev.find((r) => !r.isSkip)?.bankAccountId || "";
+      const bankName = anchorRow?.bankName || prev.find((r) => !r.isSkip)?.bankName || "";
+      const accountNumber = anchorRow?.accountNumber || prev.find((r) => !r.isSkip)?.accountNumber || "";
+      const sameAccountIndices = prev
+        .map((r, i) => ({ r, i }))
+        .filter(({ r }) => r.bankAccountId === bankAccountId);
+      const anchorIdx = sameAccountIndices.find(
+        ({ r }) => r.checkNumber.trim() !== "" && !Number.isNaN(Number(r.checkNumber)),
+      )?.i;
+      const skipRow = blankSkipRow(bankAccountId, bankName, accountNumber);
       const next = [...prev];
       if (idx === anchorIdx) {
         // The row being skipped currently holds the starting number typed
@@ -519,68 +554,80 @@ export function IssuanceQueueTable({
                     </tr>
                   </thead>
                   <tbody>
-                    {quickRows.map((r, i) =>
-                      r.isSkip ? (
-                        <tr key={r.id} className="bg-warning-bg/40">
-                          <td></td>
-                          <td className="text-warning text-xs">דילוג — צ׳ק תקול (מבוטל)</td>
-                          <td>—</td>
-                          <td>—</td>
-                          <td>
-                            <input
-                              value={r.checkNumber}
-                              onChange={(e) => updateQuickNumber(i, e.target.value)}
-                              className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm"
-                            />
-                          </td>
-                          <td>
-                            <button
-                              type="button"
-                              onClick={() => removeSkipRow(i)}
-                              className="text-xs text-danger underline whitespace-nowrap"
-                            >
-                              הסר דילוג
-                            </button>
+                    {groupByBank(
+                      quickRows.map((r, idx) => ({ ...r, idx, bank_name: r.bankName, account_number: r.accountNumber })),
+                    ).map(([bankLabel, groupRows]) => (
+                      <Fragment key={bankLabel}>
+                        <tr className="bg-background/60">
+                          <td colSpan={6} className="py-1.5">
+                            <BankGroupHeading label={bankLabel} count={groupRows.length} unit="צ׳קים להנפקה" />
                           </td>
                         </tr>
-                      ) : (
-                        <tr key={r.id}>
-                          <td>
-                            <input type="checkbox" checked={r.include} onChange={() => toggleQuickInclude(i)} />
-                          </td>
-                          <td className={r.include ? "" : "text-muted line-through"}>{r.payee}</td>
-                          <td className={r.include ? "" : "text-muted line-through"}>{formatCurrency(r.amount)}</td>
-                          <td>{r.dueDate ? formatDate(r.dueDate) : "—"}</td>
-                          <td>
-                            <input
-                              value={r.checkNumber}
-                              onChange={(e) => updateQuickNumber(i, e.target.value)}
-                              disabled={!r.include}
-                              placeholder={r.include ? "" : "לא ינופק"}
-                              className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm disabled:opacity-50"
-                            />
-                          </td>
-                          <td className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => markIssuedFromHere(i)}
-                              className="text-xs text-muted underline whitespace-nowrap"
-                              title="מבטל את הסימון משורה זו והלאה"
-                            >
-                              עד כאן הונפק
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => insertSkipAfter(i)}
-                              className="text-xs text-muted underline whitespace-nowrap"
-                              title="שומר את המספר הבא כפגום/מבוטל ולא מקצה אותו לאף דרישה"
-                            >
-                              דלג על מספר
-                            </button>
-                          </td>
-                        </tr>
-                      ),
-                    )}
+                        {groupRows.map((r) => {
+                          const i = r.idx;
+                          return r.isSkip ? (
+                            <tr key={r.id} className="bg-warning-bg/40">
+                              <td></td>
+                              <td className="text-warning text-xs">דילוג — צ׳ק תקול (מבוטל)</td>
+                              <td>—</td>
+                              <td>—</td>
+                              <td>
+                                <input
+                                  value={r.checkNumber}
+                                  onChange={(e) => updateQuickNumber(i, e.target.value)}
+                                  className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm"
+                                />
+                              </td>
+                              <td>
+                                <button
+                                  type="button"
+                                  onClick={() => removeSkipRow(i)}
+                                  className="text-xs text-danger underline whitespace-nowrap"
+                                >
+                                  הסר דילוג
+                                </button>
+                              </td>
+                            </tr>
+                          ) : (
+                            <tr key={r.id}>
+                              <td>
+                                <input type="checkbox" checked={r.include} onChange={() => toggleQuickInclude(i)} />
+                              </td>
+                              <td className={r.include ? "" : "text-muted line-through"}>{r.payee}</td>
+                              <td className={r.include ? "" : "text-muted line-through"}>{formatCurrency(r.amount)}</td>
+                              <td>{r.dueDate ? formatDate(r.dueDate) : "—"}</td>
+                              <td>
+                                <input
+                                  value={r.checkNumber}
+                                  onChange={(e) => updateQuickNumber(i, e.target.value)}
+                                  disabled={!r.include}
+                                  placeholder={r.include ? "" : "לא ינופק"}
+                                  className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm disabled:opacity-50"
+                                />
+                              </td>
+                              <td className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => markIssuedFromHere(i)}
+                                  className="text-xs text-muted underline whitespace-nowrap"
+                                  title="מבטל את הסימון משורה זו והלאה"
+                                >
+                                  עד כאן הונפק
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => insertSkipAfter(i)}
+                                  className="text-xs text-muted underline whitespace-nowrap"
+                                  title="שומר את המספר הבא כפגום/מבוטל ולא מקצה אותו לאף דרישה"
+                                >
+                                  דלג על מספר
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
+                    ))}
                     {quickRows.length === 0 && (
                       <tr>
                         <td colSpan={6} className="text-center text-muted py-4">

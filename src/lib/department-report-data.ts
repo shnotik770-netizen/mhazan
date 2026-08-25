@@ -50,7 +50,12 @@ export type DepartmentReportData = {
 export async function getDepartmentReportData(departmentId: string): Promise<DepartmentReportData> {
   const supabase = await createClient();
 
-  const [{ data: incomes }, { data: expenses }, { data: manualEntries }, { data: commissionEntries }] = await Promise.all([
+  const [
+    { data: incomes, error: incomesError },
+    { data: expenses, error: expensesError },
+    { data: manualEntries, error: manualEntriesError },
+    { data: commissionEntries, error: commissionError },
+  ] = await Promise.all([
     supabase
       .from("incomes")
       .select(
@@ -78,6 +83,19 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       .eq("department_id", departmentId)
       .order("month", { ascending: false }),
   ]);
+
+  // A failed query here would otherwise silently render as "no rows" via
+  // the `?? []` fallbacks below — exactly the kind of gap that makes a
+  // real data problem look like a missing feature. Surface it in the logs
+  // instead of swallowing it.
+  for (const [label, error] of [
+    ["incomes", incomesError],
+    ["expenses", expensesError],
+    ["manualEntries", manualEntriesError],
+    ["commissionEntries", commissionError],
+  ] as const) {
+    if (error) console.error(`getDepartmentReportData(${departmentId}): ${label} query failed`, error);
+  }
 
   const incomeRows: CombinedRow[] = (incomes ?? []).map((r) => {
     const category = (r as unknown as { categories: { name: string } | null }).categories?.name;
