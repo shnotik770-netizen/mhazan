@@ -405,6 +405,11 @@ export function PasteIncomeForm({
           `נשמרו ${result.savedCount} שורות הכנסה בהצלחה` +
           (failedCount > 0 ? ` — ${failedCount} שורות נכשלו ונשארו למטה לטיפול (הסיבה מוצגת ליד כל שורה)` : ""),
       });
+      // Rows that weren't part of this save (still need review) are kept
+      // completely untouched here — they stay in the list waiting for the
+      // admin to fix/assign them or explicitly remove them, exactly as
+      // before the save. Only rows that were actually submitted change:
+      // dropped on success, or annotated with the failure reason.
       setRows((prev) =>
         prev
           .map((r, i) => {
@@ -415,11 +420,17 @@ export function PasteIncomeForm({
             }
             return null;
           })
-          .filter((r): r is ParsedRow => r !== null)
-          .concat(prev.filter((r, i) => !savableIndexes.includes(i) && !rowIsSavable(r))),
+          .filter((r): r is ParsedRow => r !== null),
       );
       router.refresh();
     });
+  }
+
+  // Explicitly drops one row from the current pasted batch (e.g. a
+  // duplicate/irrelevant row that isn't worth fixing) — removes it from the
+  // preview entirely without saving anything.
+  function removeRow(index: number) {
+    setRows((prev) => prev.filter((_, i) => i !== index));
   }
 
   return (
@@ -543,6 +554,7 @@ export function PasteIncomeForm({
                 <th>מס׳ קבלה</th>
                 <th>מס׳ הוראה</th>
                 <th>הערות</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -556,7 +568,7 @@ export function PasteIncomeForm({
                   <Fragment key={i}>
                     {isFirstOfGroup && (
                       <tr>
-                        <td colSpan={9} className={`border-t-2 border-border py-1.5 text-xs font-semibold ${needsReview ? "text-warning" : "text-success"}`}>
+                        <td colSpan={10} className={`border-t-2 border-border py-1.5 text-xs font-semibold ${needsReview ? "text-warning" : "text-success"}`}>
                           {needsReview
                             ? `⚠ דורש בדיקה ואישור — ${needsReviewCount} שורות`
                             : `✓ נדבק תקין — ${orderedRows.length - needsReviewCount} שורות`}
@@ -645,25 +657,38 @@ export function PasteIncomeForm({
                       />
                     </td>
                     <td>
-                      <div className="flex items-center gap-0.5">
+                      {row.installmentCurrent != null || row.installmentTotal != null ? (
+                        <div className="flex items-center gap-0.5">
+                          <input
+                            className="w-10 bg-transparent border-b border-border text-sm"
+                            type="number"
+                            value={row.installmentCurrent ?? ""}
+                            onChange={(e) => updateRow(i, { installmentCurrent: e.target.value ? Number(e.target.value) : null })}
+                            placeholder="תשלום"
+                            title="תשלום מספר"
+                          />
+                          <span className="text-muted text-xs">/</span>
+                          <input
+                            className="w-10 bg-transparent border-b border-border text-sm"
+                            type="number"
+                            value={row.installmentTotal ?? ""}
+                            onChange={(e) => updateRow(i, { installmentTotal: e.target.value ? Number(e.target.value) : null })}
+                            placeholder="סה״כ"
+                            title="סה״כ תשלומים"
+                          />
+                        </div>
+                      ) : (
+                        // Not an "X מתוך Y" fraction — show the raw pasted
+                        // value as-is (e.g. "הו״ק", "העברה") instead of two
+                        // empty boxes that make it look like nothing was
+                        // captured, even though it's kept in type_text.
                         <input
-                          className="w-10 bg-transparent border-b border-border text-sm"
-                          type="number"
-                          value={row.installmentCurrent ?? ""}
-                          onChange={(e) => updateRow(i, { installmentCurrent: e.target.value ? Number(e.target.value) : null })}
-                          placeholder="תשלום"
-                          title="תשלום מספר"
+                          className="w-20 bg-transparent border-b border-border text-sm"
+                          value={row.typeText}
+                          onChange={(e) => updateRow(i, { typeText: e.target.value })}
+                          placeholder="סוג"
                         />
-                        <span className="text-muted text-xs">/</span>
-                        <input
-                          className="w-10 bg-transparent border-b border-border text-sm"
-                          type="number"
-                          value={row.installmentTotal ?? ""}
-                          onChange={(e) => updateRow(i, { installmentTotal: e.target.value ? Number(e.target.value) : null })}
-                          placeholder="סה״כ"
-                          title="סה״כ תשלומים"
-                        />
-                      </div>
+                      )}
                     </td>
                     <td>
                       <input
@@ -685,6 +710,16 @@ export function PasteIncomeForm({
                         value={row.notes}
                         onChange={(e) => updateRow(i, { notes: e.target.value })}
                       />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => removeRow(i)}
+                        title="דלג על השורה — הסרה מהרשימה בלי לשמור"
+                        className="text-xs text-muted hover:text-danger"
+                      >
+                        ✕ דלג
+                      </button>
                     </td>
                   </tr>
                   </Fragment>
