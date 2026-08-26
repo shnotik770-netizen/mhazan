@@ -5,6 +5,7 @@ import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortab
 import { formatCurrency, formatDate } from "@/lib/format";
 import { InvoiceFlagToggle } from "@/components/invoice-flag-toggle-client";
 import { Modal } from "@/components/modal";
+import { CancelAndReplaceCheckButton, CancelCheckButton } from "@/components/checks-client";
 import { EditExpenseForm, type ExpenseRow, type Option } from "@/components/expenses-client";
 import { EditIncomeForm, type IncomeEditRow } from "@/components/income-edit-form-client";
 
@@ -114,9 +115,24 @@ export function TransactionsTable({
               <td className={r.direction === "INCOME" ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>
               {isAdmin && (
                 <td>
-                  <button type="button" onClick={() => setEditRow(r)} className="text-xs text-primary underline">
-                    עריכה
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={() => setEditRow(r)} className="text-xs text-primary underline">
+                      עריכה
+                    </button>
+                    {r.checkId && r.status !== "CANCELLED" && (
+                      <>
+                        <CancelCheckButton checkId={r.checkId} variant="link" />
+                        <CancelAndReplaceCheckButton
+                          checkId={r.checkId}
+                          payee={r.expenseEdit?.payeeName ?? ""}
+                          amount={r.amount}
+                          currentPaymentMethod={r.expenseEdit?.paymentMethod ?? null}
+                          currentDueDate={r.date}
+                          variant="link"
+                        />
+                      </>
+                    )}
+                  </div>
                 </td>
               )}
             </tr>
