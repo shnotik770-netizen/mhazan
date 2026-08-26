@@ -64,11 +64,11 @@ export function NedarimSettingsSection({ lastSyncedAt }: { lastSyncedAt: string 
                   ) : (
                     <span>
                       נמצאו {r.ordersFound ?? 0} הוראות פעילות ושויכו למחלקות המתאימות
-                      {(r.matchedByOrderRef ?? 0) > 0 || (r.matchedByCategory ?? 0) > 0 ? (
+                      {(r.matchedByOrderRef ?? 0) > 0 || (r.matchedByCategory ?? 0) > 0 || (r.matchedByFallback ?? 0) > 0 ? (
                         <span className="text-muted">
                           {" "}
                           ({r.matchedByOrderRef ?? 0} לפי מספר הוראה שכבר קיים בהכנסות, {r.matchedByCategory ?? 0} לפי
-                          התאמת קטגוריה)
+                          התאמת קטגוריה, {r.matchedByFallback ?? 0} לפי ברירת מחדל למחלקה המנהלת של המוסד)
                         </span>
                       ) : null}
                       .
@@ -78,7 +78,8 @@ export function NedarimSettingsSection({ lastSyncedAt }: { lastSyncedAt: string 
                 {r.unmatchedGroups && r.unmatchedGroups.length > 0 && (
                   <div className="mt-1 rounded-lg bg-warning-bg border border-warning/40 p-2 text-xs space-y-0.5">
                     <p className="font-medium text-warning">
-                      לא נמצאה מחלקה תואמת (לא לפי מספר הוראה קיים בהכנסות ולא לפי שם קטגוריה) עבור:
+                      לא נמצאה מחלקה תואמת (לא לפי מספר הוראה, לא לפי קטגוריה, ואין מחלקה מנהלת עם קוד זהה לתווית המוסד)
+                      עבור:
                     </p>
                     {r.unmatchedGroups.map((u) => (
                       <p key={u.groupe}>
