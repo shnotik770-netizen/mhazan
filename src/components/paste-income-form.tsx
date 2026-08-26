@@ -143,6 +143,7 @@ export function PasteIncomeForm({
   const [categoryList, setCategoryList] = useState<Category[]>(initialCategories);
   const [bankAccountId, setBankAccountId] = useState("");
   const [hasHeaderRow, setHasHeaderRow] = useState(true);
+  const [isHistoryPaste, setIsHistoryPaste] = useState(false);
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [headerWarning, setHeaderWarning] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "error" | "success" | "warning"; text: string } | null>(null);
@@ -385,7 +386,7 @@ export function PasteIncomeForm({
     startTransition(async () => {
       const savableIndexes = rows.map((r, i) => (rowIsSavable(r) ? i : -1)).filter((i) => i >= 0);
       const savableRows = savableIndexes.map((i) => rows[i]);
-      const result = await submitIncomeBatch(bankAccountId, savableRows);
+      const result = await submitIncomeBatch(bankAccountId, savableRows, isHistoryPaste);
       if (result.error) {
         setMessage({ type: "error", text: result.error });
         return;
@@ -471,6 +472,12 @@ export function PasteIncomeForm({
             </option>
           ))}
         </select>
+        <label className="flex items-center gap-2 text-sm mt-3 pt-3 border-t border-border">
+          <input type="checkbox" checked={isHistoryPaste} onChange={(e) => setIsHistoryPaste(e.target.checked)} />
+          <span>
+            זו הדבקת היסטוריה — <span className="text-muted">לא לכלול בחישוב המחלקה (מסומן &quot;ישן&quot;, כמו הוראת &quot;סמן כישנה&quot; בדוח)</span>
+          </span>
+        </label>
       </div>
 
       <div className="card p-4">

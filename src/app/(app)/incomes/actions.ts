@@ -78,6 +78,11 @@ export async function checkExistingTransactionRefs(refs: string[]): Promise<stri
 export async function submitIncomeBatch(
   bankAccountId: string,
   rows: IncomeBatchRow[],
+  // A whole batch pasted purely to backfill history — every row is
+  // inserted with skip_department_ledger set, exactly like the "סמן
+  // כישנה" toggle a manager can flip on an individual row later, just
+  // applied to the entire paste up front instead of one row at a time.
+  isHistory = false,
 ): Promise<SubmitIncomeBatchResult> {
   await requireFinanceAdmin();
   if (!bankAccountId) return { savedCount: 0, outcomes: [], error: "יש לבחור חשבון בנק יעד" };
@@ -118,6 +123,7 @@ export async function submitIncomeBatch(
       notes: r.notes || null,
       created_by: user?.id ?? null,
       issuing_department_id: null,
+      skip_department_ledger: isHistory,
     };
 
     let rowPayload: TablesInsert<"incomes">[] = [];
@@ -160,7 +166,10 @@ export async function submitIncomeBatch(
     }
   }
 
-  const missedStandingOrders = await detectMissedStandingOrders(supabase, touchedDepartmentMonths);
+  // A history backfill isn't the live monthly reconciliation event this
+  // check exists for — running it here would just flag old, already-known
+  // gaps as if they'd been freshly discovered.
+  const missedStandingOrders = isHistory ? [] : await detectMissedStandingOrders(supabase, touchedDepartmentMonths);
 
   revalidatePath("/incomes");
   revalidatePath("/");
