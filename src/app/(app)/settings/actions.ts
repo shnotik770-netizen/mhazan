@@ -356,14 +356,19 @@ export async function setRecurringScheduleActive(scheduleId: string, isActive: b
 
 // Each result is per Nedarim *institution* (one per real bank account/
 // clearing terminal), not per department — most departments here share an
-// institution with several others, distinguished only by each standing
-// order's own Groupe field (matched against categories.name to find the
-// department). unmatchedGroups surfaces any Groupe text that didn't match
-// a known category, so a finance admin can fix a category name instead of
-// that money silently vanishing from every department's forecast.
+// institution with several others. Each order's department is resolved by
+// order_ref (KevaId) against an existing income already recorded under some
+// department first (authoritative — a human already routed that exact
+// order there), falling back to matching Groupe against categories.name
+// only for an order that's never been pasted into incomes yet.
+// unmatchedGroups surfaces any order that matched neither, so a finance
+// admin can act instead of that money silently vanishing from every
+// department's forecast.
 export type NedarimSyncResult = {
   label: string;
   ordersFound?: number;
+  matchedByOrderRef?: number;
+  matchedByCategory?: number;
   unmatchedGroups?: { groupe: string; count: number; amount: number }[];
   error?: string;
 };
