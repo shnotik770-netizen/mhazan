@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  cancelAndReplaceCheck,
   convertPendingCheckToSpread,
   createDeptExpenseRequest,
   deleteCheck,
@@ -14,6 +15,8 @@ import {
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { MiniCalculator } from "@/components/mini-calculator";
 import { SearchableSelect } from "@/components/searchable-select";
+import { DateInput } from "@/components/date-input";
+import { Modal } from "@/components/modal";
 import { rowActionButtonClass } from "@/components/row-actions-menu";
 import { formatCurrency, toLocalISODate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -179,6 +182,135 @@ export function CancelCheckButton({ checkId, variant = "menu" }: { checkId: stri
       </button>
       {error && <span className="px-3 text-xs text-danger">{error}</span>}
     </div>
+  );
+}
+
+// Cancels an existing check/transfer and immediately files its replacement
+// in one action, prefilled from the original (payee, amount, department) —
+// used when the original just needs different payment mechanics (e.g. a
+// bounced check reissued as a transfer, or a new date), not a re-entry of
+// a request that's otherwise identical.
+export function CancelAndReplaceCheckButton({
+  checkId,
+  payee,
+  amount,
+  currentPaymentMethod,
+  currentDueDate,
+  variant = "link",
+}: {
+  checkId: string;
+  payee: string;
+  amount: number;
+  currentPaymentMethod?: string | null;
+  currentDueDate?: string | null;
+  variant?: "link" | "menu";
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"CHECK" | "TRANSFER">(
+    currentPaymentMethod === "TRANSFER" ? "TRANSFER" : "CHECK",
+  );
+  const [dueDate, setDueDate] = useState(currentDueDate ?? "");
+  const [checkNumber, setCheckNumber] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function submit() {
+    setError(null);
+    startTransition(async () => {
+      const result = await cancelAndReplaceCheck(checkId, {
+        paymentMethod,
+        dueDate: dueDate || null,
+        checkNumber: paymentMethod === "CHECK" ? checkNumber || null : null,
+      });
+      if (result.error) setError(result.error);
+      else {
+        setOpen(false);
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={variant === "menu" ? rowActionButtonClass("warning") : "text-xs text-warning underline"}
+      >
+        {variant === "menu" ? "ביטול והחלפה בדרישה חדשה" : "בטל והחלף"}
+      </button>
+      {open && (
+        <Modal onClose={() => setOpen(false)}>
+          <div className="card p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div>
+                <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)" }}>
+                  ביטול והחלפה בדרישת תשלום חדשה
+                </h2>
+                <p className="text-xs text-muted mt-0.5">
+                  &quot;{payee}&quot; ({formatCurrency(amount)}) יסומן כמבוטל, ובמקומו תיפתח מיד דרישת תשלום חדשה
+                  באותו סכום ולאותה מחלקה — רק אמצעי התשלום ו/או התאריך משתנים.
+                </p>
+              </div>
+              <button type="button" onClick={() => setOpen(false)} className="text-muted hover:text-foreground">
+                ✕
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">אמצעי תשלום חדש</label>
+                <div className="flex items-center gap-4 text-sm">
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="radio"
+                      checked={paymentMethod === "CHECK"}
+                      onChange={() => setPaymentMethod("CHECK")}
+                    />
+                    צ׳ק
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="radio"
+                      checked={paymentMethod === "TRANSFER"}
+                      onChange={() => setPaymentMethod("TRANSFER")}
+                    />
+                    העברה
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">תאריך חדש</label>
+                <DateInput value={dueDate} onChange={setDueDate} />
+              </div>
+              {paymentMethod === "CHECK" && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">מספר צ׳ק (אופציונלי — אפשר להשלים אח״כ ב&quot;צ׳קים להנפקה&quot;)</label>
+                  <input
+                    value={checkNumber}
+                    onChange={(e) => setCheckNumber(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
+            </div>
+            {error && <p className="text-xs text-danger">{error}</p>}
+            <div className="flex items-center gap-2 pt-2 border-t border-border">
+              <button
+                disabled={isPending}
+                onClick={submit}
+                className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              >
+                {isPending ? "מבצע..." : "בטל וצור דרישה חדשה"}
+              </button>
+              <button type="button" onClick={() => setOpen(false)} className="text-sm text-muted">
+                ביטול
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -813,6 +945,14 @@ export function EditDeleteCheckRow({
           עריכה
         </button>
         <CancelCheckButton checkId={checkId} variant="link" />
+        <CancelAndReplaceCheckButton
+          checkId={checkId}
+          payee={payee}
+          amount={amount}
+          currentPaymentMethod={paymentMethod}
+          currentDueDate={dueDate}
+          variant="link"
+        />
         <button disabled={isPending} onClick={remove} className="text-xs text-danger underline">
           מחיקה
         </button>

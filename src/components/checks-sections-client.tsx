@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { ApprovePaymentRequestRow, CancelCheckButton, VerifyTransferButton } from "@/components/checks-client";
+import {
+  ApprovePaymentRequestRow,
+  CancelAndReplaceCheckButton,
+  CancelCheckButton,
+  VerifyTransferButton,
+} from "@/components/checks-client";
 import { PayeeLink } from "@/components/check-detail-client";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { groupByBank, bankColorFor, BankGroupHeading } from "@/components/bank-grouping";
@@ -162,6 +167,14 @@ export function PendingApprovalTable({
                         currentCheckNumber={c.check_number}
                       />
                       <CancelCheckButton checkId={c.id!} variant="link" />
+                      <CancelAndReplaceCheckButton
+                        checkId={c.id!}
+                        payee={c.payee ?? ""}
+                        amount={Number(c.amount)}
+                        currentPaymentMethod={c.payment_method}
+                        currentDueDate={c.due_date}
+                        variant="link"
+                      />
                     </div>
                   </td>
                 )}
@@ -252,6 +265,14 @@ export function OverdueTransfersTable({ rows }: { rows: OverdueTransferRow[] }) 
                       <div className="flex flex-wrap items-center gap-2">
                         <VerifyTransferButton checkId={row.id} label="אשר שההעברה בוצעה" captureInternalBeneficiary />
                         <CancelCheckButton checkId={row.id} variant="link" />
+                        <CancelAndReplaceCheckButton
+                          checkId={row.id}
+                          payee={row.payee}
+                          amount={Number(row.amount)}
+                          currentPaymentMethod="TRANSFER"
+                          currentDueDate={row.due_date}
+                          variant="link"
+                        />
                       </div>
                     </td>
                   </tr>
@@ -336,6 +357,14 @@ export function OverdueChecksTable({ rows }: { rows: OverdueCheckRow[] }) {
                       <div className="flex flex-wrap items-center gap-2">
                         <VerifyTransferButton checkId={row.id} label="סמן כנפרע" />
                         <CancelCheckButton checkId={row.id} variant="link" />
+                        <CancelAndReplaceCheckButton
+                          checkId={row.id}
+                          payee={row.payee}
+                          amount={Number(row.amount)}
+                          currentPaymentMethod="CHECK"
+                          currentDueDate={row.due_date}
+                          variant="link"
+                        />
                       </div>
                     </td>
                   </tr>

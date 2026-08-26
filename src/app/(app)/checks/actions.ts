@@ -614,6 +614,79 @@ export async function updateCheckStatus(
   return { error: safeErrorMessage(error) };
 }
 
+// Cancels an existing check/transfer and, in the same action, files its
+// replacement: same payee, amount, department/split, category and notes as
+// the original — only the payment method, date, and (for a check) number
+// change. Used when a check bounced/got voided or a transfer needs a new
+// date, and the correction is really "same request, different mechanics"
+// rather than a brand new one that would need every field retyped.
+export async function cancelAndReplaceCheck(
+  checkId: string,
+  input: {
+    paymentMethod: "CHECK" | "TRANSFER";
+    dueDate: string | null;
+    checkNumber: string | null;
+  },
+): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const [{ data: original, error: fetchError }, { data: originalAllocations, error: allocFetchError }] =
+    await Promise.all([
+      supabase.from("checks").select("*").eq("id", checkId).single(),
+      supabase.from("check_allocations").select("department_id, amount").eq("check_id", checkId),
+    ]);
+  if (fetchError || !original) return { error: safeErrorMessage(fetchError) ?? "הצ׳ק/הבקשה לא נמצא/ה" };
+  if (allocFetchError) return { error: safeErrorMessage(allocFetchError) };
+  if (original.status === "CANCELLED") return { error: "הצ׳ק/ההעברה כבר מבוטל/ת" };
+
+  const { error: cancelError } = await supabase.from("checks").update({ status: "CANCELLED" }).eq("id", checkId);
+  if (cancelError) return { error: safeErrorMessage(cancelError) };
+
+  const { data: created, error: createError } = await supabase
+    .from("checks")
+    .insert({
+      payment_method: input.paymentMethod,
+      bank_account_id: original.bank_account_id,
+      payee: original.payee,
+      amount: original.amount,
+      due_date: input.dueDate || null,
+      check_number: input.paymentMethod === "CHECK" ? input.checkNumber || null : null,
+      issued_at: input.paymentMethod === "CHECK" && input.checkNumber ? new Date().toISOString() : null,
+      department_id: original.department_id,
+      category_id: original.category_id,
+      internal_beneficiary: original.internal_beneficiary,
+      notes: original.notes,
+      skip_department_ledger: original.skip_department_ledger,
+      has_invoice: original.has_invoice,
+      created_by: user?.id ?? null,
+      approved_at: new Date().toISOString(),
+      approved_by: user?.id ?? null,
+    })
+    .select("id")
+    .single();
+  // The cancel already went through even if the replacement fails to
+  // insert (e.g. a duplicate check number) — surfacing that clearly here
+  // matters, since silently losing the replacement would leave the payment
+  // unaccounted for anywhere.
+  if (createError) return { error: `הביטול בוצע, אך יצירת הדרישה החדשה נכשלה: ${friendlyCheckError(createError, input.checkNumber)}` };
+
+  if ((originalAllocations ?? []).length > 0) {
+    const allocError = await insertAllocations(
+      supabase,
+      created.id,
+      originalAllocations!.map((a) => ({ departmentId: a.department_id, amount: Number(a.amount) })),
+    );
+    if (allocError) return { error: `הביטול והדרישה החדשה בוצעו, אך העתקת החלוקה בין המחלקות נכשלה: ${allocError}` };
+  }
+
+  revalidateCheckPaths(original.department_id);
+  return {};
+}
+
 export async function deleteCheck(checkId: string): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const supabase = await createClient();
