@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { ApprovePaymentRequestRow, VerifyTransferButton } from "@/components/checks-client";
+import { ApprovePaymentRequestRow, CancelCheckButton, VerifyTransferButton } from "@/components/checks-client";
 import { PayeeLink } from "@/components/check-detail-client";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { groupByBank, bankColorFor, BankGroupHeading } from "@/components/bank-grouping";
@@ -154,12 +154,15 @@ export function PendingApprovalTable({
                 <td>{c.notes ?? "—"}</td>
                 {isAdmin && (
                   <td>
-                    <ApprovePaymentRequestRow
-                      checkId={c.id!}
-                      paymentMethod={c.payment_method ?? undefined}
-                      currentDueDate={c.due_date}
-                      currentCheckNumber={c.check_number}
-                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ApprovePaymentRequestRow
+                        checkId={c.id!}
+                        paymentMethod={c.payment_method ?? undefined}
+                        currentDueDate={c.due_date}
+                        currentCheckNumber={c.check_number}
+                      />
+                      <CancelCheckButton checkId={c.id!} variant="link" />
+                    </div>
                   </td>
                 )}
               </tr>
@@ -246,7 +249,10 @@ export function OverdueTransfersTable({ rows }: { rows: OverdueTransferRow[] }) 
                     <td>{formatDate(row.due_date)}</td>
                     <td>{row.departments?.name ?? "בהמתנה"}</td>
                     <td>
-                      <VerifyTransferButton checkId={row.id} label="אשר שההעברה בוצעה" captureInternalBeneficiary />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <VerifyTransferButton checkId={row.id} label="אשר שההעברה בוצעה" captureInternalBeneficiary />
+                        <CancelCheckButton checkId={row.id} variant="link" />
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -327,7 +333,10 @@ export function OverdueChecksTable({ rows }: { rows: OverdueCheckRow[] }) {
                     <td>{formatDate(row.due_date)}</td>
                     <td>{row.departments?.name ?? "בהמתנה"}</td>
                     <td>
-                      <VerifyTransferButton checkId={row.id} label="סמן כנפרע" />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <VerifyTransferButton checkId={row.id} label="סמן כנפרע" />
+                        <CancelCheckButton checkId={row.id} variant="link" />
+                      </div>
                     </td>
                   </tr>
                 ))}

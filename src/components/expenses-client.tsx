@@ -8,13 +8,13 @@ import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
 import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
+import { CancelCheckButton } from "@/components/checks-client";
 import { RowActionsMenu, rowActionButtonClass } from "@/components/row-actions-menu";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import {
   bulkAssignCheckDepartment,
   bulkSetSkipDepartmentLedger,
   updateCheck,
-  updateCheckStatus,
   deleteCheck,
   groupChecksIntoSpread,
   splitSpreadIntoNew,
@@ -579,30 +579,6 @@ function SplitAcrossDepartmentsForm({
           {isPending ? "שומר…" : "שמירה"}
         </button>
       </div>
-    </div>
-  );
-}
-
-function CancelCheckButton({ checkId }: { checkId: string }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  function cancel() {
-    if (!confirm("לבטל את הצ׳ק/העברה? הפעולה תסמן אותו כמבוטל — הוא יישאר ברשימה עם סטטוס \"בוטל\" ולא יימחק.")) return;
-    startTransition(async () => {
-      const result = await updateCheckStatus(checkId, "CANCELLED");
-      if (result.error) setError(result.error);
-      else router.refresh();
-    });
-  }
-
-  return (
-    <div className="flex w-full flex-col items-end gap-0.5">
-      <button type="button" disabled={isPending} onClick={cancel} className={rowActionButtonClass("warning")}>
-        ביטול
-      </button>
-      {error && <span className="px-3 text-xs text-danger">{error}</span>}
     </div>
   );
 }

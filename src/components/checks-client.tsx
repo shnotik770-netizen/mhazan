@@ -14,6 +14,7 @@ import {
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { MiniCalculator } from "@/components/mini-calculator";
 import { SearchableSelect } from "@/components/searchable-select";
+import { rowActionButtonClass } from "@/components/row-actions-menu";
 import { formatCurrency, toLocalISODate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -136,6 +137,47 @@ export function VerifyTransferButton({
       >
         {label ?? "אשר שההעברה בוצעה"}
       </button>
+    </div>
+  );
+}
+
+// Marks a check/transfer CANCELLED without deleting it — it stays in the
+// system with status "בוטל" for the audit trail, distinct from deleteCheck
+// which removes the row entirely. Shared between the /expenses page (inside
+// a RowActionsMenu, variant="menu") and the /checks page's own tables
+// (a plain inline text link, variant="link"), so the exact same confirm
+// wording and behavior applies everywhere a check/transfer can be cancelled.
+export function CancelCheckButton({ checkId, variant = "menu" }: { checkId: string; variant?: "menu" | "link" }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function cancel() {
+    if (!confirm('לבטל את הצ׳ק/העברה? הפעולה תסמן אותו כמבוטל — הוא יישאר ברשימה עם סטטוס "בוטל" ולא יימחק.')) return;
+    startTransition(async () => {
+      const result = await updateCheckStatus(checkId, "CANCELLED");
+      if (result.error) setError(result.error);
+      else router.refresh();
+    });
+  }
+
+  if (variant === "link") {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <button type="button" disabled={isPending} onClick={cancel} className="text-xs text-danger underline">
+          בטל
+        </button>
+        {error && <span className="text-xs text-danger">{error}</span>}
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex w-full flex-col items-end gap-0.5">
+      <button type="button" disabled={isPending} onClick={cancel} className={rowActionButtonClass("warning")}>
+        ביטול
+      </button>
+      {error && <span className="px-3 text-xs text-danger">{error}</span>}
     </div>
   );
 }
@@ -770,6 +812,7 @@ export function EditDeleteCheckRow({
         <button onClick={() => setEditing(true)} className="text-xs text-primary underline">
           עריכה
         </button>
+        <CancelCheckButton checkId={checkId} variant="link" />
         <button disabled={isPending} onClick={remove} className="text-xs text-danger underline">
           מחיקה
         </button>
