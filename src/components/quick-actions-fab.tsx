@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { UnifiedCheckForm } from "@/components/unified-check-form";
 import { Modal } from "@/components/modal";
-import { DateInput } from "@/components/date-input";
+import { ExpectedIncomeBatchForm } from "@/components/expected-income-batch-form";
 import { getQuickActionRefData } from "@/app/(app)/quick-actions-actions";
-import { createExpectedIncome } from "@/app/(app)/forecast/actions";
 
 type RefData = Awaited<ReturnType<typeof getQuickActionRefData>>;
 type ModalActionKey = "payment_request" | "expected_income";
@@ -158,31 +156,6 @@ export function QuickActionsPanel() {
 }
 
 function QuickExpectedIncomeForm({ bankAccounts, onClose }: { bankAccounts: RefData["bankAccounts"]; onClose: () => void }) {
-  const router = useRouter();
-  const [bankAccountId, setBankAccountId] = useState("");
-  const [amount, setAmount] = useState(0);
-  const [expectedDate, setExpectedDate] = useState("");
-  const [description, setDescription] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  function submit() {
-    setError(null);
-    startTransition(async () => {
-      const result = await createExpectedIncome({
-        bankAccountId,
-        amount,
-        expectedDate,
-        description: description || null,
-      });
-      if (result.error) setError(result.error);
-      else {
-        router.refresh();
-        onClose();
-      }
-    });
-  }
-
   return (
     <Modal onClose={onClose}>
       <div className="card p-5 space-y-4">
@@ -192,65 +165,15 @@ function QuickExpectedIncomeForm({ bankAccounts, onClose }: { bankAccounts: RefD
               הכנסה צפויה חדשה
             </h2>
             <p className="text-xs text-muted mt-0.5">
-              הערכה בלבד — מופיעה בתחזית, לא משפיעה על היתרה או ההכנסות בפועל עד שמסמנים שהתקבלה.
+              הערכה בלבד — מופיעה בתחזית, לא משפיעה על היתרה או ההכנסות בפועל עד שמסמנים שהתקבלה. אפשר להוסיף כמה
+              שורות ברצף.
             </p>
           </div>
           <button type="button" onClick={onClose} className="text-muted hover:text-foreground">
             ✕
           </button>
         </div>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium mb-1">חשבון בנק</label>
-            <select
-              value={bankAccountId}
-              onChange={(e) => setBankAccountId(e.target.value)}
-              className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-            >
-              <option value="">בחר חשבון בנק...</option>
-              {bankAccounts.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.departments?.name} — {b.bank_name} ({b.account_number})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">סכום משוער</label>
-            <input
-              type="number"
-              value={amount || ""}
-              onChange={(e) => setAmount(Number(e.target.value) || 0)}
-              className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">תאריך צפוי</label>
-            <DateInput value={expectedDate} onChange={setExpectedDate} required />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">תיאור / מקור</label>
-            <input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="לדוגמה: סיכום חברת אשראי"
-              className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-            />
-          </div>
-        </div>
-        {error && <p className="text-xs text-danger">{error}</p>}
-        <div className="flex items-center gap-2 pt-2 border-t border-border">
-          <button
-            disabled={isPending || !bankAccountId || amount <= 0 || !expectedDate}
-            onClick={submit}
-            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
-          >
-            {isPending ? "שומר..." : "שמירה"}
-          </button>
-          <button type="button" onClick={onClose} className="text-sm text-muted">
-            ביטול
-          </button>
-        </div>
+        <ExpectedIncomeBatchForm bankAccounts={bankAccounts} onSaved={onClose} />
       </div>
     </Modal>
   );

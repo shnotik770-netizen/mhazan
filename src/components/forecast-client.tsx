@@ -3,13 +3,13 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  createExpectedIncome,
   deleteExpectedIncome,
   updateBankBalance,
   updateExpectedIncome,
   updateExpectedIncomeStatus,
 } from "@/app/(app)/forecast/actions";
 import { DateInput } from "@/components/date-input";
+import { ExpectedIncomeBatchForm } from "@/components/expected-income-batch-form";
 import { Modal } from "@/components/modal";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate, todayIso, daysAgoLabel } from "@/lib/format";
@@ -319,119 +319,15 @@ function AddExpectedIncomeButton({
                 סגור
               </button>
             </div>
-            <ExpectedIncomeForm
-              bankAccountId={bankAccountId}
+            <ExpectedIncomeBatchForm
               bankAccounts={bankAccounts}
+              defaultBankAccountId={bankAccountId}
               onSaved={() => setOpen(false)}
             />
           </div>
         </Modal>
       )}
     </>
-  );
-}
-
-function ExpectedIncomeForm({
-  bankAccountId,
-  bankAccounts,
-  onSaved,
-}: {
-  bankAccountId: string;
-  bankAccounts: BankAccountOption[];
-  onSaved: () => void;
-}) {
-  const router = useRouter();
-  const [targetAccountId, setTargetAccountId] = useState(bankAccountId);
-  const [amount, setAmount] = useState(0);
-  const [expectedDate, setExpectedDate] = useState("");
-  const [description, setDescription] = useState("");
-  const [repeats, setRepeats] = useState(false);
-  const [repeatMonths, setRepeatMonths] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  function submit() {
-    setError(null);
-    if (repeats && (!repeatMonths || Number(repeatMonths) < 2)) {
-      setError("יש להזין מספר חודשים תקין (2 ומעלה), או לבטל את הישנות ההכנסה");
-      return;
-    }
-    startTransition(async () => {
-      const result = await createExpectedIncome({
-        bankAccountId: targetAccountId,
-        amount,
-        expectedDate,
-        description: description || null,
-        repeatMonths: repeats ? Number(repeatMonths) : 1,
-      });
-      if (result.error) setError(result.error);
-      else {
-        router.refresh();
-        onSaved();
-      }
-    });
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <select
-          value={targetAccountId}
-          onChange={(e) => setTargetAccountId(e.target.value)}
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        >
-          <option value="">חשבון בנק...</option>
-          {bankAccounts.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.bank_name} ({b.account_number})
-            </option>
-          ))}
-        </select>
-        <input
-          type="number"
-          value={amount || ""}
-          onChange={(e) => setAmount(Number(e.target.value) || 0)}
-          placeholder="סכום משוער"
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        />
-        <DateInput value={expectedDate} onChange={setExpectedDate} required />
-        <input
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="תיאור / מקור"
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        />
-      </div>
-      <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
-        <input
-          type="checkbox"
-          checked={repeats}
-          onChange={(e) => {
-            setRepeats(e.target.checked);
-            if (!e.target.checked) setRepeatMonths("");
-          }}
-        />
-        חוזר כל חודש (לא הכנסה חד-פעמית)
-      </label>
-      {repeats && (
-        <input
-          type="number"
-          min="2"
-          value={repeatMonths}
-          onChange={(e) => setRepeatMonths(e.target.value)}
-          placeholder="כמה חודשים"
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm w-28"
-        />
-      )}
-      {error && <p className="text-xs text-danger">{error}</p>}
-      <button
-        disabled={isPending || amount <= 0 || !expectedDate || !targetAccountId}
-        onClick={submit}
-        className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
-      >
-        הוספה
-      </button>
-    </div>
   );
 }
 

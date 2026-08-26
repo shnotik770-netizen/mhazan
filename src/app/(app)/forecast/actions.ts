@@ -53,6 +53,44 @@ export async function createExpectedIncome(input: {
   return {};
 }
 
+// Lets an admin key in several expected-income rows at once (e.g. a
+// morning's worth of expected credit-company settlements across different
+// accounts and dates) and save them all in one insert, instead of reopening
+// the single-row form repeatedly.
+export async function createExpectedIncomesBatch(
+  inputs: {
+    bankAccountId: string;
+    amount: number;
+    expectedDate: string;
+    description: string | null;
+    repeatMonths?: number;
+  }[],
+): Promise<{ error?: string }> {
+  const admin = await requireFinanceAdmin();
+  if (inputs.length === 0) return { error: "אין שורות להוספה" };
+  for (const input of inputs) {
+    if (!input.bankAccountId) return { error: "יש לבחור חשבון בנק בכל שורה" };
+    if (!input.expectedDate) return { error: "יש להזין תאריך בכל שורה" };
+    if (!(input.amount > 0)) return { error: "יש להזין סכום תקין בכל שורה" };
+  }
+  const supabase = await createClient();
+  const rows = inputs.flatMap((input) => {
+    const months = Math.max(1, Math.floor(input.repeatMonths ?? 1));
+    const [y, m, d] = input.expectedDate.split("-").map(Number);
+    return Array.from({ length: months }, (_, i) => ({
+      bank_account_id: input.bankAccountId,
+      amount: input.amount,
+      expected_date: toLocalISODate(new Date(y, m - 1 + i, d)),
+      description: input.description,
+      created_by: admin.id,
+    }));
+  });
+  const { error } = await supabase.from("expected_incomes").insert(rows);
+  if (error) return { error: safeErrorMessage(error) };
+  revalidateForecastPaths();
+  return {};
+}
+
 export async function updateExpectedIncome(
   id: string,
   input: {
