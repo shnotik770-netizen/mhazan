@@ -44,6 +44,8 @@ export function DepartmentTransactionsSection({
   departmentId,
   monthOptions,
   defaultSortDir = "desc",
+  defaultFromDate = "",
+  defaultToDate = "",
 }: {
   title: string;
   rows: Row[];
@@ -51,11 +53,18 @@ export function DepartmentTransactionsSection({
   departmentId: string;
   monthOptions: string[];
   defaultSortDir?: "asc" | "desc";
+  // Pre-fills the date-range filter on first render — "תנועות עד היום"
+  // defaults to the last 3 months, "תנועות עתידיות ידועות" to the next 4 —
+  // instead of always dumping the department's entire history/forecast in
+  // one table. Still just a starting point: "נקה סינון" clears it to the
+  // unfiltered full list, same as clearing any other filter here.
+  defaultFromDate?: string;
+  defaultToDate?: string;
 }) {
   const [search, setSearch] = useState("");
   const [month, setMonth] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(defaultFromDate);
+  const [toDate, setToDate] = useState(defaultToDate);
   const [kindFilter, setKindFilter] = useState<"all" | "income" | "expense">("all");
 
   const filtered = useMemo(() => {

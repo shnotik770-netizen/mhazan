@@ -7,7 +7,7 @@ import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { MiniCalculator } from "@/components/mini-calculator";
 import { SearchableSelect } from "@/components/searchable-select";
 import { Modal } from "@/components/modal";
-import { toLocalISODate, todayIso } from "@/lib/format";
+import { addMonthsToDate, todayIso } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -23,12 +23,6 @@ type Row = {
 
 function blankRow(): Row {
   return { date: "", amount: 0, checkNumber: "", departmentId: "", allocations: [] };
-}
-
-function addMonths(iso: string, months: number): string {
-  const d = new Date(iso + "T00:00:00");
-  d.setMonth(d.getMonth() + months);
-  return toLocalISODate(d);
 }
 
 // A single button/flow for issuing a check or transfer that covers three
@@ -120,7 +114,7 @@ export function UnifiedCheckForm({
       Array.from({ length: count }, (_, i) => ({
         ...blankRow(),
         amount: i === count - 1 ? base + remainder : base,
-        date: addMonths(startDate, i),
+        date: addMonthsToDate(startDate, i),
         departmentId: rows[0].departmentId,
       })),
     );

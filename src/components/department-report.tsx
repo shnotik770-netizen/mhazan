@@ -1,4 +1,4 @@
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, addMonthsToDate, todayIso } from "@/lib/format";
 import { getDepartmentReportData } from "@/lib/department-report-data";
 import { DepartmentTransactionsSection } from "@/components/department-transactions-section-client";
 import { DepartmentMonthlyCashFlow } from "@/components/department-monthly-cashflow-client";
@@ -75,6 +75,7 @@ export async function DepartmentReport({
         departmentId={departmentId}
         monthOptions={pastMonths}
         defaultSortDir="desc"
+        defaultFromDate={addMonthsToDate(todayIso(), -3)}
       />
 
       <DepartmentTransactionsSection
@@ -84,6 +85,7 @@ export async function DepartmentReport({
         departmentId={departmentId}
         monthOptions={futureMonths}
         defaultSortDir="asc"
+        defaultToDate={addMonthsToDate(todayIso(), 4)}
       />
     </div>
   );

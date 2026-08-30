@@ -23,6 +23,15 @@ export function todayIso(): string {
   return toLocalISODate(new Date());
 }
 
+// Adds calendar months to a "YYYY-MM-DD" date, preserving local
+// year/month/day throughout (see toLocalISODate above for why this never
+// routes through toISOString()).
+export function addMonthsToDate(iso: string, months: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setMonth(d.getMonth() + months);
+  return toLocalISODate(d);
+}
+
 // A bank balance is manually entered/confirmed, never auto-calculated —
 // this makes how stale that number is visible at a glance, e.g. next to
 // "יתרה" everywhere it's shown, instead of admins having to guess whether
