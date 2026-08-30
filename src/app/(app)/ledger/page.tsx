@@ -89,7 +89,6 @@ export default async function LedgerPage({
 
       {selectedDepartment && (
         <div className="space-y-4">
-          <h2 className="text-lg font-bold no-print">דוח — {selectedDepartment.name}</h2>
           <DepartmentReport departmentId={selectedDepartment.id} departmentName={selectedDepartment.name} isAdmin={isAdmin} />
         </div>
       )}
