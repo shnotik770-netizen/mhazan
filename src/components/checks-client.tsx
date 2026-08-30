@@ -9,6 +9,7 @@ import {
   deleteCheck,
   issueCheck,
   updateCheck,
+  updateCheckDueDate,
   updateCheckStatus,
   type CheckAllocationInput,
 } from "@/app/(app)/checks/actions";
@@ -109,24 +110,73 @@ export function CheckStatusControls({
 // status transition, framed for the overdue-transfer verification queue.
 // For transfers, this is also where the internal beneficiary within the
 // supplier gets recorded (moved here from check/transfer creation).
+//
+// A transfer's recorded due_date is when it was *planned* to go out — by
+// the time an admin gets around to confirming it, the bank may show it
+// actually went out on a different day. Rather than silently keeping the
+// planned date (which would then be wrong in every report/forecast that
+// reads it), the confirm flow itself asks: if a due date exists, the
+// button first shows a plain question with two choices instead of
+// clearing immediately, so a same-day confirm stays a single click while
+// a different actual date gets one extra step to correct it.
 export function VerifyTransferButton({
   checkId,
   label,
+  currentDueDate,
   captureInternalBeneficiary,
 }: {
   checkId: string;
   label?: string;
+  currentDueDate?: string | null;
   captureInternalBeneficiary?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [internalBeneficiary, setInternalBeneficiary] = useState("");
+  const [askingDate, setAskingDate] = useState(false);
+  const [actualDate, setActualDate] = useState(currentDueDate ?? "");
 
-  function confirm() {
+  function finish(newDueDate?: string) {
     startTransition(async () => {
+      if (newDueDate && newDueDate !== currentDueDate) {
+        await updateCheckDueDate(checkId, newDueDate);
+      }
       await updateCheckStatus(checkId, "CLEARED", captureInternalBeneficiary ? internalBeneficiary || null : undefined);
       router.refresh();
     });
+  }
+
+  function clickConfirm() {
+    if (currentDueDate) setAskingDate(true);
+    else finish();
+  }
+
+  if (askingDate) {
+    return (
+      <div className="flex flex-col gap-1">
+        <p className="text-xs text-muted">
+          התאריך הרשום הוא {currentDueDate} — אם ההעברה בוצעה בפועל בתאריך אחר, עדכנו כאן:
+        </p>
+        <div className="flex items-center gap-1">
+          <input
+            type="date"
+            value={actualDate}
+            onChange={(e) => setActualDate(e.target.value)}
+            className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+          />
+          <button
+            disabled={isPending}
+            onClick={() => finish(actualDate)}
+            className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
+          >
+            אישור
+          </button>
+          <button disabled={isPending} onClick={() => setAskingDate(false)} className="text-xs text-muted">
+            ביטול
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -141,7 +191,7 @@ export function VerifyTransferButton({
       )}
       <button
         disabled={isPending}
-        onClick={confirm}
+        onClick={clickConfirm}
         className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
       >
         {label ?? "אשר שההעברה בוצעה"}

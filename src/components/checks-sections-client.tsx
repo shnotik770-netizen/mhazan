@@ -270,7 +270,12 @@ export function OverdueTransfersTable({ rows, bankAccounts }: { rows: OverdueTra
                     <td>{row.departments?.name ?? "בהמתנה"}</td>
                     <td>
                       <div className="flex flex-wrap items-center gap-2">
-                        <VerifyTransferButton checkId={row.id} label="אשר שההעברה בוצעה" captureInternalBeneficiary />
+                        <VerifyTransferButton
+                          checkId={row.id}
+                          label="אשר שההעברה בוצעה"
+                          currentDueDate={row.due_date}
+                          captureInternalBeneficiary
+                        />
                         <CancelCheckButton checkId={row.id} variant="link" />
                         <CancelAndReplaceCheckButton
                           checkId={row.id}
