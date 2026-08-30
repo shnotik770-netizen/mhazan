@@ -12,6 +12,7 @@ import {
 } from "@/app/(app)/checks/actions";
 import { EditDeleteCheckRow, IssueCheckRow } from "@/components/checks-client";
 import { Modal } from "@/components/modal";
+import { RowActionsMenu } from "@/components/row-actions-menu";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { groupByBank, bankColorFor, BankGroupHeading } from "@/components/bank-grouping";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -456,7 +457,6 @@ export function IssuanceQueueTable({
                     setColumnFilter={setColumnFilter}
                   />
                 ))}
-                <th>הנפקה</th>
                 <th></th>
               </tr>
             </thead>
@@ -489,37 +489,37 @@ export function IssuanceQueueTable({
               </td>
               <td>{c.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"}</td>
               <td>
-                <IssueCheckRow
-                  checkId={c.id!}
-                  currentCheckNumber={c.check_number}
-                  currentDueDate={c.due_date}
-                  currentPaymentMethod={c.payment_method ?? undefined}
-                  currentDepartmentId={c.department_id}
-                  amount={Number(c.amount)}
-                  departments={departments}
-                  hasExistingDepartmentSplit={allocationsByCheck.has(c.id!)}
-                />
-              </td>
-              <td>
-                <EditDeleteCheckRow
-                  checkId={c.id!}
-                  payee={c.payee ?? ""}
-                  amount={Number(c.amount)}
-                  dueDate={c.due_date}
-                  checkNumber={c.check_number}
-                  departmentId={c.department_id}
-                  notes={c.notes}
-                  paymentMethod={c.payment_method ?? undefined}
-                  bankAccountId={c.bank_account_id}
-                  bankAccounts={bankAccounts}
-                  existingAllocations={
-                    (allocationsByCheck.get(c.id!) ?? []).map((a) => ({
-                      departmentId: a.departmentId,
-                      amount: a.amount,
-                    })) as CheckAllocationInput[]
-                  }
-                  departments={departments}
-                />
+                <RowActionsMenu>
+                  <IssueCheckRow
+                    checkId={c.id!}
+                    currentCheckNumber={c.check_number}
+                    currentDueDate={c.due_date}
+                    currentPaymentMethod={c.payment_method ?? undefined}
+                    currentDepartmentId={c.department_id}
+                    amount={Number(c.amount)}
+                    departments={departments}
+                    hasExistingDepartmentSplit={allocationsByCheck.has(c.id!)}
+                  />
+                  <EditDeleteCheckRow
+                    checkId={c.id!}
+                    payee={c.payee ?? ""}
+                    amount={Number(c.amount)}
+                    dueDate={c.due_date}
+                    checkNumber={c.check_number}
+                    departmentId={c.department_id}
+                    notes={c.notes}
+                    paymentMethod={c.payment_method ?? undefined}
+                    bankAccountId={c.bank_account_id}
+                    bankAccounts={bankAccounts}
+                    existingAllocations={
+                      (allocationsByCheck.get(c.id!) ?? []).map((a) => ({
+                        departmentId: a.departmentId,
+                        amount: a.amount,
+                      })) as CheckAllocationInput[]
+                    }
+                    departments={departments}
+                  />
+                </RowActionsMenu>
               </td>
             </tr>
           ))}

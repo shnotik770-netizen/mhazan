@@ -9,6 +9,7 @@ import {
   VerifyTransferButton,
 } from "@/components/checks-client";
 import { PayeeLink } from "@/components/check-detail-client";
+import { RowActionsMenu } from "@/components/row-actions-menu";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { groupByBank, bankColorFor, BankGroupHeading } from "@/components/bank-grouping";
 
@@ -163,14 +164,14 @@ export function PendingApprovalTable({
                 <td>{c.notes ?? "—"}</td>
                 {isAdmin && (
                   <td>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <RowActionsMenu>
                       <ApprovePaymentRequestRow
                         checkId={c.id!}
                         paymentMethod={c.payment_method ?? undefined}
                         currentDueDate={c.due_date}
                         currentCheckNumber={c.check_number}
                       />
-                      <CancelCheckButton checkId={c.id!} variant="link" />
+                      <CancelCheckButton checkId={c.id!} variant="menu" />
                       <CancelAndReplaceCheckButton
                         checkId={c.id!}
                         payee={c.payee ?? ""}
@@ -179,9 +180,9 @@ export function PendingApprovalTable({
                         currentDueDate={c.due_date}
                         currentBankAccountId={c.bank_account_id}
                         bankAccounts={bankAccounts}
-                        variant="link"
+                        variant="menu"
                       />
-                    </div>
+                    </RowActionsMenu>
                   </td>
                 )}
               </tr>
@@ -269,14 +270,14 @@ export function OverdueTransfersTable({ rows, bankAccounts }: { rows: OverdueTra
                     <td>{formatDate(row.due_date)}</td>
                     <td>{row.departments?.name ?? "בהמתנה"}</td>
                     <td>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <RowActionsMenu>
                         <VerifyTransferButton
                           checkId={row.id}
                           label="אשר שההעברה בוצעה"
                           currentDueDate={row.due_date}
                           captureInternalBeneficiary
                         />
-                        <CancelCheckButton checkId={row.id} variant="link" />
+                        <CancelCheckButton checkId={row.id} variant="menu" />
                         <CancelAndReplaceCheckButton
                           checkId={row.id}
                           payee={row.payee}
@@ -285,9 +286,9 @@ export function OverdueTransfersTable({ rows, bankAccounts }: { rows: OverdueTra
                           currentDueDate={row.due_date}
                           currentBankAccountId={row.bank_account_id}
                           bankAccounts={bankAccounts}
-                          variant="link"
+                          variant="menu"
                         />
-                      </div>
+                      </RowActionsMenu>
                     </td>
                   </tr>
                 ))}
@@ -369,9 +370,9 @@ export function OverdueChecksTable({ rows, bankAccounts }: { rows: OverdueCheckR
                     <td>{formatDate(row.due_date)}</td>
                     <td>{row.departments?.name ?? "בהמתנה"}</td>
                     <td>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <RowActionsMenu>
                         <VerifyTransferButton checkId={row.id} label="סמן כנפרע" />
-                        <CancelCheckButton checkId={row.id} variant="link" />
+                        <CancelCheckButton checkId={row.id} variant="menu" />
                         <CancelAndReplaceCheckButton
                           checkId={row.id}
                           payee={row.payee}
@@ -380,9 +381,9 @@ export function OverdueChecksTable({ rows, bankAccounts }: { rows: OverdueCheckR
                           currentDueDate={row.due_date}
                           currentBankAccountId={row.bank_account_id}
                           bankAccounts={bankAccounts}
-                          variant="link"
+                          variant="menu"
                         />
-                      </div>
+                      </RowActionsMenu>
                     </td>
                   </tr>
                 ))}

@@ -13,7 +13,7 @@ import {
 } from "@/app/(app)/checks/actions";
 import { EditDeleteCheckRow } from "@/components/checks-client";
 import { Modal } from "@/components/modal";
-import { rowActionButtonClass } from "@/components/row-actions-menu";
+import { RowActionsMenu, rowActionButtonClass } from "@/components/row-actions-menu";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -404,20 +404,22 @@ function PayeeExpensesTable({
             <td>{r.departmentName ?? <span className="text-warning">בהמתנה</span>}</td>
             <td>{r.categoryName ?? "—"}</td>
             <td>{statusLabel(r.status)}</td>
-            <td className="flex items-center gap-2">
-              <CheckDetailLink checkId={r.id} />
-              <EditDeleteCheckRow
-                checkId={r.id}
-                payee={payee}
-                amount={r.amount}
-                dueDate={r.due_date}
-                checkNumber={r.check_number}
-                departmentId={r.department_id}
-                notes={r.notes}
-                paymentMethod={r.payment_method}
-                existingAllocations={allocationsByCheck[r.id] ?? []}
-                departments={departments}
-              />
+            <td>
+              <RowActionsMenu>
+                <CheckDetailLink checkId={r.id} variant="menu" />
+                <EditDeleteCheckRow
+                  checkId={r.id}
+                  payee={payee}
+                  amount={r.amount}
+                  dueDate={r.due_date}
+                  checkNumber={r.check_number}
+                  departmentId={r.department_id}
+                  notes={r.notes}
+                  paymentMethod={r.payment_method}
+                  existingAllocations={allocationsByCheck[r.id] ?? []}
+                  departments={departments}
+                />
+              </RowActionsMenu>
             </td>
           </tr>
         ))}

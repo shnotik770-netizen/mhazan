@@ -2,6 +2,7 @@
 
 import { DeleteIncomeButton } from "@/components/delete-income-button";
 import { IncomeDepartmentEditor } from "@/components/income-department-editor";
+import { RowActionsMenu } from "@/components/row-actions-menu";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -194,7 +195,9 @@ export function IncomesTable({
             <td>{row.order_ref ?? "—"}</td>
             {isAdmin && (
               <td>
-                <DeleteIncomeButton incomeId={row.id} label={row.donor_name ?? row.categoryName ?? ""} />
+                <RowActionsMenu>
+                  <DeleteIncomeButton incomeId={row.id} label={row.donor_name ?? row.categoryName ?? ""} />
+                </RowActionsMenu>
               </td>
             )}
           </tr>
