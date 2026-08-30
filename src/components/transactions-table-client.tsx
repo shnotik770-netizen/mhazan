@@ -63,7 +63,12 @@ export function TransactionsTable({
     { key: "description", label: "תיאור", sortValue: (r) => r.description },
     { key: "category", label: "קטגוריה", sortValue: (r) => r.categoryName ?? "", filterValue: (r) => r.categoryName ?? "—" },
     { key: "department", label: "מחלקה", sortValue: (r) => r.departmentName ?? "", filterValue: (r) => r.departmentName ?? "—" },
-    { key: "status", label: "סטטוס", sortValue: (r) => r.status ?? "", filterValue: (r) => r.status ?? "—" },
+    {
+      key: "status",
+      label: "סטטוס",
+      sortValue: (r) => (r.convertedFromUsd ? "הומר מדולר" : (r.status ?? "")),
+      filterValue: (r) => (r.convertedFromUsd ? "הומר מדולר" : (r.status ?? "—")),
+    },
     { key: "invoice", label: "חשבונית", sortValue: (r) => invoiceLabel(r), filterValue: (r) => invoiceLabel(r) },
     { key: "amount", label: "סכום", sortValue: (r) => r.amount },
   ];
@@ -98,13 +103,16 @@ export function TransactionsTable({
                 </span>
               </td>
               <td>{r.source}</td>
-              <td>
-                {r.description}
-                {r.convertedFromUsd && <span className="badge bg-background text-muted mr-1">הומר מדולר</span>}
-              </td>
+              <td>{r.description}</td>
               <td>{r.categoryName ?? "—"}</td>
               <td>{r.departmentName ?? "—"}</td>
-              <td>{r.status ?? "—"}</td>
+              <td>
+                {r.convertedFromUsd ? (
+                  <span className="badge bg-background text-muted">הומר מדולר</span>
+                ) : (
+                  (r.status ?? "—")
+                )}
+              </td>
               <td>{invoiceLabel(r)}</td>
               <td className={r.direction === "INCOME" ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>
               {isAdmin && (

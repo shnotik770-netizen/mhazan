@@ -183,8 +183,8 @@ export function DepartmentTransactionsTable({
     {
       key: "status",
       label: "נפרע?",
-      sortValue: (r) => (r.status ? statusLabel(r.status) : ""),
-      filterValue: (r) => (r.status ? statusLabel(r.status) : "—"),
+      sortValue: (r) => (r.status ? statusLabel(r.status) : r.convertedFromUsd ? "הומר מדולר" : ""),
+      filterValue: (r) => (r.status ? statusLabel(r.status) : r.convertedFromUsd ? "הומר מדולר" : "—"),
     },
   ];
   const { rows: filtered, sort, toggleSort, filters, setColumnFilter } = useSortFilter(rows, columns, {
@@ -227,7 +227,6 @@ export function DepartmentTransactionsTable({
               {r.spreadTotal != null && (
                 <span className="badge bg-background text-muted mr-1">פריסה · סה״כ {formatCurrency(r.spreadTotal)}</span>
               )}
-              {r.convertedFromUsd && <span className="badge bg-background text-muted mr-1">הומר מדולר</span>}
               {r.isOld && <span className="badge bg-warning-bg text-warning mr-1">ישן — לא נכלל במאזן</span>}
             </td>
             <td className={r.amount >= 0 ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>
@@ -244,6 +243,8 @@ export function DepartmentTransactionsTable({
                 >
                   {statusLabel(r.status)}
                 </span>
+              ) : r.convertedFromUsd ? (
+                <span className="badge bg-background text-muted">הומר מדולר</span>
               ) : (
                 "—"
               )}
