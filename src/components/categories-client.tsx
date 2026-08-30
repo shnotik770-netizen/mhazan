@@ -133,6 +133,26 @@ export function PendingCategoryRow({
     });
   }
 
+  // A pending category with nothing worth keeping (e.g. a stray email
+  // address that got parsed out of a paste as the "category" text) doesn't
+  // need a department at all — just remove it instead of forcing a
+  // meaningless assignment. deleteCategory already refuses (with a clear
+  // message) if any income ended up recorded under it in the meantime.
+  function remove() {
+    if (!confirm(`למחוק את הקטגוריה הממתינה "${category.name}"?`)) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        const fd = new FormData();
+        fd.set("id", category.id);
+        await deleteCategory(fd);
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "שגיאה במחיקה");
+      }
+    });
+  }
+
   return (
     <tr>
       <td>{category.name}</td>
@@ -151,13 +171,18 @@ export function PendingCategoryRow({
         </select>
       </td>
       <td>
-        <button
-          disabled={!departmentId || isPending}
-          onClick={assign}
-          className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
-        >
-          שייך למחלקה
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={!departmentId || isPending}
+            onClick={assign}
+            className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
+          >
+            שייך למחלקה
+          </button>
+          <button disabled={isPending} onClick={remove} className="text-xs text-danger underline">
+            מחיקה
+          </button>
+        </div>
         {error && <p className="text-xs text-danger mt-1">{error}</p>}
       </td>
     </tr>

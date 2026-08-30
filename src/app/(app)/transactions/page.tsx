@@ -48,10 +48,11 @@ export default async function TransactionsPage({
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const supabase = await createClient();
 
-  const [{ data: departments }, { data: grants }, { data: categories }] = await Promise.all([
+  const [{ data: departments }, { data: grants }, { data: categories }, { data: bankAccounts }] = await Promise.all([
     supabase.from("departments").select("*").order("name"),
     supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
     supabase.from("categories").select("id, name").order("name"),
+    supabase.from("bank_accounts").select("id, bank_name, account_number").order("bank_name"),
   ]);
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
@@ -66,7 +67,7 @@ export default async function TransactionsPage({
   let checksQuery = supabase
     .from("checks")
     .select(
-      "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name), check_number, skip_department_ledger",
+      "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name), check_number, skip_department_ledger, bank_account_id",
     )
     .neq("status", "CANCELLED")
     .order("due_date", { ascending: false, nullsFirst: false })
@@ -99,7 +100,7 @@ export default async function TransactionsPage({
     checksQuery = supabase
       .from("checks")
       .select(
-        "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name), check_number, skip_department_ledger",
+        "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name), check_number, skip_department_ledger, bank_account_id",
       )
       .order("due_date", { ascending: false, nullsFirst: false })
       .limit(300);
@@ -159,6 +160,7 @@ export default async function TransactionsPage({
       source: SOURCE_LABELS.INCOME,
       status: null,
       checkId: null,
+      bankAccountId: null,
       hasInvoice: null,
       incomeEdit: {
         id: row.id,
@@ -192,6 +194,7 @@ export default async function TransactionsPage({
     categories: { name: string } | null;
     check_number: string | null;
     skip_department_ledger: boolean;
+    bank_account_id: string | null;
   }[]) {
     if (type === "INCOME") continue;
     const sourceKey = row.payment_method === "TRANSFER" ? "TRANSFER" : "CHECK";
@@ -209,6 +212,7 @@ export default async function TransactionsPage({
       source: SOURCE_LABELS[sourceKey],
       status: row.status,
       checkId: row.id,
+      bankAccountId: row.bank_account_id,
       hasInvoice: row.has_invoice,
       incomeEdit: null,
       expenseEdit: {
@@ -284,6 +288,7 @@ export default async function TransactionsPage({
       },
       status: "APPROVED",
       checkId: null,
+      bankAccountId: null,
       hasInvoice: null,
     });
   }
@@ -392,6 +397,7 @@ export default async function TransactionsPage({
           isAdmin={isAdmin}
           departments={(departments ?? []).map((d) => ({ id: d.id, name: d.name }))}
           categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name }))}
+          bankAccounts={bankAccounts ?? []}
         />
         <p className="text-xs text-muted mt-2">
           מוצגות עד 300 תנועות אחרונות מכל סוג (הכנסות / צ׳קים-העברות / רישומים ידניים) — לצמצום התוצאות יש להשתמש

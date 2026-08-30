@@ -285,10 +285,12 @@ export default async function ChecksPage({
                     payee: string;
                     amount: number;
                     due_date: string;
+                    bank_account_id: string;
                     departments: { name: string } | null;
                     bank_accounts: { bank_name: string; account_number: string } | null;
                   }[]
                 }
+                bankAccounts={bankAccounts ?? []}
               />
             )}
 
@@ -301,10 +303,12 @@ export default async function ChecksPage({
                     check_number: string | null;
                     amount: number;
                     due_date: string;
+                    bank_account_id: string;
                     departments: { name: string } | null;
                     bank_accounts: { bank_name: string; account_number: string } | null;
                   }[]
                 }
+                bankAccounts={bankAccounts ?? []}
               />
             )}
 
@@ -339,6 +343,7 @@ export default async function ChecksPage({
             <IssuanceQueueTable
               rows={sortedNeedingIssuance}
               departments={departments ?? []}
+              bankAccounts={bankAccounts ?? []}
               allocationsByCheck={allocationsByCheck}
             />
           </CollapsibleSection>
@@ -354,7 +359,12 @@ export default async function ChecksPage({
                 העברה, או צ׳ק עם מספר, היא תמתין לביצוע בתאריך שנקבע.
               </p>
             )}
-            <PendingApprovalTable rows={filteredPendingApproval} isAdmin={isAdmin} allocationsByCheck={allocationsByCheck} />
+            <PendingApprovalTable
+              rows={filteredPendingApproval}
+              isAdmin={isAdmin}
+              bankAccounts={bankAccounts ?? []}
+              allocationsByCheck={allocationsByCheck}
+            />
           </CollapsibleSection>
         </div>
       )}

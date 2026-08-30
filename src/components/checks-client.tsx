@@ -23,6 +23,12 @@ import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
 type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | null };
+// The cancel/reissue flow only ever needs to display and pick a bank
+// account by name+number — every call site (issuance queue, overdue
+// tables, the unified transactions view) already has this much without
+// needing the full row shape (balance, department, etc.) that BankAccount
+// above carries for the request forms.
+type MinimalBankAccount = { id: string; bank_name: string; account_number: string };
 
 
 export function CheckStatusControls({
@@ -196,6 +202,8 @@ export function CancelAndReplaceCheckButton({
   amount,
   currentPaymentMethod,
   currentDueDate,
+  currentBankAccountId,
+  bankAccounts = [],
   variant = "link",
 }: {
   checkId: string;
@@ -203,6 +211,8 @@ export function CancelAndReplaceCheckButton({
   amount: number;
   currentPaymentMethod?: string | null;
   currentDueDate?: string | null;
+  currentBankAccountId?: string | null;
+  bankAccounts?: MinimalBankAccount[];
   variant?: "link" | "menu";
 }) {
   const router = useRouter();
@@ -212,6 +222,8 @@ export function CancelAndReplaceCheckButton({
   );
   const [dueDate, setDueDate] = useState(currentDueDate ?? "");
   const [checkNumber, setCheckNumber] = useState("");
+  const [newAmount, setNewAmount] = useState(String(amount));
+  const [bankAccountId, setBankAccountId] = useState(currentBankAccountId ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -222,6 +234,8 @@ export function CancelAndReplaceCheckButton({
         paymentMethod,
         dueDate: dueDate || null,
         checkNumber: paymentMethod === "CHECK" ? checkNumber || null : null,
+        amount: Number(newAmount) || undefined,
+        bankAccountId: bankAccountId || undefined,
       });
       if (result.error) setError(result.error);
       else {
@@ -250,7 +264,7 @@ export function CancelAndReplaceCheckButton({
                 </h2>
                 <p className="text-xs text-muted mt-0.5">
                   &quot;{payee}&quot; ({formatCurrency(amount)}) יסומן כמבוטל, ובמקומו תיפתח מיד דרישת תשלום חדשה
-                  באותו סכום ולאותה מחלקה — רק אמצעי התשלום ו/או התאריך משתנים.
+                  לאותה מחלקה — ניתן לשנות כאן את הסכום, חשבון הבנק, אמצעי התשלום ו/או התאריך.
                 </p>
               </div>
               <button type="button" onClick={() => setOpen(false)} className="text-muted hover:text-foreground">
@@ -258,6 +272,33 @@ export function CancelAndReplaceCheckButton({
               </button>
             </div>
             <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">סכום</label>
+                  <input
+                    type="number"
+                    value={newAmount}
+                    onChange={(e) => setNewAmount(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+                  />
+                </div>
+                {bankAccounts.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">חשבון בנק</label>
+                    <select
+                      value={bankAccountId}
+                      onChange={(e) => setBankAccountId(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+                    >
+                      {bankAccounts.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.bank_name} ({b.account_number})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
               <div>
                 <label className="block text-sm font-medium mb-1">אמצעי תשלום חדש</label>
                 <div className="flex items-center gap-4 text-sm">
@@ -878,6 +919,8 @@ export function EditDeleteCheckRow({
   departmentId,
   notes,
   paymentMethod,
+  bankAccountId,
+  bankAccounts = [],
   existingAllocations,
   departments,
 }: {
@@ -889,6 +932,8 @@ export function EditDeleteCheckRow({
   departmentId: string | null;
   notes: string | null;
   paymentMethod?: string;
+  bankAccountId?: string | null;
+  bankAccounts?: MinimalBankAccount[];
   existingAllocations?: CheckAllocationInput[];
   departments: Department[];
 }) {
@@ -951,6 +996,8 @@ export function EditDeleteCheckRow({
           amount={amount}
           currentPaymentMethod={paymentMethod}
           currentDueDate={dueDate}
+          currentBankAccountId={bankAccountId}
+          bankAccounts={bankAccounts}
           variant="link"
         />
         <button disabled={isPending} onClick={remove} className="text-xs text-danger underline">

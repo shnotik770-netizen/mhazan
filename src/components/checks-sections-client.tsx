@@ -13,6 +13,7 @@ import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortab
 import { groupByBank, bankColorFor, BankGroupHeading } from "@/components/bank-grouping";
 
 type AllocationInfo = { departmentId: string; departmentName: string | null; amount: number };
+type BankAccount = { id: string; bank_name: string; account_number: string };
 
 // Small chevron button at the header's edge that collapses/expands a
 // section's body — every section on the checks page uses this so a long
@@ -101,6 +102,7 @@ type PaymentRequestRow = {
   payment_method: string | null;
   due_date: string | null;
   check_number: string | null;
+  bank_account_id: string | null;
 };
 
 // "דרישות תשלום ממתינות לאישור" — includes both transfers and checks, with
@@ -108,10 +110,12 @@ type PaymentRequestRow = {
 export function PendingApprovalTable({
   rows,
   isAdmin,
+  bankAccounts,
   allocationsByCheck,
 }: {
   rows: PaymentRequestRow[];
   isAdmin: boolean;
+  bankAccounts: BankAccount[];
   allocationsByCheck: Map<string, AllocationInfo[]>;
 }) {
   const [query, setQuery] = useState("");
@@ -173,6 +177,8 @@ export function PendingApprovalTable({
                         amount={Number(c.amount)}
                         currentPaymentMethod={c.payment_method}
                         currentDueDate={c.due_date}
+                        currentBankAccountId={c.bank_account_id}
+                        bankAccounts={bankAccounts}
                         variant="link"
                       />
                     </div>
@@ -199,6 +205,7 @@ type OverdueTransferRow = {
   payee: string;
   amount: number;
   due_date: string;
+  bank_account_id: string;
   departments: { name: string } | null;
   bank_accounts: { bank_name: string; account_number: string } | null;
 };
@@ -209,7 +216,7 @@ type OverdueTransferRow = {
 // to, especially important here since these are unresolved/overdue.
 type OverdueTransferFlatRow = OverdueTransferRow & { bank_name: string | null; account_number: string | null };
 
-export function OverdueTransfersTable({ rows }: { rows: OverdueTransferRow[] }) {
+export function OverdueTransfersTable({ rows, bankAccounts }: { rows: OverdueTransferRow[]; bankAccounts: BankAccount[] }) {
   const [query, setQuery] = useState("");
   const flat: OverdueTransferFlatRow[] = rows.map((r) => ({
     ...r,
@@ -271,6 +278,8 @@ export function OverdueTransfersTable({ rows }: { rows: OverdueTransferRow[] }) 
                           amount={Number(row.amount)}
                           currentPaymentMethod="TRANSFER"
                           currentDueDate={row.due_date}
+                          currentBankAccountId={row.bank_account_id}
+                          bankAccounts={bankAccounts}
                           variant="link"
                         />
                       </div>
@@ -293,13 +302,14 @@ type OverdueCheckRow = {
   check_number: string | null;
   amount: number;
   due_date: string;
+  bank_account_id: string;
   departments: { name: string } | null;
   bank_accounts: { bank_name: string; account_number: string } | null;
 };
 
 type OverdueCheckFlatRow = OverdueCheckRow & { bank_name: string | null; account_number: string | null };
 
-export function OverdueChecksTable({ rows }: { rows: OverdueCheckRow[] }) {
+export function OverdueChecksTable({ rows, bankAccounts }: { rows: OverdueCheckRow[]; bankAccounts: BankAccount[] }) {
   const [query, setQuery] = useState("");
   const flat: OverdueCheckFlatRow[] = rows.map((r) => ({
     ...r,
@@ -363,6 +373,8 @@ export function OverdueChecksTable({ rows }: { rows: OverdueCheckRow[] }) {
                           amount={Number(row.amount)}
                           currentPaymentMethod="CHECK"
                           currentDueDate={row.due_date}
+                          currentBankAccountId={row.bank_account_id}
+                          bankAccounts={bankAccounts}
                           variant="link"
                         />
                       </div>

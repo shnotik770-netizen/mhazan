@@ -626,6 +626,11 @@ export async function cancelAndReplaceCheck(
     paymentMethod: "CHECK" | "TRANSFER";
     dueDate: string | null;
     checkNumber: string | null;
+    // Both optional — omit to keep the original's amount/bank account
+    // unchanged, matching the common case where only the payment mechanics
+    // (method/date/number) need correcting.
+    amount?: number;
+    bankAccountId?: string;
   },
 ): Promise<{ error?: string }> {
   await requireFinanceAdmin();
@@ -643,6 +648,9 @@ export async function cancelAndReplaceCheck(
   if (allocFetchError) return { error: safeErrorMessage(allocFetchError) };
   if (original.status === "CANCELLED") return { error: "הצ׳ק/ההעברה כבר מבוטל/ת" };
 
+  const newAmount = input.amount && input.amount > 0 ? input.amount : Number(original.amount);
+  const newBankAccountId = input.bankAccountId || original.bank_account_id;
+
   const { error: cancelError } = await supabase.from("checks").update({ status: "CANCELLED" }).eq("id", checkId);
   if (cancelError) return { error: safeErrorMessage(cancelError) };
 
@@ -650,9 +658,9 @@ export async function cancelAndReplaceCheck(
     .from("checks")
     .insert({
       payment_method: input.paymentMethod,
-      bank_account_id: original.bank_account_id,
+      bank_account_id: newBankAccountId,
       payee: original.payee,
-      amount: original.amount,
+      amount: newAmount,
       due_date: input.dueDate || null,
       check_number: input.paymentMethod === "CHECK" ? input.checkNumber || null : null,
       issued_at: input.paymentMethod === "CHECK" && input.checkNumber ? new Date().toISOString() : null,
@@ -675,10 +683,18 @@ export async function cancelAndReplaceCheck(
   if (createError) return { error: `הביטול בוצע, אך יצירת הדרישה החדשה נכשלה: ${friendlyCheckError(createError, input.checkNumber)}` };
 
   if ((originalAllocations ?? []).length > 0) {
+    // Scale each department's share by the same ratio the total amount
+    // changed by, so a split still adds up sensibly even when the admin
+    // corrected the amount at the same time as reissuing it.
+    const originalTotal = Number(original.amount);
+    const ratio = originalTotal > 0 ? newAmount / originalTotal : 1;
     const allocError = await insertAllocations(
       supabase,
       created.id,
-      originalAllocations!.map((a) => ({ departmentId: a.department_id, amount: Number(a.amount) })),
+      originalAllocations!.map((a) => ({
+        departmentId: a.department_id,
+        amount: Math.round(Number(a.amount) * ratio * 100) / 100,
+      })),
     );
     if (allocError) return { error: `הביטול והדרישה החדשה בוצעו, אך העתקת החלוקה בין המחלקות נכשלה: ${allocError}` };
   }

@@ -25,6 +25,7 @@ export type UnifiedRow = {
   // Only checks/transfers carry an invoice flag — null for incomes/manual
   // entries, where the concept doesn't apply.
   checkId: string | null;
+  bankAccountId: string | null;
   hasInvoice: boolean | null;
   // Exactly one of these is set, matching sourceKey — the full raw data
   // an admin's edit form needs, which the display columns above don't
@@ -38,16 +39,20 @@ function invoiceLabel(r: UnifiedRow): string {
   return r.hasInvoice ? "יש חשבונית" : "אין חשבונית";
 }
 
+type BankAccount = { id: string; bank_name: string; account_number: string };
+
 export function TransactionsTable({
   rows,
   isAdmin,
   departments,
   categories,
+  bankAccounts,
 }: {
   rows: UnifiedRow[];
   isAdmin: boolean;
   departments: Option[];
   categories: Option[];
+  bankAccounts: BankAccount[];
 }) {
   const [editRow, setEditRow] = useState<UnifiedRow | null>(null);
   const columns: ColumnDef<UnifiedRow>[] = [
@@ -128,6 +133,8 @@ export function TransactionsTable({
                           amount={r.amount}
                           currentPaymentMethod={r.expenseEdit?.paymentMethod ?? null}
                           currentDueDate={r.date}
+                          currentBankAccountId={r.bankAccountId}
+                          bankAccounts={bankAccounts}
                           variant="link"
                         />
                       </>

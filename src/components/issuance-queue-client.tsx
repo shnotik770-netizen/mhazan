@@ -18,6 +18,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
+type BankAccount = { id: string; bank_name: string; account_number: string };
 
 type QueueRow = {
   id: string | null;
@@ -161,10 +162,12 @@ function recomputeSequence(rows: QuickRow[]): QuickRow[] {
 export function IssuanceQueueTable({
   rows,
   departments,
+  bankAccounts,
   allocationsByCheck,
 }: {
   rows: QueueRow[];
   departments: Department[];
+  bankAccounts: BankAccount[];
   allocationsByCheck: Map<string, AllocationInfo[]>;
 }) {
   const router = useRouter();
@@ -507,6 +510,8 @@ export function IssuanceQueueTable({
                   departmentId={c.department_id}
                   notes={c.notes}
                   paymentMethod={c.payment_method ?? undefined}
+                  bankAccountId={c.bank_account_id}
+                  bankAccounts={bankAccounts}
                   existingAllocations={
                     (allocationsByCheck.get(c.id!) ?? []).map((a) => ({
                       departmentId: a.departmentId,
