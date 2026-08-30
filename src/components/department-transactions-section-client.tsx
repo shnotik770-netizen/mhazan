@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { formatCurrency } from "@/lib/format";
 import { DepartmentTransactionsTable } from "@/components/department-report-table-client";
 
 type ForecastDetail = {
@@ -32,9 +31,12 @@ function monthLabel(monthStr: string): string {
 }
 
 // One filterable transactions block, reused for both the "future" and
-// "past" sections of a department report — pick a month or an exact date
-// and the summary line (income/expenses/net) recalculates for just that
-// selection, same as the table below it.
+// "past" sections of a department report — pick a month, an exact date
+// range, or a free-text search and the table below narrows to match. No
+// income/expense/net summary here (it lived in this section too, but
+// duplicated — confusingly, since it could mix in forecast placeholder
+// rows — the "מצב נוכחי" cards above the report already show the real
+// totals).
 export function DepartmentTransactionsSection({
   title,
   rows,
@@ -78,11 +80,6 @@ export function DepartmentTransactionsSection({
     }
     return result;
   }, [rows, month, fromDate, toDate, kindFilter, search]);
-
-  const counted = filtered.filter((r) => !r.isOld);
-  const income = counted.filter((r) => r.amount > 0).reduce((sum, r) => sum + r.amount, 0);
-  const expense = counted.filter((r) => r.amount < 0).reduce((sum, r) => sum + -r.amount, 0);
-  const net = income - expense;
 
   return (
     <div className="card p-4 space-y-3">
@@ -169,18 +166,6 @@ export function DepartmentTransactionsSection({
             </button>
           )}
         </div>
-      </div>
-
-      <div className="flex flex-wrap gap-4 text-sm">
-        <p>
-          הכנסות: <span className="text-success font-semibold">{formatCurrency(income)}</span>
-        </p>
-        <p>
-          הוצאות: <span className="text-danger font-semibold">{formatCurrency(expense)}</span>
-        </p>
-        <p>
-          נטו: <span className={`font-semibold ${net >= 0 ? "text-success" : "text-danger"}`}>{formatCurrency(net)}</span>
-        </p>
       </div>
 
       <div className="overflow-x-auto">

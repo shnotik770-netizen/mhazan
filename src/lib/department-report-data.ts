@@ -292,11 +292,19 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
   // sorts as "future", even when the month in question is the current one.
   // Each month also keeps the list of commitments behind its total, so the
   // row can be expanded to show exactly which payments it's counting.
+  const currentMonth = todayIso().slice(0, 7);
   const installmentForecastByMonth = new Map<string, { total: number; details: InstallmentForecastDetail[] }>();
   for (const g of installmentGroups.values()) {
     const remaining = g.total - g.current;
     for (let i = 1; i <= remaining; i++) {
       const m = addMonths(g.date.slice(0, 7), i);
+      // A projected month that's already fully elapsed without a real
+      // installment payment showing up for it is treated the same as a
+      // missed standing order below: the paste for that month is assumed
+      // complete, so the forecast line quietly disappears instead of
+      // surfacing as a "future" row dated in the past, sitting among
+      // today's actual transactions in "תנועות עד היום".
+      if (m < currentMonth) continue;
       const bucket = installmentForecastByMonth.get(m) ?? { total: 0, details: [] };
       bucket.total += g.amount;
       bucket.details.push({
@@ -345,7 +353,6 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     if (!r.order_ref || !r.date) continue;
     chargedOrderMonths.add(`${r.order_ref}|${r.date.slice(0, 7)}`);
   }
-  const currentMonth = todayIso().slice(0, 7);
 
   // Standing-order (הוראת קבע) forecast, cached in `standing_order_forecast`
   // by the monthly (or manually-triggered) Nedarim Plus sync — pre-computed
