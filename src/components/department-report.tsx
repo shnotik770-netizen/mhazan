@@ -37,8 +37,8 @@ export async function DepartmentReport({
       <MissedStandingOrdersNote notes={missedStandingOrders} isAdmin={isAdmin} />
 
       <div>
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
-          <h2 className="text-lg font-bold">מצב נוכחי — {departmentName}</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1 print-header-row">
+          <h2 className="text-lg font-bold print-title">מצב נוכחי — {departmentName}</h2>
           <a
             href={`/reports/${departmentId}/export`}
             className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold no-print"
@@ -46,7 +46,7 @@ export async function DepartmentReport({
             ייצוא לאקסל ⇩
           </a>
         </div>
-        <p className="text-xs text-muted mb-3">
+        <p className="text-xs text-muted mb-3 print-subtitle">
           לפי תנועות שכבר נרשמו בפועל עד היום בלבד — לא כולל צפי הכנסות עתידי (ראו את &quot;תזרים חודשי מלא&quot; ו-
           &quot;תנועות עתידיות ידועות&quot; למטה לתמונה כוללת).
         </p>

@@ -97,7 +97,7 @@ export function DepartmentTransactionsSection({
     <div className="card p-4 space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="font-semibold">{title}</h2>
-        <div className="flex items-center gap-2 text-sm flex-wrap">
+        <div className="flex items-center gap-2 text-sm flex-wrap no-print">
           <input
             type="text"
             value={search}

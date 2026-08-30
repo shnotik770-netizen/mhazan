@@ -171,6 +171,7 @@ export function DepartmentTransactionsTable({
       label: "הכנסה / הוצאה",
       sortValue: (r) => (r.amount >= 0 ? "הכנסה" : "הוצאה"),
       filterValue: (r) => (r.amount >= 0 ? "הכנסה" : "הוצאה"),
+      thClassName: "print-narrow-col",
     },
     // filterValue uses the coarse typeCategory (a handful of buckets like
     // "אשראי רגיל"/"אשראי תשלומים"/"הוראת קבע") rather than the fully
@@ -207,14 +208,14 @@ export function DepartmentTransactionsTable({
               setColumnFilter={setColumnFilter}
             />
           ))}
-          <th></th>
+          <th className="no-print"></th>
         </tr>
       </thead>
       <tbody>
         {filtered.map((r) => (
           <tr key={r.id} className={r.isOld ? "opacity-60" : undefined}>
             <td>{r.date ? formatDate(r.date) : "—"}</td>
-            <td className={r.amount >= 0 ? "text-success" : "text-danger"}>{r.amount >= 0 ? "הכנסה" : "הוצאה"}</td>
+            <td className={`print-narrow-col ${r.amount >= 0 ? "text-success" : "text-danger"}`}>{r.amount >= 0 ? "הכנסה" : "הוצאה"}</td>
             <td>{r.typeDetail}</td>
             <td>
               {r.kind === "check" ? (
@@ -249,7 +250,7 @@ export function DepartmentTransactionsTable({
                 "—"
               )}
             </td>
-            <td>
+            <td className="no-print">
               {(r.kind === "check" ||
                 r.kind === "income" ||
                 (r.kind === "forecast" && (r.forecastDetails?.length ?? 0) > 0) ||

@@ -17,6 +17,9 @@ export type ColumnDef<T> = {
   sortValue?: (row: T) => string | number | null;
   // Omit to make the column not filterable (no funnel icon/dropdown).
   filterValue?: (row: T) => string;
+  // Extra class on the <th> — currently only used to narrow a column for
+  // print (see globals.css's print-narrow-col rule).
+  thClassName?: string;
 };
 
 export type SortState = { key: string; dir: "asc" | "desc" } | null;
@@ -103,7 +106,7 @@ export function SortFilterTh<T>({
   const isFiltered = Boolean(activeFilter && activeFilter.size > 0);
 
   return (
-    <th className="select-none">
+    <th className={`select-none ${col.thClassName ?? ""}`}>
       <div className="flex items-center gap-1">
         {col.sortValue ? (
           <button
@@ -113,7 +116,7 @@ export function SortFilterTh<T>({
             title="מיין"
           >
             {col.label}
-            <span className={`text-[10px] ${isSorted ? "text-primary" : "text-muted/50"}`}>
+            <span className={`sort-indicator text-[10px] ${isSorted ? "text-primary" : "text-muted/50"}`}>
               {isSorted ? (sort!.dir === "asc" ? "▲" : "▼") : "▲▼"}
             </span>
           </button>
@@ -126,7 +129,7 @@ export function SortFilterTh<T>({
               <button
                 ref={filterTriggerRef}
                 type="button"
-                className={`inline-flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-background hover:text-foreground ${
+                className={`filter-trigger inline-flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-background hover:text-foreground ${
                   isFiltered ? "text-primary" : "text-muted/60"
                 }`}
                 title="סנן"

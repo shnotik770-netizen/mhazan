@@ -66,7 +66,7 @@ export default async function LedgerPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      <div className="flex items-start justify-between gap-3 flex-wrap no-print">
         <div>
           <h1 className="text-xl font-bold">דוחות מחלקות</h1>
           <p className="text-sm text-muted">בחרו מחלקה כדי לראות את הדוח שלה. ניתן להוסיף הכנסה/הוצאה ידנית לכל מחלקה, לא רק לזו שפתוחה כרגע.</p>
@@ -89,7 +89,7 @@ export default async function LedgerPage({
 
       {selectedDepartment && (
         <div className="space-y-4">
-          <h2 className="text-lg font-bold">דוח — {selectedDepartment.name}</h2>
+          <h2 className="text-lg font-bold no-print">דוח — {selectedDepartment.name}</h2>
           <DepartmentReport departmentId={selectedDepartment.id} departmentName={selectedDepartment.name} isAdmin={isAdmin} />
         </div>
       )}
