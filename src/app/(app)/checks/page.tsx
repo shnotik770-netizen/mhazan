@@ -212,7 +212,7 @@ export default async function ChecksPage({
         <h1 className="text-xl font-bold">ניהול צ׳קים והעברות</h1>
         {isAdmin && (
           <div className="flex items-center gap-2">
-            <UnifiedCheckForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} categories={categories ?? []} />
+            <UnifiedCheckForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <PasteExistingChecksForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <BankReconciliationPanel bankAccounts={bankAccounts ?? []} />
             <NewManualEntryButton departments={departments ?? []} bankAccounts={bankAccounts ?? []} />

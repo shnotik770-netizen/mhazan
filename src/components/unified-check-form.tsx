@@ -7,10 +7,10 @@ import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { MiniCalculator } from "@/components/mini-calculator";
 import { SearchableSelect } from "@/components/searchable-select";
 import { Modal } from "@/components/modal";
+import { toLocalISODate, todayIso } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
-type Category = Tables<"categories">;
 type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | null };
 
 type Row = {
@@ -25,6 +25,12 @@ function blankRow(): Row {
   return { date: "", amount: 0, checkNumber: "", departmentId: "", allocations: [] };
 }
 
+function addMonths(iso: string, months: number): string {
+  const d = new Date(iso + "T00:00:00");
+  d.setMonth(d.getMonth() + months);
+  return toLocalISODate(d);
+}
+
 // A single button/flow for issuing a check or transfer that covers three
 // cases the app used to split across separate buttons: one plain
 // check/transfer, one check/transfer split across departments, and several
@@ -34,14 +40,12 @@ function blankRow(): Row {
 export function UnifiedCheckForm({
   bankAccounts,
   departments,
-  categories,
   open: controlledOpen,
   onOpenChange,
   hideTrigger = false,
 }: {
   bankAccounts: BankAccount[];
   departments: Department[];
-  categories: Category[];
   // Uncontrolled by default (renders its own "+ דרישת תשלום חדשה" button,
   // as used on the checks page). Passing `open`/`onOpenChange` lets an
   // external trigger (the quick-actions FAB) drive it instead, with
@@ -58,7 +62,6 @@ export function UnifiedCheckForm({
   const [payee, setPayee] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"CHECK" | "TRANSFER">("CHECK");
   const [bankAccountId, setBankAccountId] = useState("");
-  const [categoryId, setCategoryId] = useState("");
   const [notes, setNotes] = useState("");
   const [skipDepartmentLedger, setSkipDepartmentLedger] = useState(false);
   const [hasInvoice, setHasInvoice] = useState(false);
@@ -68,21 +71,18 @@ export function UnifiedCheckForm({
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const [spreadTotal, setSpreadTotal] = useState(0);
   const [spreadCount, setSpreadCount] = useState(2);
 
   const isSpread = rows.length > 1;
 
   function resetFields() {
     setPayee("");
-    setCategoryId("");
     setNotes("");
     setSkipDepartmentLedger(false);
     setHasInvoice(false);
     setIsSplitting(false);
     setRows([blankRow()]);
     setError(null);
-    setSpreadTotal(0);
     setSpreadCount(2);
   }
 
@@ -104,18 +104,24 @@ export function UnifiedCheckForm({
     setRows((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
   }
 
-  // Splits a total amount evenly across N payment rows (the remainder from
-  // rounding goes on the last row) — date, check number, and department
-  // are left for the admin to fill in per row exactly like any other
-  // multi-row spread, rather than trying to also guess those upfront.
+  // Splits the amount and date already entered in the first payment row
+  // evenly across N payment rows — the remainder from rounding goes on the
+  // last row, and each row's date advances one month from the first, so a
+  // spread is a single click instead of retyping the total (already known
+  // from row 1) and then every date by hand. Check number and department
+  // still default blank/carried-over per row, same as before.
   function generateSpreadRows() {
+    const total = rows[0].amount;
+    const startDate = rows[0].date || todayIso();
     const count = Math.max(2, Math.floor(spreadCount) || 2);
-    const base = Math.floor((spreadTotal / count) * 100) / 100;
-    const remainder = Math.round((spreadTotal - base * count) * 100) / 100;
+    const base = Math.floor((total / count) * 100) / 100;
+    const remainder = Math.round((total - base * count) * 100) / 100;
     setRows(
       Array.from({ length: count }, (_, i) => ({
         ...blankRow(),
         amount: i === count - 1 ? base + remainder : base,
+        date: addMonths(startDate, i),
+        departmentId: rows[0].departmentId,
       })),
     );
   }
@@ -134,7 +140,7 @@ export function UnifiedCheckForm({
           dueDate: row.date || null,
           checkNumber: row.checkNumber || null,
           departmentId: isSplitting ? null : row.departmentId || null,
-          categoryId: categoryId || null,
+          categoryId: null,
           internalBeneficiary: null,
           notes: notes || null,
           skipDepartmentLedger,
@@ -243,20 +249,6 @@ export function UnifiedCheckForm({
               list="supplier-names"
               className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
             />
-            {!isSpread && (
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-              >
-                <option value="">קטגוריה (אופציונלי)</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            )}
             <input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -290,14 +282,6 @@ export function UnifiedCheckForm({
                     />
                     <MiniCalculator onApply={(v) => updateRow(i, { amount: v })} />
                   </div>
-                  {paymentMethod === "CHECK" && (
-                    <input
-                      value={row.checkNumber}
-                      onChange={(e) => updateRow(i, { checkNumber: e.target.value })}
-                      placeholder="מספר צ׳ק (ניתן להשאיר ריק)"
-                      className="w-32 rounded border border-border bg-transparent px-2 py-1 text-sm"
-                    />
-                  )}
                   {!isSplitting && (
                     <SearchableSelect
                       value={row.departmentId}
@@ -305,6 +289,14 @@ export function UnifiedCheckForm({
                       options={departments.map((d) => ({ id: d.id, label: d.name }))}
                       placeholder="מחלקה (ברירת מחדל: מחלקת חשבון הבנק)"
                       className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+                    />
+                  )}
+                  {paymentMethod === "CHECK" && (
+                    <input
+                      value={row.checkNumber}
+                      onChange={(e) => updateRow(i, { checkNumber: e.target.value })}
+                      placeholder="מספר צ׳ק (ניתן להשאיר ריק)"
+                      className="w-32 rounded border border-border bg-transparent px-2 py-1 text-sm"
                     />
                   )}
                   {rows.length > 1 && (
@@ -358,14 +350,9 @@ export function UnifiedCheckForm({
             <button type="button" onClick={addRow} className="text-sm text-primary underline">
               + הוסף תשלום נוסף לאותו מוטב
             </button>
-            <span className="text-xs text-muted">או פריסה אוטומטית של סכום כולל:</span>
-            <input
-              type="number"
-              value={spreadTotal || ""}
-              onChange={(e) => setSpreadTotal(Number(e.target.value) || 0)}
-              placeholder="סה״כ סכום"
-              className="w-32 rounded border border-border bg-transparent px-2 py-1 text-sm"
-            />
+            <span className="text-xs text-muted">
+              או פריסה אוטומטית של הסכום והתאריך שכבר הוזנו למעלה, לכמה תשלומים ברצף חודשי:
+            </span>
             <input
               type="number"
               min={2}
@@ -376,7 +363,7 @@ export function UnifiedCheckForm({
             />
             <button
               type="button"
-              disabled={spreadTotal <= 0 || spreadCount < 2}
+              disabled={rows[0].amount <= 0 || spreadCount < 2}
               onClick={generateSpreadRows}
               className="rounded bg-primary text-primary-foreground text-xs px-3 py-1.5 disabled:opacity-50"
             >

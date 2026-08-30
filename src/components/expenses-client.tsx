@@ -88,7 +88,8 @@ export function ExpensesTable({
       r.description.toLowerCase().includes(q) ||
       (r.departmentName ?? "").toLowerCase().includes(q) ||
       (r.categoryName ?? "").toLowerCase().includes(q) ||
-      (r.bankAccountName ?? "").toLowerCase().includes(q)
+      (r.bankAccountName ?? "").toLowerCase().includes(q) ||
+      (r.checkNumber ?? "").toLowerCase().includes(q)
     );
   });
 
@@ -100,6 +101,7 @@ export function ExpensesTable({
       sortValue: (r) => (r.isCheck ? r.payeeName : r.description),
       filterValue: (r) => (r.isCheck ? r.payeeName : r.description),
     },
+    { key: "checkNumber", label: "מספר צ׳ק", sortValue: (r) => r.checkNumber ?? "", filterValue: (r) => r.checkNumber ?? "—" },
     { key: "amount", label: "סכום", sortValue: (r) => r.amount },
     { key: "date", label: "תאריך", sortValue: (r) => r.date ?? "" },
     { key: "department", label: "מחלקה", sortValue: (r) => r.departmentName ?? "", filterValue: (r) => r.departmentName ?? "בהמתנה" },
@@ -225,7 +227,7 @@ export function ExpensesTable({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="חיפוש לפי תיאור / ספק / מחלקה / קטגוריה / בנק"
+          placeholder="חיפוש לפי תיאור / ספק / מחלקה / קטגוריה / בנק / מספר צ׳ק"
           className="w-full max-w-sm rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
         />
         <label className="flex items-center gap-2 text-sm">
@@ -395,6 +397,7 @@ export function ExpensesTable({
                     r.description
                   )}
                 </td>
+                <td>{r.checkNumber ?? "—"}</td>
                 <td>{formatCurrency(r.amount)}</td>
                 <td>{r.date ? formatDate(r.date) : "—"}</td>
                 <td>{r.departmentName ?? <span className="text-warning">בהמתנה</span>}</td>
@@ -427,7 +430,7 @@ export function ExpensesTable({
             ))}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 9 : 7} className="text-center text-muted py-6">
+                <td colSpan={isAdmin ? 10 : 8} className="text-center text-muted py-6">
                   אין הוצאות מאושרות עדיין
                 </td>
               </tr>

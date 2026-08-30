@@ -50,7 +50,6 @@ function useQuickActionsState() {
         <UnifiedCheckForm
           bankAccounts={refData.bankAccounts}
           departments={refData.departments}
-          categories={refData.categories}
           open
           onOpenChange={(v) => !v && setActiveAction(null)}
           hideTrigger
