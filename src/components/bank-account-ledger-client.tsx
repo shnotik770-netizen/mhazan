@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, addMonthsToDate, todayIso } from "@/lib/format";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
+import { DepartmentTransactionsSection } from "@/components/department-transactions-section-client";
 import type { BankAccountLedgerPair, BankAccountLedgerTransaction } from "@/lib/bank-account-ledger-data";
 
 const KIND_LABEL: Record<BankAccountLedgerTransaction["kind"], string> = {
@@ -83,31 +84,52 @@ export function BankAccountLedgerTable({ pairs }: { pairs: BankAccountLedgerPair
   );
 }
 
-// A full internal report for one pair of bank accounts — mirrors the shape
-// of a department's own report (summary cards + a sortable/filterable
-// transaction table) instead of just an inline expand arrow, since "how did
-// we get to this number" deserves the same treatment here as it does for a
-// department.
-export function BankAccountPairReport({ pair }: { pair: BankAccountLedgerPair }) {
+type SectionRow = {
+  id: string;
+  date: string | null;
+  typeDetail: string;
+  typeCategory: string;
+  description: string;
+  status?: string | null;
+  amount: number;
+  isOld: boolean;
+  kind: "check" | "income" | "manual" | "commission" | "forecast";
+};
+
+// A full internal report for one pair of bank accounts — deliberately
+// reuses DepartmentTransactionsSection (the exact same "תנועות עד היום" /
+// "תנועות עתידיות ידועות" split, with the exact same search / income-
+// expense-toggle / month / date-range filters a department report has)
+// instead of a bespoke table, since a bank-account debt deserves the same
+// "how did we get to this number, and what's still coming" treatment a
+// department gets. Amounts are all signed relative to accountA — positive
+// increases what A owes B, negative reduces it — the same convention
+// getBankAccountLedgerData used to net the pair's totals in the first
+// place, so the "הכנסות/הוצאות" toggle reads consistently even though this
+// isn't literally one side's own income/expense ledger.
+export function BankAccountPairReport({ pair, isAdmin }: { pair: BankAccountLedgerPair; isAdmin: boolean }) {
   const debtorName = nameById(pair, pair.debtorAccountId);
   const creditorName = nameById(pair, pair.creditorAccountId);
 
-  const columns: ColumnDef<BankAccountLedgerTransaction>[] = [
-    { key: "date", label: "תאריך", sortValue: (t) => t.date ?? "" },
-    { key: "kind", label: "סוג", sortValue: (t) => KIND_LABEL[t.kind], filterValue: (t) => KIND_LABEL[t.kind] },
-    { key: "description", label: "תיאור", sortValue: (t) => t.description, filterValue: (t) => t.description },
-    {
-      key: "direction",
-      label: "כיוון",
-      sortValue: (t) => nameById(pair, t.fromAccountId),
-      filterValue: (t) => `${nameById(pair, t.fromAccountId)} ← ${nameById(pair, t.toAccountId)}`,
-    },
-    { key: "amount", label: "סכום", sortValue: (t) => t.amount },
-  ];
-  const { rows: filtered, sort, toggleSort, filters, setColumnFilter } = useSortFilter(pair.transactions, columns, {
-    key: "date",
-    dir: "desc",
-  });
+  const allRows: SectionRow[] = pair.transactions.map((tx) => ({
+    id: tx.id,
+    date: tx.date,
+    typeDetail: KIND_LABEL[tx.kind],
+    typeCategory: KIND_LABEL[tx.kind],
+    description: `${tx.description} (${nameById(pair, tx.fromAccountId)} ← ${nameById(pair, tx.toAccountId)})`,
+    status: tx.status,
+    amount: tx.fromAccountId === pair.accountAId ? tx.amount : -tx.amount,
+    isOld: false,
+    kind: tx.kind,
+  }));
+
+  const today = todayIso();
+  const pastRows = allRows.filter((r) => !r.date || r.date <= today);
+  const futureRows = [...allRows.filter((r) => r.date && r.date > today)].sort((a, b) =>
+    (a.date ?? "").localeCompare(b.date ?? ""),
+  );
+  const pastMonths = [...new Set(pastRows.filter((r) => r.date).map((r) => r.date!.slice(0, 7)))].sort();
+  const futureMonths = [...new Set(futureRows.filter((r) => r.date).map((r) => r.date!.slice(0, 7)))].sort();
 
   return (
     <div className="space-y-4">
@@ -133,46 +155,23 @@ export function BankAccountPairReport({ pair }: { pair: BankAccountLedgerPair })
         </div>
       </div>
 
-      <div className="card p-4 overflow-x-auto">
-        <h3 className="font-semibold mb-3">כל התנועות ({pair.transactions.length})</h3>
-        <table className="data-table">
-          <thead>
-            <tr>
-              {columns.map((col) => (
-                <SortFilterTh
-                  key={col.key}
-                  col={col}
-                  allRows={pair.transactions}
-                  sort={sort}
-                  toggleSort={toggleSort}
-                  activeFilter={filters[col.key]}
-                  setColumnFilter={setColumnFilter}
-                />
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((tx) => (
-              <tr key={tx.id}>
-                <td>{tx.date ? formatDate(tx.date) : "—"}</td>
-                <td>{KIND_LABEL[tx.kind]}</td>
-                <td>{tx.description}</td>
-                <td className="text-xs text-muted">
-                  {nameById(pair, tx.fromAccountId)} ← {nameById(pair, tx.toAccountId)}
-                </td>
-                <td className={tx.amount < 0 ? "text-danger" : undefined}>{formatCurrency(tx.amount)}</td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={5} className="text-center text-muted py-6">
-                  אין תנועות
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DepartmentTransactionsSection
+        title="תנועות עד היום"
+        rows={pastRows}
+        isAdmin={isAdmin}
+        monthOptions={pastMonths}
+        defaultSortDir="desc"
+        defaultFromDate={addMonthsToDate(today, -3)}
+      />
+
+      <DepartmentTransactionsSection
+        title="תנועות עתידיות ידועות"
+        rows={futureRows}
+        isAdmin={isAdmin}
+        monthOptions={futureMonths}
+        defaultSortDir="asc"
+        defaultToDate={addMonthsToDate(today, 4)}
+      />
     </div>
   );
 }

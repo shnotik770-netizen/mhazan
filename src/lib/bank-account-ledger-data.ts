@@ -11,6 +11,9 @@ export type BankAccountLedgerTransaction = {
   fromAccountId: string;
   toAccountId: string;
   kind: "income" | "check" | "manual" | "commission";
+  // Only ever set for a "check" leg (UNPAID/CLEARED) — lets the pair report
+  // show the same "נפרע?" column a department report shows.
+  status?: string | null;
 };
 
 export type BankAccountLedgerPair = {
@@ -79,7 +82,7 @@ export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[
       .eq("skip_department_ledger", false),
     supabase
       .from("v_check_department_amounts")
-      .select("check_id, due_date, amount, payee, bank_account_id, department_id")
+      .select("check_id, due_date, amount, payee, bank_account_id, department_id, status")
       .neq("status", "CANCELLED")
       .eq("skip_department_ledger", false),
     supabase
@@ -149,6 +152,7 @@ export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[
       fromAccountId,
       toAccountId,
       kind: "check",
+      status: r.status,
     });
   }
 

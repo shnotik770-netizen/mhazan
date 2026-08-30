@@ -361,6 +361,7 @@ export function PasteIncomeForm({
                 ...r,
                 amount: convertedAmount,
                 notes: r.notes ? `${r.notes} | ${conversionNote}` : conversionNote,
+                convertedFromUsd: true,
               };
             }),
           );

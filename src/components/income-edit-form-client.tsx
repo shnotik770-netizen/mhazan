@@ -45,6 +45,7 @@ export function EditIncomeForm({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isConverting, setIsConverting] = useState(false);
+  const [didConvertFromUsd, setDidConvertFromUsd] = useState(false);
 
   // For an old income that was recorded in dollars by mistake (the amount
   // field holds the raw USD number instead of its ILS equivalent) — looks
@@ -75,6 +76,7 @@ export function EditIncomeForm({
         const note = `הומר מ-${usdAmount.toFixed(2)}$ לפי שער ${result.rate.toFixed(4)} ליום ${result.asOfDate}`;
         setAmount(String(converted));
         setNotes((prev) => (prev ? `${prev} | ${note}` : note));
+        setDidConvertFromUsd(true);
       })
       .catch(() => {
         setIsConverting(false);
@@ -103,6 +105,7 @@ export function EditIncomeForm({
       receiptNumber,
       orderRef,
       notes,
+      markConvertedFromUsd: didConvertFromUsd,
     };
     startTransition(async () => {
       const result = await updateIncome(row.id, input);

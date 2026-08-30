@@ -99,7 +99,7 @@ export default async function LedgerPage({
           <Link href="/ledger" className="text-sm text-muted underline">
             ⇦ חזרה לרשימת החשבונות
           </Link>
-          <BankAccountPairReport pair={selectedPair} />
+          <BankAccountPairReport pair={selectedPair} isAdmin={isAdmin} />
         </div>
       )}
 

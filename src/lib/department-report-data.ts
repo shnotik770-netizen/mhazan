@@ -46,6 +46,11 @@ export type CombinedRow = {
   isOld: boolean;
   kind: "check" | "income" | "manual" | "commission" | "forecast";
   forecastDetails?: InstallmentForecastDetail[];
+  // True for an income whose amount was auto-converted from USD to ILS
+  // (at paste time, or later via the edit form's conversion helper) — shown
+  // as a badge so a manager knows the ILS figure isn't what was literally
+  // on the original statement/paste.
+  convertedFromUsd?: boolean;
 };
 
 // Buckets an income's payment method + installment/type-text info into the
@@ -112,7 +117,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     supabase
       .from("incomes")
       .select(
-        "id, date, amount, donor_name, payment_method, installment_current, installment_total, type_text, skip_department_ledger, order_ref, categories(name)",
+        "id, date, amount, donor_name, payment_method, installment_current, installment_total, type_text, skip_department_ledger, order_ref, converted_from_usd, categories(name)",
       )
       .eq("owner_department_id", departmentId)
       .order("date", { ascending: false }),
@@ -190,6 +195,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       amount: Number(r.amount),
       isOld: r.skip_department_ledger,
       kind: "income",
+      convertedFromUsd: r.converted_from_usd,
     };
   });
 

@@ -34,6 +34,7 @@ type Row = {
   isOld: boolean;
   kind: "check" | "income" | "manual" | "commission" | "forecast";
   forecastDetails?: ForecastDetail[];
+  convertedFromUsd?: boolean;
 };
 
 function statusLabel(status: string) {
@@ -157,7 +158,10 @@ export function DepartmentTransactionsTable({
 }: {
   rows: Row[];
   isAdmin: boolean;
-  departmentId: string;
+  // Optional so this table can also serve the bank-account debt report,
+  // which isn't scoped to any one department — PayeeLink/DonorLink already
+  // treat a missing departmentId as "search across all departments".
+  departmentId?: string;
   defaultSortDir?: "asc" | "desc";
 }) {
   const columns: ColumnDef<Row>[] = [
@@ -223,6 +227,7 @@ export function DepartmentTransactionsTable({
               {r.spreadTotal != null && (
                 <span className="badge bg-background text-muted mr-1">פריסה · סה״כ {formatCurrency(r.spreadTotal)}</span>
               )}
+              {r.convertedFromUsd && <span className="badge bg-background text-muted mr-1">הומר מדולר</span>}
               {r.isOld && <span className="badge bg-warning-bg text-warning mr-1">ישן — לא נכלל במאזן</span>}
             </td>
             <td className={r.amount >= 0 ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>

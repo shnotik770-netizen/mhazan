@@ -50,7 +50,10 @@ export function DepartmentTransactionsSection({
   title: string;
   rows: Row[];
   isAdmin: boolean;
-  departmentId: string;
+  // Optional — the bank-account debt report reuses this same section
+  // (identical filters: search / income-expense toggle / month / date
+  // range) without being scoped to any one department.
+  departmentId?: string;
   monthOptions: string[];
   defaultSortDir?: "asc" | "desc";
   // Pre-fills the date-range filter on first render — "תנועות עד היום"

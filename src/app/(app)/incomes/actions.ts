@@ -24,6 +24,11 @@ export type IncomeBatchRow = {
   notes: string;
   splitAllocations: SplitAllocation[];
   rawPasteData?: Record<string, string>;
+  // True when this row's amount was auto-converted from USD to ILS at
+  // paste time (see lookupUsdIlsRate) — surfaced as a badge everywhere the
+  // income shows up, so a manager sees at a glance that the ILS amount
+  // isn't what was literally on the bank statement/paste.
+  convertedFromUsd?: boolean;
 };
 
 export type MissedStandingOrderAlert = {
@@ -176,6 +181,7 @@ export async function submitIncomeBatch(
       created_by: user?.id ?? null,
       issuing_department_id: null,
       skip_department_ledger: isHistory,
+      converted_from_usd: r.convertedFromUsd ?? false,
     };
 
     let rowPayload: TablesInsert<"incomes">[] = [];
@@ -410,6 +416,10 @@ export type IncomeEditInput = {
   receiptNumber: string;
   orderRef: string;
   notes: string;
+  // Set only when the edit form's "convert from USD" helper was used on
+  // this save — never sent as false, so an unrelated later edit never
+  // clears an already-set badge.
+  markConvertedFromUsd?: boolean;
 };
 
 // General edit of an income row's own details, from the unified
@@ -441,6 +451,7 @@ export async function updateIncome(incomeId: string, input: IncomeEditInput): Pr
       receipt_number: input.receiptNumber || null,
       order_ref: input.orderRef || null,
       notes: input.notes || null,
+      ...(input.markConvertedFromUsd ? { converted_from_usd: true } : {}),
     })
     .eq("id", incomeId)
     .select("owner_department_id")
@@ -531,6 +542,7 @@ export async function splitIncome(
     issuing_department_id: income.issuing_department_id,
     owner_department_id: alloc.departmentId,
     amount: alloc.amount,
+    converted_from_usd: income.converted_from_usd,
   }));
 
   const { data: inserted, error: insertError } = await supabase.from("incomes").insert(rows).select("id");

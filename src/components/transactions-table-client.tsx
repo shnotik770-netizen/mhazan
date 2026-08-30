@@ -28,6 +28,9 @@ export type UnifiedRow = {
   checkId: string | null;
   bankAccountId: string | null;
   hasInvoice: boolean | null;
+  // True for an income whose amount was auto-converted from USD to ILS —
+  // rendered as a badge, same as in a department report.
+  convertedFromUsd?: boolean;
   // Exactly one of these is set, matching sourceKey — the full raw data
   // an admin's edit form needs, which the display columns above don't
   // carry (e.g. the composed `description` isn't the raw donor/payee name).
@@ -103,7 +106,10 @@ export function TransactionsTable({
                 </span>
               </td>
               <td>{r.source}</td>
-              <td>{r.description}</td>
+              <td>
+                {r.description}
+                {r.convertedFromUsd && <span className="badge bg-background text-muted mr-1">הומר מדולר</span>}
+              </td>
               <td>{r.categoryName ?? "—"}</td>
               <td>{r.departmentName ?? "—"}</td>
               <td>{r.status ?? "—"}</td>
