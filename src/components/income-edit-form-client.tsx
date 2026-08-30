@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateIncome, type IncomeEditInput } from "@/app/(app)/incomes/actions";
+import { updateIncome, lookupUsdIlsRate, type IncomeEditInput } from "@/app/(app)/incomes/actions";
 import { DateInput } from "@/components/date-input";
 import { SearchableSelect } from "@/components/searchable-select";
 import type { Option } from "@/components/expenses-client";
@@ -44,6 +44,43 @@ export function EditIncomeForm({
   const [notes, setNotes] = useState(row.notes ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [isConverting, setIsConverting] = useState(false);
+
+  // For an old income that was recorded in dollars by mistake (the amount
+  // field holds the raw USD number instead of its ILS equivalent) — looks
+  // up the same USD-ILS rate the paste-income flow uses for this row's own
+  // date, overwrites the amount with the converted value, and appends a
+  // note explaining the conversion, so the fix is a single click instead of
+  // an admin doing the math and editing two fields by hand.
+  function convertFromUsd() {
+    const usdAmount = Number(amount);
+    if (!usdAmount || usdAmount <= 0) {
+      setError("יש להזין קודם את הסכום בדולרים בשדה הסכום");
+      return;
+    }
+    if (!date) {
+      setError("יש לבחור תאריך לפני ההמרה");
+      return;
+    }
+    setError(null);
+    setIsConverting(true);
+    lookupUsdIlsRate(date)
+      .then((result) => {
+        setIsConverting(false);
+        if ("error" in result) {
+          setError(result.error);
+          return;
+        }
+        const converted = Math.round(usdAmount * result.rate * 100) / 100;
+        const note = `הומר מ-${usdAmount.toFixed(2)}$ לפי שער ${result.rate.toFixed(4)} ליום ${result.asOfDate}`;
+        setAmount(String(converted));
+        setNotes((prev) => (prev ? `${prev} | ${note}` : note));
+      })
+      .catch(() => {
+        setIsConverting(false);
+        setError("שגיאה בשליפת שער דולר-שקל");
+      });
+  }
 
   function save() {
     const amountNum = Number(amount);
@@ -108,6 +145,14 @@ export function EditIncomeForm({
             onChange={(e) => setAmount(e.target.value)}
             className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
           />
+          <button
+            type="button"
+            onClick={convertFromUsd}
+            disabled={isConverting}
+            className="mt-1 text-xs text-primary underline disabled:opacity-50"
+          >
+            {isConverting ? "ממיר…" : "הסכום כאן הוא בדולר — המר לשקלים לפי שער התאריך"}
+          </button>
         </div>
         <div>
           <label className="block text-sm text-muted mb-1">תאריך</label>

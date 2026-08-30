@@ -14,6 +14,10 @@ export type BankAccountLedgerTransaction = {
 };
 
 export type BankAccountLedgerPair = {
+  // Stable identifier for linking to this pair's own report page — the two
+  // account IDs joined in a fixed (sorted) order, so the same pair always
+  // resolves to the same URL regardless of which side triggered the lookup.
+  pairId: string;
   accountAId: string;
   accountAName: string;
   accountBId: string;
@@ -183,6 +187,7 @@ export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[
   for (const { a, b, net, transactions } of pairs.values()) {
     if (Math.abs(net) < 0.005) continue;
     result.push({
+      pairId: `${a}__${b}`,
       accountAId: a,
       accountAName: accountNameById.get(a) ?? "—",
       accountBId: b,

@@ -6,14 +6,14 @@ import { InterDepartmentTransferButton, NewManualEntryButton } from "@/component
 import { LedgerNetPositionTable } from "@/components/ledger-tables-client";
 import { DepartmentPickerSelect } from "@/components/department-picker-select-client";
 import { getBankAccountLedgerData } from "@/lib/bank-account-ledger-data";
-import { BankAccountLedgerTable } from "@/components/bank-account-ledger-client";
+import { BankAccountLedgerTable, BankAccountPairReport } from "@/components/bank-account-ledger-client";
 
 export default async function LedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ department?: string }>;
+  searchParams: Promise<{ department?: string; accounts?: string }>;
 }) {
-  const { department: departmentParam } = await searchParams;
+  const { department: departmentParam, accounts: accountsParam } = await searchParams;
 
   const user = await requireUser();
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
@@ -60,6 +60,10 @@ export default async function LedgerPage({
       ? myDepartments.find((d) => d.id === departmentParam)!
       : null;
 
+  const selectedPair = !selectedDepartment && accountsParam
+    ? (bankAccountLedgerPairs.find((p) => p.pairId === accountsParam) ?? null)
+    : null;
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -90,7 +94,16 @@ export default async function LedgerPage({
         </div>
       )}
 
-      {!selectedDepartment && (
+      {!selectedDepartment && selectedPair && (
+        <div className="space-y-4">
+          <Link href="/ledger" className="text-sm text-muted underline">
+            ⇦ חזרה לרשימת החשבונות
+          </Link>
+          <BankAccountPairReport pair={selectedPair} />
+        </div>
+      )}
+
+      {!selectedDepartment && !selectedPair && (
         <div>
           <h2 className="text-lg font-bold mb-3">התחשבנות פנימית בין מחלקות</h2>
           <p className="text-sm text-muted mb-3">
