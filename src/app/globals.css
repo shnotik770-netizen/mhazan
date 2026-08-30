@@ -339,18 +339,23 @@ table.data-table tbody tr:hover {
   .summary-cards-grid {
     grid-template-columns: repeat(3, 1fr) !important;
   }
-  /* "מצב נוכחי — <department>" and the note under it read as an incidental
-     screen heading at their normal size/alignment — centered and enlarged,
-     they read as the report's actual title once printed. */
-  .print-header-row {
-    justify-content: center !important;
-  }
+  /* "מצב נוכחי — <department>" reads as the report's actual title once
+     printed — enlarged here on top of the always-on centering below (see
+     .print-title outside this block), since page count doesn't matter on
+     screen the way it does on paper. */
   .print-title {
-    width: 100%;
-    text-align: center;
     font-size: 1.5rem !important;
   }
-  .print-subtitle {
-    text-align: center;
-  }
+}
+
+/* Centers "מצב נוכחי — <department>" (and the note below it) both on
+   screen and in print — .print-title grows to fill the row so its text
+   centers across the full width instead of just the space left after the
+   "ייצוא לאקסל" button, which sits at one end regardless. */
+.print-title {
+  flex: 1 1 auto;
+  text-align: center;
+}
+.print-subtitle {
+  text-align: center;
 }

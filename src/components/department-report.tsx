@@ -37,7 +37,7 @@ export async function DepartmentReport({
       <MissedStandingOrdersNote notes={missedStandingOrders} isAdmin={isAdmin} />
 
       <div>
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-1 print-header-row">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
           <h2 className="text-lg font-bold print-title">מצב נוכחי — {departmentName}</h2>
           <a
             href={`/reports/${departmentId}/export`}
