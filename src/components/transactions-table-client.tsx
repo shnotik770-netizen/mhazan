@@ -3,11 +3,9 @@
 import { useState } from "react";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { InvoiceFlagToggle } from "@/components/invoice-flag-toggle-client";
 import { Modal } from "@/components/modal";
 import { RowActionsMenu, rowActionButtonClass } from "@/components/row-actions-menu";
-import { CancelAndReplaceCheckButton, CancelCheckButton } from "@/components/checks-client";
-import { EditExpenseForm, type ExpenseRow, type Option } from "@/components/expenses-client";
+import { type Option } from "@/components/expenses-client";
 import { EditIncomeForm, type IncomeEditRow } from "@/components/income-edit-form-client";
 
 export type UnifiedRow = {
@@ -24,18 +22,18 @@ export type UnifiedRow = {
   source: string;
   status: string | null;
   // Only checks/transfers carry an invoice flag — null for incomes/manual
-  // entries, where the concept doesn't apply.
-  checkId: string | null;
-  bankAccountId: string | null;
+  // entries, where the concept doesn't apply. Shown here read-only: editing
+  // it, like cancel/cancel-and-replace and expense editing generally, lives
+  // only on the dedicated "הוצאות" page now — this screen keeps editing for
+  // incomes only.
   hasInvoice: boolean | null;
   // True for an income whose amount was auto-converted from USD to ILS —
   // rendered as a badge, same as in a department report.
   convertedFromUsd?: boolean;
-  // Exactly one of these is set, matching sourceKey — the full raw data
-  // an admin's edit form needs, which the display columns above don't
-  // carry (e.g. the composed `description` isn't the raw donor/payee name).
+  // Set only for an income row — the full raw data EditIncomeForm needs,
+  // which the display columns above don't carry (e.g. the composed
+  // `description` isn't the raw donor name).
   incomeEdit: IncomeEditRow | null;
-  expenseEdit: ExpenseRow | null;
 };
 
 function invoiceLabel(r: UnifiedRow): string {
@@ -43,20 +41,14 @@ function invoiceLabel(r: UnifiedRow): string {
   return r.hasInvoice ? "יש חשבונית" : "אין חשבונית";
 }
 
-type BankAccount = { id: string; bank_name: string; account_number: string };
-
 export function TransactionsTable({
   rows,
   isAdmin,
-  departments,
   categories,
-  bankAccounts,
 }: {
   rows: UnifiedRow[];
   isAdmin: boolean;
-  departments: Option[];
   categories: Option[];
-  bankAccounts: BankAccount[];
 }) {
   const [editRow, setEditRow] = useState<UnifiedRow | null>(null);
   const columns: ColumnDef<UnifiedRow>[] = [
@@ -113,40 +105,17 @@ export function TransactionsTable({
               <td>{r.categoryName ?? "—"}</td>
               <td>{r.departmentName ?? "—"}</td>
               <td>{r.status ?? "—"}</td>
-              <td>
-                {r.hasInvoice === null ? (
-                  "—"
-                ) : isAdmin && r.checkId ? (
-                  <InvoiceFlagToggle checkId={r.checkId} hasInvoice={r.hasInvoice} />
-                ) : r.hasInvoice ? (
-                  "יש חשבונית"
-                ) : (
-                  "אין חשבונית"
-                )}
-              </td>
+              <td>{invoiceLabel(r)}</td>
               <td className={r.direction === "INCOME" ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>
               {isAdmin && (
                 <td>
-                  <RowActionsMenu>
-                    <button type="button" onClick={() => setEditRow(r)} className={rowActionButtonClass("primary")}>
-                      עריכה
-                    </button>
-                    {r.checkId && r.status !== "CANCELLED" && (
-                      <>
-                        <CancelCheckButton checkId={r.checkId} variant="menu" />
-                        <CancelAndReplaceCheckButton
-                          checkId={r.checkId}
-                          payee={r.expenseEdit?.payeeName ?? ""}
-                          amount={r.amount}
-                          currentPaymentMethod={r.expenseEdit?.paymentMethod ?? null}
-                          currentDueDate={r.date}
-                          currentBankAccountId={r.bankAccountId}
-                          bankAccounts={bankAccounts}
-                          variant="menu"
-                        />
-                      </>
-                    )}
-                  </RowActionsMenu>
+                  {r.incomeEdit && (
+                    <RowActionsMenu>
+                      <button type="button" onClick={() => setEditRow(r)} className={rowActionButtonClass("primary")}>
+                        עריכה
+                      </button>
+                    </RowActionsMenu>
+                  )}
                 </td>
               )}
             </tr>
@@ -164,16 +133,6 @@ export function TransactionsTable({
       {editRow && editRow.incomeEdit && (
         <Modal onClose={() => setEditRow(null)}>
           <EditIncomeForm row={editRow.incomeEdit} categories={categories} onClose={() => setEditRow(null)} />
-        </Modal>
-      )}
-      {editRow && editRow.expenseEdit && (
-        <Modal onClose={() => setEditRow(null)}>
-          <EditExpenseForm
-            row={editRow.expenseEdit}
-            departments={departments}
-            categories={categories}
-            onClose={() => setEditRow(null)}
-          />
         </Modal>
       )}
     </>

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NewUserForm, UsersTable } from "@/components/user-access-client";
 import { BankAccountsTable } from "@/components/dashboard-tables-client";
 import { NedarimSettingsSection } from "@/components/nedarim-settings-client";
+import { PasteExistingChecksForm } from "@/components/checks-paste-client";
 import { createBankAccount } from "./actions";
 
 export default async function SettingsPage() {
@@ -122,6 +123,16 @@ export default async function SettingsPage() {
         >
           ניהול צ׳קים והעברות
         </Link>
+      </section>
+
+      <section className="card p-4 flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="font-semibold">ייבוא צ׳קים/העברות קיימים</h2>
+          <p className="text-sm text-muted">
+            הדבקה חד-פעמית של צ׳קים/העברות שכבר קיימים בפועל (למשל בעת הקמת המערכת) — לצורך תחזית תזרים הבנק בלבד.
+          </p>
+        </div>
+        <PasteExistingChecksForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
       </section>
 
       <NedarimSettingsSection lastSyncedAt={lastNedarimSync?.synced_at ?? null} />

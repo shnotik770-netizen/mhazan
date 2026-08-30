@@ -8,7 +8,8 @@ import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
 import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
-import { CancelCheckButton } from "@/components/checks-client";
+import { CancelCheckButton, CancelAndReplaceCheckButton } from "@/components/checks-client";
+import { InvoiceFlagToggle } from "@/components/invoice-flag-toggle-client";
 import { RowActionsMenu, rowActionButtonClass } from "@/components/row-actions-menu";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import {
@@ -37,6 +38,7 @@ export type ExpenseRow = {
   categoryId: string | null;
   categoryName: string | null;
   bankAccountName: string | null;
+  bankAccountId: string | null;
   status: string | null;
   checkNumber: string | null;
   paymentMethod: string | null;
@@ -48,6 +50,10 @@ export type ExpenseRow = {
 
 export type Option = { id: string; name: string };
 
+// Only id/bank_name/account_number are needed here (for CancelAndReplaceCheckButton's
+// bank-account picker), not the full bank_accounts row.
+type BankAccount = { id: string; bank_name: string; account_number: string };
+
 const statusLabel = (s: string | null) =>
   s === "CLEARED" ? "נפרע" : s === "APPROVED" ? "מאושר" : s === "CANCELLED" ? "בוטל" : "לא נפרע";
 
@@ -56,11 +62,13 @@ export function ExpensesTable({
   departments,
   categories,
   isAdmin,
+  bankAccounts = [],
 }: {
   rows: ExpenseRow[];
   departments: Option[];
   categories: Option[];
   isAdmin: boolean;
+  bankAccounts?: BankAccount[];
 }) {
   const [query, setQuery] = useState("");
   const [onlyUnclassified, setOnlyUnclassified] = useState(false);
@@ -108,6 +116,12 @@ export function ExpensesTable({
     { key: "category", label: "קטגוריה", sortValue: (r) => r.categoryName ?? "", filterValue: (r) => r.categoryName ?? "—" },
     { key: "bankAccount", label: "חשבון בנק", sortValue: (r) => r.bankAccountName ?? "", filterValue: (r) => r.bankAccountName ?? "—" },
     { key: "status", label: "סטטוס", sortValue: (r) => r.status ?? "", filterValue: (r) => statusLabel(r.status) },
+    {
+      key: "invoice",
+      label: "חשבונית",
+      sortValue: (r) => (r.hasInvoice ? "יש חשבונית" : "אין חשבונית"),
+      filterValue: (r) => (r.isCheck ? (r.hasInvoice ? "יש חשבונית" : "אין חשבונית") : "—"),
+    },
   ];
   const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(filtered, columns);
 
@@ -414,6 +428,17 @@ export function ExpensesTable({
                     <span className="badge bg-warning-bg text-warning">לא נפרע</span>
                   )}
                 </td>
+                <td>
+                  {!r.isCheck ? (
+                    "—"
+                  ) : isAdmin ? (
+                    <InvoiceFlagToggle checkId={r.id} hasInvoice={r.hasInvoice} />
+                  ) : r.hasInvoice ? (
+                    "יש חשבונית"
+                  ) : (
+                    "אין חשבונית"
+                  )}
+                </td>
                 {isAdmin && (
                   <td>
                     <RowActionsMenu>
@@ -421,7 +446,21 @@ export function ExpensesTable({
                       <button type="button" onClick={() => setEditRow(r)} className={rowActionButtonClass("primary")}>
                         עריכה
                       </button>
-                      {r.isCheck && r.status !== "CANCELLED" && <CancelCheckButton checkId={r.id} />}
+                      {r.isCheck && r.status !== "CANCELLED" && (
+                        <>
+                          <CancelCheckButton checkId={r.id} />
+                          <CancelAndReplaceCheckButton
+                            checkId={r.id}
+                            payee={r.payeeName}
+                            amount={r.amount}
+                            currentPaymentMethod={r.paymentMethod}
+                            currentDueDate={r.date}
+                            currentBankAccountId={r.bankAccountId}
+                            bankAccounts={bankAccounts}
+                            variant="menu"
+                          />
+                        </>
+                      )}
                       <DeleteExpenseButton row={r} />
                     </RowActionsMenu>
                   </td>
@@ -430,7 +469,7 @@ export function ExpensesTable({
             ))}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 10 : 8} className="text-center text-muted py-6">
+                <td colSpan={isAdmin ? 11 : 9} className="text-center text-muted py-6">
                   אין הוצאות מאושרות עדיין
                 </td>
               </tr>

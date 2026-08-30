@@ -14,10 +14,11 @@ export default async function ExpensesPage() {
   // function is idempotent so this is cheap once caught up.
   await supabase.rpc("materialize_known_recurring_occurrences");
 
-  const [{ data: departments }, { data: grants }, { data: categories }] = await Promise.all([
+  const [{ data: departments }, { data: grants }, { data: categories }, { data: bankAccounts }] = await Promise.all([
     supabase.from("departments").select("*").order("name"),
     supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
     supabase.from("categories").select("id, name").order("name"),
+    supabase.from("bank_accounts").select("id, bank_name, account_number").order("bank_name"),
   ]);
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartmentIds = isAdmin ? null : new Set((departments ?? []).filter((d) => grantedIds.has(d.id)).map((d) => d.id));
@@ -82,6 +83,7 @@ export default async function ExpensesPage() {
     categoryId: string | null;
     categoryName: string | null;
     bankAccountName: string | null;
+    bankAccountId: string | null;
     status: string | null;
     checkNumber: string | null;
     paymentMethod: string | null;
@@ -104,6 +106,7 @@ export default async function ExpensesPage() {
         check_number: string | null;
         department_id: string | null;
         category_id: string | null;
+        bank_account_id: string | null;
         spread_id: string | null;
         skip_department_ledger: boolean;
         has_invoice: boolean;
@@ -125,6 +128,7 @@ export default async function ExpensesPage() {
         categoryId: row.category_id,
         categoryName: row.categories?.name ?? null,
         bankAccountName: row.bank_accounts ? `${row.bank_accounts.bank_name} (${row.bank_accounts.account_number})` : null,
+        bankAccountId: row.bank_account_id,
         status: row.status,
         checkNumber: row.check_number,
         paymentMethod: row.payment_method,
@@ -158,6 +162,7 @@ export default async function ExpensesPage() {
         categoryId: null,
         categoryName: null,
         bankAccountName: null,
+        bankAccountId: null,
         status: "APPROVED",
         checkNumber: null,
         paymentMethod: null,
@@ -181,6 +186,7 @@ export default async function ExpensesPage() {
           departments={(departments ?? []).map((d) => ({ id: d.id, name: d.name }))}
           categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name }))}
           isAdmin={isAdmin}
+          bankAccounts={bankAccounts ?? []}
         />
       </div>
     </div>

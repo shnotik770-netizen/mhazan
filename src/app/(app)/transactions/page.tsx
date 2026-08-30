@@ -48,11 +48,10 @@ export default async function TransactionsPage({
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const supabase = await createClient();
 
-  const [{ data: departments }, { data: grants }, { data: categories }, { data: bankAccounts }] = await Promise.all([
+  const [{ data: departments }, { data: grants }, { data: categories }] = await Promise.all([
     supabase.from("departments").select("*").order("name"),
     supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
     supabase.from("categories").select("id, name").order("name"),
-    supabase.from("bank_accounts").select("id, bank_name, account_number").order("bank_name"),
   ]);
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
@@ -67,7 +66,7 @@ export default async function TransactionsPage({
   let checksQuery = supabase
     .from("checks")
     .select(
-      "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name), check_number, skip_department_ledger, bank_account_id",
+      "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name)",
     )
     .neq("status", "CANCELLED")
     .order("due_date", { ascending: false, nullsFirst: false })
@@ -100,7 +99,7 @@ export default async function TransactionsPage({
     checksQuery = supabase
       .from("checks")
       .select(
-        "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name), check_number, skip_department_ledger, bank_account_id",
+        "id, due_date, amount, payee, notes, status, payment_method, department_id, category_id, spread_id, has_invoice, departments(name), categories(name)",
       )
       .order("due_date", { ascending: false, nullsFirst: false })
       .limit(300);
@@ -114,18 +113,6 @@ export default async function TransactionsPage({
     type === "INCOME" ? Promise.resolve({ data: [] }) : checksQuery,
     Promise.resolve(manualQuery),
   ]);
-
-  const checkIds = (checks ?? []).map((c) => c.id);
-  const { data: allocations } =
-    checkIds.length > 0
-      ? await supabase.from("check_allocations").select("check_id, department_id, amount").in("check_id", checkIds)
-      : { data: [] as { check_id: string; department_id: string; amount: number }[] };
-  const allocationsByCheckId = new Map<string, { departmentId: string; amount: number }[]>();
-  for (const a of allocations ?? []) {
-    const arr = allocationsByCheckId.get(a.check_id) ?? [];
-    arr.push({ departmentId: a.department_id, amount: Number(a.amount) });
-    allocationsByCheckId.set(a.check_id, arr);
-  }
 
   const unified: UnifiedRow[] = [];
 
@@ -160,8 +147,6 @@ export default async function TransactionsPage({
       sourceKey: "INCOME",
       source: SOURCE_LABELS.INCOME,
       status: null,
-      checkId: null,
-      bankAccountId: null,
       hasInvoice: null,
       convertedFromUsd: row.converted_from_usd ?? false,
       incomeEdit: {
@@ -176,7 +161,6 @@ export default async function TransactionsPage({
         orderRef: row.order_ref,
         notes: row.notes,
       },
-      expenseEdit: null,
     });
   }
 
@@ -194,9 +178,6 @@ export default async function TransactionsPage({
     has_invoice: boolean;
     departments: { name: string } | null;
     categories: { name: string } | null;
-    check_number: string | null;
-    skip_department_ledger: boolean;
-    bank_account_id: string | null;
   }[]) {
     if (type === "INCOME") continue;
     const sourceKey = row.payment_method === "TRANSFER" ? "TRANSFER" : "CHECK";
@@ -213,32 +194,8 @@ export default async function TransactionsPage({
       sourceKey,
       source: SOURCE_LABELS[sourceKey],
       status: row.status,
-      checkId: row.id,
-      bankAccountId: row.bank_account_id,
       hasInvoice: row.has_invoice,
       incomeEdit: null,
-      expenseEdit: {
-        id: row.id,
-        isCheck: true,
-        date: row.due_date,
-        source: SOURCE_LABELS[sourceKey],
-        description: row.payee,
-        payeeName: row.payee,
-        notes: row.notes,
-        amount: Number(row.amount),
-        departmentId: row.department_id,
-        departmentName: row.departments?.name ?? null,
-        categoryId: row.category_id,
-        categoryName: row.categories?.name ?? null,
-        bankAccountName: null,
-        status: row.status,
-        checkNumber: row.check_number,
-        paymentMethod: row.payment_method,
-        spreadId: row.spread_id,
-        isOld: row.skip_department_ledger,
-        hasInvoice: row.has_invoice,
-        allocations: allocationsByCheckId.get(row.id) ?? [],
-      },
     });
   }
 
@@ -266,31 +223,7 @@ export default async function TransactionsPage({
       sourceKey: "MANUAL",
       source: SOURCE_LABELS.MANUAL,
       incomeEdit: null,
-      expenseEdit: {
-        id: row.id,
-        isCheck: false,
-        date: row.entry_date,
-        source: SOURCE_LABELS.MANUAL,
-        description: row.notes ?? "רישום ידני",
-        payeeName: "",
-        notes: row.notes,
-        amount: Number(row.amount),
-        departmentId: row.department_id,
-        departmentName: row.departments?.name ?? null,
-        categoryId: null,
-        categoryName: null,
-        bankAccountName: null,
-        status: "APPROVED",
-        checkNumber: null,
-        paymentMethod: null,
-        spreadId: null,
-        isOld: false,
-        hasInvoice: false,
-        allocations: [],
-      },
       status: "APPROVED",
-      checkId: null,
-      bankAccountId: null,
       hasInvoice: null,
     });
   }
@@ -397,9 +330,7 @@ export default async function TransactionsPage({
         <TransactionsTable
           rows={filtered}
           isAdmin={isAdmin}
-          departments={(departments ?? []).map((d) => ({ id: d.id, name: d.name }))}
           categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name }))}
-          bankAccounts={bankAccounts ?? []}
         />
         <p className="text-xs text-muted mt-2">
           מוצגות עד 300 תנועות אחרונות מכל סוג (הכנסות / צ׳קים-העברות / רישומים ידניים) — לצמצום התוצאות יש להשתמש

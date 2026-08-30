@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { DeptExpenseRequestForm } from "@/components/checks-client";
-import { PasteExistingChecksForm } from "@/components/checks-paste-client";
 import { UnifiedCheckForm } from "@/components/unified-check-form";
 import { BulkExpenseRequestFormMulti } from "@/components/bulk-checks-client";
 import { IssuanceQueueTable } from "@/components/issuance-queue-client";
@@ -15,8 +14,6 @@ import {
 } from "@/components/checks-sections-client";
 import { ScheduleConfirmationsList, type PendingConfirmation } from "@/components/schedule-confirmations-client";
 import { RecurringSchedulesSection, type ScheduleRow } from "@/components/recurring-schedules-manager-client";
-import { InterDepartmentTransferButton, NewManualEntryButton } from "@/components/manual-entries-client";
-import { CancelCheckNumberButton } from "@/components/cancel-check-number-client";
 
 export default async function ChecksPage({
   searchParams,
@@ -213,11 +210,7 @@ export default async function ChecksPage({
         {isAdmin && (
           <div className="flex items-center gap-2">
             <UnifiedCheckForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
-            <PasteExistingChecksForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
             <BankReconciliationPanel bankAccounts={bankAccounts ?? []} />
-            <NewManualEntryButton departments={departments ?? []} bankAccounts={bankAccounts ?? []} />
-            <InterDepartmentTransferButton departments={departments ?? []} />
-            <CancelCheckNumberButton bankAccounts={bankAccounts ?? []} />
           </div>
         )}
       </div>

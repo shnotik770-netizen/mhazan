@@ -11,6 +11,7 @@ import {
   type CheckAllocationInput,
 } from "@/app/(app)/checks/actions";
 import { EditDeleteCheckRow, IssueCheckRow } from "@/components/checks-client";
+import { CancelCheckNumberButton } from "@/components/cancel-check-number-client";
 import { Modal } from "@/components/modal";
 import { RowActionsMenu } from "@/components/row-actions-menu";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
@@ -19,7 +20,10 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
-type BankAccount = { id: string; bank_name: string; account_number: string };
+// The full row shape, not just id/bank_name/account_number — needed so this
+// table can also render CancelCheckNumberButton, which requires the whole
+// bank_accounts row.
+type BankAccount = Tables<"bank_accounts">;
 
 type QueueRow = {
   id: string | null;
@@ -437,6 +441,7 @@ export function IssuanceQueueTable({
             הנפקה מהירה ({eligibleForQuickIssuance.length})
           </button>
         )}
+        <CancelCheckNumberButton bankAccounts={bankAccounts} />
       </div>
       {groupByBank(filteredRows).map(([bankLabel, bankRows]) => (
         <div key={bankLabel} className={`mb-4 border-r-4 ${bankColorFor(bankLabel).border} pr-3`}>
