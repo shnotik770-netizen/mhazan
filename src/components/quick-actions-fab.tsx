@@ -3,12 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { UnifiedCheckForm } from "@/components/unified-check-form";
+import { NewManualEntryButton } from "@/components/manual-entries-client";
 import { Modal } from "@/components/modal";
 import { ExpectedIncomeBatchForm } from "@/components/expected-income-batch-form";
 import { getQuickActionRefData } from "@/app/(app)/quick-actions-actions";
 
 type RefData = Awaited<ReturnType<typeof getQuickActionRefData>>;
-type ModalActionKey = "payment_request" | "expected_income";
+type ModalActionKey = "payment_request" | "expected_income" | "manual_entry";
 
 // Every quick action shows up in two places — the floating "+" speed-dial
 // (QuickActionsFab) and a plain button grid on the dashboard
@@ -23,6 +24,9 @@ type ActionDef =
 const ACTIONS: ActionDef[] = [
   { key: "payment_request", label: "דרישת תשלום חדשה", type: "modal" },
   { key: "expected_income", label: "הכנסה צפויה חדשה", type: "modal" },
+  { key: "manual_entry", label: "הכנסה / הוצאה ידנית", type: "modal" },
+  { key: "paste_income", label: "הדבק הכנסות", type: "link", href: "/incomes/new" },
+  { key: "quick_issuance", label: "הנפקה מהירה", type: "link", href: "/checks#issuance-queue" },
   { key: "forecast", label: "מעבר לתחזית", type: "link", href: "/forecast" },
   { key: "due_checks", label: "צ׳קים והעברות שהגיע תאריכם", type: "link", href: "/checks#due-checks" },
 ];
@@ -57,6 +61,15 @@ function useQuickActionsState() {
       )}
       {activeAction === "expected_income" && refData && (
         <QuickExpectedIncomeForm bankAccounts={refData.bankAccounts} onClose={() => setActiveAction(null)} />
+      )}
+      {activeAction === "manual_entry" && refData && (
+        <NewManualEntryButton
+          departments={refData.departments}
+          bankAccounts={refData.bankAccounts}
+          open
+          onOpenChange={(v) => !v && setActiveAction(null)}
+          hideTrigger
+        />
       )}
     </>
   );

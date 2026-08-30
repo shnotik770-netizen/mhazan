@@ -78,14 +78,9 @@ export default async function IncomesPage({
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-xl font-bold">הכנסות</h1>
-        {user.profile.role === "FINANCE_ADMIN" && (
-          <Link
-            href="/incomes/new"
-            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
-          >
-            + קליטת הכנסות בהדבקה
-          </Link>
-        )}
+        <p className="text-xs text-muted">
+          להדבקת הכנסות חדשות: כפתור &quot;+&quot; הפעולות המהירות, או מהדשבורד הראשי.
+        </p>
       </div>
 
       <form className="flex items-center gap-2" method="get">

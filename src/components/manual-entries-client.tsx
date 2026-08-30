@@ -27,21 +27,35 @@ let nextEntryKey = 1;
 export function NewManualEntryButton({
   departments,
   bankAccounts,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
 }: {
   departments: Department[];
   bankAccounts: BankAccount[];
+  // Uncontrolled by default (renders its own trigger button). Passing
+  // `open`/`onOpenChange` lets an external trigger (the quick-actions FAB)
+  // drive it instead, with `hideTrigger` suppressing the built-in button —
+  // same convention as UnifiedCheckForm.
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   if (departments.length === 0) return null;
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
-      >
-        + הכנסה / הוצאה
-      </button>
+      {!hideTrigger && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+        >
+          + הכנסה / הוצאה
+        </button>
+      )}
       {open && (
         <Modal onClose={() => setOpen(false)}>
           <div className="p-4">

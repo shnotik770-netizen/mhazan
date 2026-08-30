@@ -12,7 +12,6 @@ import type { CurrentUser } from "@/lib/auth";
 const links = [
   { href: "/", label: "דשבורד" },
   { href: "/checks", label: "צ׳קים והעברות" },
-  { href: "/incomes", label: "הכנסות" },
   { href: "/transactions", label: "כל התנועות" },
   { href: "/expenses", label: "הוצאות" },
   { href: "/ledger", label: "דוחות מחלקות" },

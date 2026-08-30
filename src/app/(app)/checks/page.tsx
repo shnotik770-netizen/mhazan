@@ -329,7 +329,7 @@ export default async function ChecksPage({
       )}
 
       {sortedNeedingIssuance.length > 0 && isAdmin && (
-        <div className="card p-4 border-warning/40">
+        <div id="issuance-queue" className="card p-4 border-warning/40 scroll-mt-4">
           <CollapsibleSection
             title={
               <h2 className="font-semibold">
