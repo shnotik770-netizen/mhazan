@@ -3,8 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { DepartmentReport } from "@/components/department-report";
 import { InterDepartmentTransferButton, NewManualEntryButton } from "@/components/manual-entries-client";
-import { LedgerBalancesTable, LedgerNetPositionTable } from "@/components/ledger-tables-client";
+import { LedgerNetPositionTable } from "@/components/ledger-tables-client";
 import { DepartmentPickerSelect } from "@/components/department-picker-select-client";
+import { getBankAccountLedgerData } from "@/lib/bank-account-ledger-data";
+import { BankAccountLedgerTable } from "@/components/bank-account-ledger-client";
 
 export default async function LedgerPage({
   searchParams,
@@ -17,12 +19,13 @@ export default async function LedgerPage({
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const supabase = await createClient();
 
-  const [{ data: balances }, { data: departments }, { data: bankAccounts }, { data: grants }] =
+  const [{ data: balances }, { data: departments }, { data: bankAccounts }, { data: grants }, bankAccountLedgerPairs] =
     await Promise.all([
       supabase.from("v_inter_department_balances").select("*"),
       supabase.from("departments").select("*").order("name"),
       supabase.from("bank_accounts").select("*").order("bank_name"),
       supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
+      getBankAccountLedgerData(),
     ]);
 
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
@@ -48,25 +51,6 @@ export default async function LedgerPage({
     .map(([departmentId, netAmount]) => ({ departmentId, departmentName: deptName(departmentId), netAmount }))
     .filter((r) => Math.abs(r.netAmount) > 0.005)
     .sort((a, b) => a.netAmount - b.netAmount);
-
-  // The "hub" department — whichever department's own bank account most
-  // other departments use as their home account — is the one everyone
-  // else's balance is effectively measured against. A row where money is
-  // owed TO the hub gets flagged, since that's the account this dashboard
-  // itself belongs to.
-  const hubDepartmentId = (() => {
-    const counts = new Map<string, number>();
-    for (const d of departments ?? []) counts.set(d.home_bank_account_id, (counts.get(d.home_bank_account_id) ?? 0) + 1);
-    let bestAccountId: string | null = null;
-    let bestCount = 0;
-    for (const [accountId, count] of counts) {
-      if (count > bestCount) {
-        bestAccountId = accountId;
-        bestCount = count;
-      }
-    }
-    return (bankAccounts ?? []).find((b) => b.id === bestAccountId)?.department_id ?? null;
-  })();
 
   // Only a department this user is actually granted (or any, if admin) can
   // be selected here — same boundary /reports/[departmentId] enforces via
@@ -118,18 +102,14 @@ export default async function LedgerPage({
             <LedgerNetPositionTable rows={netPositionRows} />
           </div>
 
-          <div className="card p-4 overflow-x-auto">
-            <h3 className="font-semibold mb-3">פירוט — מי חייב למי</h3>
-            <LedgerBalancesTable
-              rows={(balances ?? []).map((row) => ({
-                debtorId: row.debtor_department_id,
-                debtorName: deptName(row.debtor_department_id),
-                creditorId: row.creditor_department_id,
-                creditorName: deptName(row.creditor_department_id),
-                netAmount: Number(row.net_amount),
-                owedToHub: row.creditor_department_id === hubDepartmentId,
-              }))}
-            />
+          <div className="card p-4">
+            <h3 className="font-semibold mb-1">חוב בין חשבונות בנק</h3>
+            <p className="text-sm text-muted mb-3">
+              רוב המחלקות משתמשות באותו חשבון בנק מרכזי, כך שחוב בין מחלקות ברוב המקרים אינו חוב אמיתי. הטבלה הזו מציגה רק
+              חוב אמיתי בין חשבונות בנק שונים — העברות בין מחלקות עם חשבונות שונים, וכל הכנסה/הוצאה/רישום ידני שנרשם דרך
+              חשבון אחר מהחשבון שאליו הוא שייך — כולל פירוט כל תנועה שמרכיבה את החוב ועמלת האשראי של 2% במקרים הרלוונטיים.
+            </p>
+            <BankAccountLedgerTable pairs={bankAccountLedgerPairs} />
           </div>
         </div>
       )}

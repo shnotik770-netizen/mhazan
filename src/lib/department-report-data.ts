@@ -107,6 +107,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     { data: manualEntries, error: manualEntriesError },
     { data: commissionEntries, error: commissionError },
     { data: standingOrderForecast, error: standingOrderError },
+    { data: creditedTransfers, error: creditedTransfersError },
   ] = await Promise.all([
     supabase
       .from("incomes")
@@ -136,6 +137,21 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       .from("standing_order_forecast")
       .select("month, amount, details")
       .eq("department_id", departmentId),
+    // Cross-account inter-department transfers only ever insert one
+    // manual_department_entries row, attributed to the paying (debtor)
+    // department — the receiving (creditor) department has no row of its
+    // own to be found by the `.eq("department_id", departmentId)` query
+    // above, so its own report would otherwise show nothing at all for a
+    // transfer it clearly benefited from. inter_department_ledger always
+    // gets the correct from/to pair regardless (a DB trigger writes it),
+    // so pulling the OPEN ledger rows where this department is the
+    // creditor recovers exactly the missing side.
+    supabase
+      .from("inter_department_ledger")
+      .select("id, from_department_id, amount, manual_entry_id, manual_department_entries(entry_date, notes)")
+      .eq("status", "OPEN")
+      .eq("to_department_id", departmentId)
+      .not("manual_entry_id", "is", null),
   ]);
 
   // A failed query here would otherwise silently render as "no rows" via
@@ -148,6 +164,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     ["manualEntries", manualEntriesError],
     ["commissionEntries", commissionError],
     ["standingOrderForecast", standingOrderError],
+    ["creditedTransfers", creditedTransfersError],
   ] as const) {
     if (error) console.error(`getDepartmentReportData(${departmentId}): ${label} query failed`, error);
   }
@@ -229,6 +246,35 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       typeCategory: kindLabel,
       description: e.notes || fallbackLabel,
       amount: e.direction === "INCOME" ? Number(e.amount) : -Number(e.amount),
+      isOld: false,
+      kind: "manual",
+    };
+  });
+
+  // See the creditedTransfers query above: a cross-account transfer only
+  // ever inserted a row for the paying department, so recover the missing
+  // creditor-side row from the ledger instead — skipping any manual_entry_id
+  // this department's own manualEntries query above already returned (the
+  // same-account case inserts a real row for both sides, which would
+  // otherwise get double-counted here).
+  const ownManualEntryIds = new Set((manualEntries ?? []).map((e) => e.id));
+  const missingTransferRows = (creditedTransfers ?? []).filter((t) => !ownManualEntryIds.has(t.manual_entry_id!));
+  const payerDepartmentIds = [...new Set(missingTransferRows.map((t) => t.from_department_id))];
+  const payerNames = new Map<string, string>();
+  if (payerDepartmentIds.length > 0) {
+    const { data: payerDepartments } = await supabase.from("departments").select("id, name").in("id", payerDepartmentIds);
+    for (const d of payerDepartments ?? []) payerNames.set(d.id, d.name);
+  }
+  const creditedTransferRows: CombinedRow[] = missingTransferRows.map((t) => {
+    const source = t.manual_department_entries as { entry_date: string | null; notes: string | null } | null;
+    const payerName = payerNames.get(t.from_department_id) ?? "מחלקה אחרת";
+    return {
+      id: `ledger-credit-${t.id}`,
+      date: source?.entry_date ?? null,
+      typeDetail: "העברה בין מחלקות",
+      typeCategory: "העברה בין מחלקות",
+      description: source?.notes ? `התקבל ממחלקת ${payerName} — ${source.notes}` : `התקבל ממחלקת ${payerName}`,
+      amount: Number(t.amount),
       isOld: false,
       kind: "manual",
     };
@@ -387,6 +433,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     ...incomeRows,
     ...expenseRows,
     ...manualRows,
+    ...creditedTransferRows,
     ...commissionRows,
     ...installmentForecastRows,
     ...standingOrderRows,
