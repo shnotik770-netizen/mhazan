@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   checkExistingTransactionRefs,
+  lookupUsdIlsRate,
   submitIncomeBatch,
   type IncomeBatchRow,
   type SplitAllocation,
@@ -20,6 +21,7 @@ type Department = Tables<"departments">;
 type ParsedRow = IncomeBatchRow & {
   raw: string;
   categoryText: string;
+  currencyText: string;
   isCancelled: boolean;
   duplicateReason: string | null;
   saveError: string | null;
@@ -37,6 +39,7 @@ const HEADER_FIELD_MAP: Record<string, string> = {
   שםתורם: "donorName",
   תז: "donorId",
   סכום: "amount",
+  מטבע: "currency",
   מספרקבלה: "receiptNumber",
   הערות: "notes",
   סטטוס: "status",
@@ -45,6 +48,14 @@ const HEADER_FIELD_MAP: Record<string, string> = {
   מקור: "paymentMethod",
   סוג: "installmentText",
 };
+
+// A "מטבע" column carrying anything other than shekels ("$"/"USD"/"דולר")
+// means the pasted amount is still in the original foreign currency, not
+// what the account actually received — it needs converting to ILS using
+// that day's rate before it means anything as an income row.
+function isUsdCurrencyText(text: string): boolean {
+  return /\$|usd|דולר/i.test(text.trim());
+}
 
 // "סוג" often carries the installment count for a credit-card standing
 // payment ("תשלום 4 מתוך 12", "4/12" — both seen in real exports). Parsed
@@ -254,6 +265,7 @@ export function PasteIncomeForm({
       return {
         raw: cols.join(" | "),
         categoryText,
+        currencyText: getField(cols, "currency"),
         date: normalizeDate(getField(cols, "date")),
         categoryId: guessCategory(categoryText, categoryList),
         donorName: getField(cols, "donorName"),
@@ -317,6 +329,48 @@ export function PasteIncomeForm({
         .catch(() => {
           // Non-fatal — the DB's unique constraint still protects against
           // an actual duplicate insert if this check fails silently.
+        });
+    }
+
+    // Rows whose "מטבע" column says USD are still holding the original
+    // dollar amount — convert each to ILS using that row's own date before
+    // it's savable. One rate lookup per distinct date covers every row on
+    // that date. A row whose lookup fails is blocked from saving via
+    // duplicateReason (same field that already blocks a duplicate
+    // transaction ref) — rowIsSavable doesn't look at saveError, so that
+    // field alone wouldn't actually stop a still-in-dollars amount from
+    // being saved as if it were already shekels.
+    const usdDates = Array.from(
+      new Set(initialRows.filter((r) => isUsdCurrencyText(r.currencyText) && r.date).map((r) => r.date)),
+    );
+    if (usdDates.length > 0) {
+      Promise.all(usdDates.map(async (date) => [date, await lookupUsdIlsRate(date)] as const))
+        .then((results) => {
+          const rateByDate = new Map(results);
+          setRows((prev) =>
+            prev.map((r) => {
+              if (!isUsdCurrencyText(r.currencyText) || !r.date) return r;
+              const result = rateByDate.get(r.date);
+              if (!result || "error" in result) {
+                return { ...r, duplicateReason: result && "error" in result ? result.error : "שגיאה בשליפת שער דולר" };
+              }
+              const originalAmount = r.amount;
+              const convertedAmount = Math.round(originalAmount * result.rate * 100) / 100;
+              const conversionNote = `הומר מ-$${originalAmount.toFixed(2)} לפי שער ${result.rate.toFixed(4)} ליום ${result.asOfDate}`;
+              return {
+                ...r,
+                amount: convertedAmount,
+                notes: r.notes ? `${r.notes} | ${conversionNote}` : conversionNote,
+              };
+            }),
+          );
+        })
+        .catch(() => {
+          setRows((prev) =>
+            prev.map((r) =>
+              isUsdCurrencyText(r.currencyText) && r.date ? { ...r, duplicateReason: "שגיאה בשליפת שער דולר" } : r,
+            ),
+          );
         });
     }
 

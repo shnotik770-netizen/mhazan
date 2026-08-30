@@ -50,6 +50,58 @@ export type SubmitIncomeBatchResult = {
   error?: string;
 };
 
+// A pasted row whose currency column says USD needs converting to ILS
+// using that day's rate before the amount means anything as an income —
+// tries the Bank of Israel's official published rate first (the standard
+// reference for this kind of conversion in Israel), falling back to the
+// ECB-based Frankfurter rate if that's unreachable or doesn't have a
+// figure for the date. Neither publishes a rate for weekends/holidays, so
+// this walks back day by day (up to a week) to the last rate that exists.
+async function fetchUsdIlsRateForExactDate(dateIso: string): Promise<number | null> {
+  const [y, m, d] = dateIso.split("-");
+  try {
+    const res = await fetch(`https://www.boi.org.il/PublicApi/GetExchangeRate?asOf=${d}/${m}/${y}&currency=USD`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const rate = Number(data?.currentExchangeRate ?? data?.rate ?? data?.exchangeRate);
+      if (rate > 0) return rate;
+    }
+  } catch {
+    // Fall through to the secondary source below.
+  }
+  try {
+    const res = await fetch(`https://api.frankfurter.app/${dateIso}?from=USD&to=ILS`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const rate = Number(data?.rates?.ILS);
+      if (rate > 0) return rate;
+    }
+  } catch {
+    // Both sources failed for this date — the caller steps back a day.
+  }
+  return null;
+}
+
+export async function lookupUsdIlsRate(
+  dateIso: string,
+): Promise<{ rate: number; asOfDate: string } | { error: string }> {
+  await requireFinanceAdmin();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIso)) return { error: "תאריך לא תקין" };
+
+  const cursor = new Date(`${dateIso}T00:00:00Z`);
+  for (let i = 0; i < 8; i++) {
+    const candidate = cursor.toISOString().slice(0, 10);
+    const rate = await fetchUsdIlsRateForExactDate(candidate);
+    if (rate) return { rate, asOfDate: candidate };
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+  return { error: `לא נמצא שער דולר-שקל לתאריך ${dateIso} (או לשבוע שלפניו) — יש להזין את הסכום בשקלים ידנית` };
+}
+
 // Used by the paste-income preview to flag rows whose transaction number
 // was already recorded (e.g. an installment charge re-appearing in an
 // overlapping date-range paste), so they can be excluded before saving
