@@ -1033,109 +1033,123 @@ export function EditDeleteCheckRow({
     });
   }
 
-  if (!editing) {
-    return (
-      <div className="flex items-center gap-2">
-        <button onClick={() => setEditing(true)} className="text-xs text-primary underline">
-          עריכה
-        </button>
-        <CancelCheckButton checkId={checkId} variant="link" />
-        <CancelAndReplaceCheckButton
-          checkId={checkId}
-          payee={payee}
-          amount={amount}
-          currentPaymentMethod={paymentMethod}
-          currentDueDate={dueDate}
-          currentBankAccountId={bankAccountId}
-          bankAccounts={bankAccounts}
-          variant="link"
-        />
-        <button disabled={isPending} onClick={remove} className="text-xs text-danger underline">
-          מחיקה
-        </button>
-        {error && <p className="text-xs text-danger">{error}</p>}
-      </div>
-    );
-  }
+  // Always rendered inside a RowActionsMenu dropdown at every call site, so
+  // these are plain menu-item buttons, not the underlined text links this
+  // used to be before the site-wide 3-dot-menu conversion.
+  const menu = (
+    <>
+      <button onClick={() => setEditing(true)} className={rowActionButtonClass("primary")}>
+        עריכה
+      </button>
+      <CancelCheckButton checkId={checkId} variant="menu" />
+      <CancelAndReplaceCheckButton
+        checkId={checkId}
+        payee={payee}
+        amount={amount}
+        currentPaymentMethod={paymentMethod}
+        currentDueDate={dueDate}
+        currentBankAccountId={bankAccountId}
+        bankAccounts={bankAccounts}
+        variant="menu"
+      />
+      <button disabled={isPending} onClick={remove} className={rowActionButtonClass("danger")}>
+        מחיקה
+      </button>
+      {error && <p className="px-3 py-1 text-xs text-danger">{error}</p>}
+    </>
+  );
 
+  if (!editing) return menu;
+
+  // Rendered as a real Modal (native <dialog>, its own top layer) rather
+  // than inline inside the dropdown — SearchableSelect's own Radix Popover
+  // was silently failing to open when nested inside the RowActionsMenu's
+  // Radix DropdownMenu, since both are floating layers competing for the
+  // same focus/dismiss handling. A Modal sidesteps that entirely, the same
+  // way every other edit form in the app already opens one.
   return (
-    <div className="flex flex-col gap-1 min-w-[220px]">
-      <input
-        value={editPayee}
-        onChange={(e) => setEditPayee(e.target.value)}
-        placeholder="מוטב"
-        list="supplier-names"
-        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
-      />
-      <select
-        value={editPaymentMethod}
-        onChange={(e) => setEditPaymentMethod(e.target.value as "CHECK" | "TRANSFER")}
-        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
-      >
-        <option value="CHECK">צ׳ק</option>
-        <option value="TRANSFER">העברה</option>
-      </select>
-      <input
-        type="number"
-        value={editAmount || ""}
-        onChange={(e) => setEditAmount(Number(e.target.value) || 0)}
-        placeholder="סכום"
-        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
-      />
-      <MiniCalculator onApply={setEditAmount} />
-      <input
-        type="date"
-        value={editDueDate}
-        onChange={(e) => setEditDueDate(e.target.value)}
-        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
-      />
-      {editPaymentMethod === "CHECK" && (
-        <input
-          value={editCheckNumber}
-          onChange={(e) => setEditCheckNumber(e.target.value)}
-          placeholder="מספר צ׳ק"
-          className="rounded border border-border bg-transparent px-2 py-1 text-xs"
-        />
-      )}
-      <label className="flex items-center gap-1 text-xs">
-        <input type="checkbox" checked={isSplitting} onChange={(e) => setIsSplitting(e.target.checked)} />
-        פצל בין מחלקות
-      </label>
-      {!isSplitting ? (
-        <SearchableSelect
-          value={editDepartmentId}
-          onChange={setEditDepartmentId}
-          options={departments.map((d) => ({ id: d.id, label: d.name }))}
-          placeholder="מחלקה (ריק = ימתין לסיווג)"
-          className="rounded border border-border bg-transparent px-2 py-1 text-xs"
-        />
-      ) : (
-        <SplitAllocationEditor
-          departments={departments}
-          totalAmount={editAmount}
-          allocations={allocations}
-          onChange={setAllocations}
-        />
-      )}
-      <input
-        value={editNotes}
-        onChange={(e) => setEditNotes(e.target.value)}
-        placeholder="הערות"
-        className="rounded border border-border bg-transparent px-2 py-1 text-xs"
-      />
-      <div className="flex items-center gap-2">
-        <button
-          disabled={isPending}
-          onClick={save}
-          className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
-        >
-          שמור
-        </button>
-        <button onClick={() => setEditing(false)} className="text-xs text-muted">
-          ביטול
-        </button>
-      </div>
-      {error && <p className="text-xs text-danger">{error}</p>}
-    </div>
+    <>
+      {menu}
+      <Modal onClose={() => setEditing(false)}>
+        <div className="card flex flex-col gap-2 p-4 min-w-[280px]">
+          <input
+            value={editPayee}
+            onChange={(e) => setEditPayee(e.target.value)}
+            placeholder="מוטב"
+            list="supplier-names"
+            className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+          />
+          <select
+            value={editPaymentMethod}
+            onChange={(e) => setEditPaymentMethod(e.target.value as "CHECK" | "TRANSFER")}
+            className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+          >
+            <option value="CHECK">צ׳ק</option>
+            <option value="TRANSFER">העברה</option>
+          </select>
+          <input
+            type="number"
+            value={editAmount || ""}
+            onChange={(e) => setEditAmount(Number(e.target.value) || 0)}
+            placeholder="סכום"
+            className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+          />
+          <MiniCalculator onApply={setEditAmount} />
+          <input
+            type="date"
+            value={editDueDate}
+            onChange={(e) => setEditDueDate(e.target.value)}
+            className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+          />
+          {editPaymentMethod === "CHECK" && (
+            <input
+              value={editCheckNumber}
+              onChange={(e) => setEditCheckNumber(e.target.value)}
+              placeholder="מספר צ׳ק"
+              className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+            />
+          )}
+          <label className="flex items-center gap-1 text-xs">
+            <input type="checkbox" checked={isSplitting} onChange={(e) => setIsSplitting(e.target.checked)} />
+            פצל בין מחלקות
+          </label>
+          {!isSplitting ? (
+            <SearchableSelect
+              value={editDepartmentId}
+              onChange={setEditDepartmentId}
+              options={departments.map((d) => ({ id: d.id, label: d.name }))}
+              placeholder="מחלקה (ריק = ימתין לסיווג)"
+              className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+            />
+          ) : (
+            <SplitAllocationEditor
+              departments={departments}
+              totalAmount={editAmount}
+              allocations={allocations}
+              onChange={setAllocations}
+            />
+          )}
+          <input
+            value={editNotes}
+            onChange={(e) => setEditNotes(e.target.value)}
+            placeholder="הערות"
+            className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              disabled={isPending}
+              onClick={save}
+              className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
+            >
+              שמור
+            </button>
+            <button onClick={() => setEditing(false)} className="text-xs text-muted">
+              ביטול
+            </button>
+          </div>
+          {error && <p className="text-xs text-danger">{error}</p>}
+        </div>
+      </Modal>
+    </>
   );
 }
