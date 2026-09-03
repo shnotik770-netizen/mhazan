@@ -6,8 +6,10 @@ import {
   ApprovePaymentRequestRow,
   CancelAndReplaceCheckButton,
   CancelCheckButton,
+  EditCheckButton,
   VerifyTransferButton,
 } from "@/components/checks-client";
+import type { Tables } from "@/lib/supabase/database.types";
 import { PayeeLink } from "@/components/check-detail-client";
 import { RowActionsMenu } from "@/components/row-actions-menu";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
@@ -98,6 +100,7 @@ type PaymentRequestRow = {
   id: string | null;
   payee: string | null;
   amount: number | null;
+  department_id: string | null;
   department_name: string | null;
   notes: string | null;
   payment_method: string | null;
@@ -112,11 +115,13 @@ export function PendingApprovalTable({
   rows,
   isAdmin,
   bankAccounts,
+  departments,
   allocationsByCheck,
 }: {
   rows: PaymentRequestRow[];
   isAdmin: boolean;
   bankAccounts: BankAccount[];
+  departments: Tables<"departments">[];
   allocationsByCheck: Map<string, AllocationInfo[]>;
 }) {
   const [query, setQuery] = useState("");
@@ -170,6 +175,18 @@ export function PendingApprovalTable({
                         paymentMethod={c.payment_method ?? undefined}
                         currentDueDate={c.due_date}
                         currentCheckNumber={c.check_number}
+                      />
+                      <EditCheckButton
+                        checkId={c.id!}
+                        payee={c.payee ?? ""}
+                        amount={Number(c.amount)}
+                        dueDate={c.due_date}
+                        checkNumber={c.check_number}
+                        departmentId={c.department_id}
+                        notes={c.notes}
+                        paymentMethod={c.payment_method ?? undefined}
+                        existingAllocations={allocationsByCheck.get(c.id!)}
+                        departments={departments}
                       />
                       <CancelCheckButton checkId={c.id!} variant="menu" />
                       <CancelAndReplaceCheckButton

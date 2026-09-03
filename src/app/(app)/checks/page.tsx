@@ -356,6 +356,7 @@ export default async function ChecksPage({
               rows={filteredPendingApproval}
               isAdmin={isAdmin}
               bankAccounts={bankAccounts ?? []}
+              departments={departments ?? []}
               allocationsByCheck={allocationsByCheck}
             />
           </CollapsibleSection>
