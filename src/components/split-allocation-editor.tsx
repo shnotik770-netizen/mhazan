@@ -1,5 +1,7 @@
 "use client";
 
+import { formatCurrency } from "@/lib/format";
+
 export type Allocation = { departmentId: string; amount: number };
 
 export function SplitAllocationEditor({
@@ -14,6 +16,7 @@ export function SplitAllocationEditor({
   onChange: (allocations: Allocation[]) => void;
 }) {
   const allocatedSum = allocations.reduce((sum, a) => sum + (a.amount || 0), 0);
+  const remaining = Math.round((totalAmount - allocatedSum) * 100) / 100;
 
   function update(i: number, patch: Partial<Allocation>) {
     onChange(allocations.map((a, idx) => (idx === i ? { ...a, ...patch } : a)));
@@ -29,7 +32,7 @@ export function SplitAllocationEditor({
 
   return (
     <div className="mt-2 space-y-1 border-t border-border pt-2">
-      <p className="text-xs text-muted">פיצול בין מחלקות (סכום מקורי: {totalAmount})</p>
+      <p className="text-xs text-muted">פיצול בין מחלקות (סכום מקורי: {formatCurrency(totalAmount)})</p>
       {allocations.map((alloc, i) => (
         <div key={i} className="flex items-center gap-1">
           <select
@@ -58,8 +61,8 @@ export function SplitAllocationEditor({
       <button type="button" onClick={add} className="text-xs text-primary underline">
         + הוסף מחלקה
       </button>
-      <p className={`text-xs ${allocatedSum === totalAmount ? "text-muted" : "text-warning"}`}>
-        הוקצה: {allocatedSum} מתוך {totalAmount}
+      <p className={`text-xs ${remaining === 0 ? "text-muted" : "text-warning"}`}>
+        שויך: {formatCurrency(allocatedSum)} · נותר לשייך: {formatCurrency(remaining)}
       </p>
     </div>
   );
