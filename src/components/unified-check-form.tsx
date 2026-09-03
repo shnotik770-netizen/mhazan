@@ -59,6 +59,7 @@ export function UnifiedCheckForm({
   const [notes, setNotes] = useState("");
   const [skipDepartmentLedger, setSkipDepartmentLedger] = useState(false);
   const [hasInvoice, setHasInvoice] = useState(false);
+  const [markCleared, setMarkCleared] = useState(false);
   const [isSplitting, setIsSplitting] = useState(false);
   const [rows, setRows] = useState<Row[]>([blankRow()]);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +75,7 @@ export function UnifiedCheckForm({
     setNotes("");
     setSkipDepartmentLedger(false);
     setHasInvoice(false);
+    setMarkCleared(false);
     setIsSplitting(false);
     setRows([blankRow()]);
     setError(null);
@@ -140,6 +142,7 @@ export function UnifiedCheckForm({
           skipDepartmentLedger,
           hasInvoice,
           allocations: isSplitting ? row.allocations : [],
+          markCleared: paymentMethod === "TRANSFER" ? markCleared : undefined,
         });
         if (result.error) {
           setError(result.error);
@@ -324,6 +327,12 @@ export function UnifiedCheckForm({
               <input type="checkbox" checked={hasInvoice} onChange={(e) => setHasInvoice(e.target.checked)} />
               יש חשבונית
             </label>
+            {paymentMethod === "TRANSFER" && !isSpread && (
+              <label className="flex items-center gap-1 text-sm">
+                <input type="checkbox" checked={markCleared} onChange={(e) => setMarkCleared(e.target.checked)} />
+                ההעברה כבר בוצעה בפועל
+              </label>
+            )}
             {!isSpread && (
               <label className="flex items-center gap-1 text-sm">
                 <input

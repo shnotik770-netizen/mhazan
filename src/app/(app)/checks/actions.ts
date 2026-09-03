@@ -78,6 +78,11 @@ export async function createCheck(input: {
   skipDepartmentLedger: boolean;
   hasInvoice: boolean;
   allocations: CheckAllocationInput[];
+  // A transfer an admin is entering after the fact — it already went out
+  // (often dated today) — can be filed as already cleared instead of
+  // landing in the "due"/unpaid queue and needing a separate confirm step
+  // right afterward.
+  markCleared?: boolean;
 }): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const supabase = await createClient();
@@ -109,6 +114,7 @@ export async function createCheck(input: {
       // dept-manager-request approval step.
       approved_at: new Date().toISOString(),
       approved_by: user?.id ?? null,
+      ...(input.markCleared ? { status: "CLEARED" } : {}),
     })
     .select("id")
     .single();
