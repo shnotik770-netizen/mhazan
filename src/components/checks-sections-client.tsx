@@ -224,6 +224,8 @@ type OverdueTransferRow = {
   amount: number;
   due_date: string;
   bank_account_id: string;
+  department_id: string | null;
+  notes: string | null;
   departments: { name: string } | null;
   bank_accounts: { bank_name: string; account_number: string } | null;
 };
@@ -234,7 +236,17 @@ type OverdueTransferRow = {
 // to, especially important here since these are unresolved/overdue.
 type OverdueTransferFlatRow = OverdueTransferRow & { bank_name: string | null; account_number: string | null };
 
-export function OverdueTransfersTable({ rows, bankAccounts }: { rows: OverdueTransferRow[]; bankAccounts: BankAccount[] }) {
+export function OverdueTransfersTable({
+  rows,
+  bankAccounts,
+  departments,
+  allocationsByCheck,
+}: {
+  rows: OverdueTransferRow[];
+  bankAccounts: BankAccount[];
+  departments: Tables<"departments">[];
+  allocationsByCheck: Map<string, AllocationInfo[]>;
+}) {
   const [query, setQuery] = useState("");
   const flat: OverdueTransferFlatRow[] = rows.map((r) => ({
     ...r,
@@ -293,6 +305,18 @@ export function OverdueTransfersTable({ rows, bankAccounts }: { rows: OverdueTra
                           label="אשר שההעברה בוצעה"
                           currentDueDate={row.due_date}
                           captureInternalBeneficiary
+                        />
+                        <EditCheckButton
+                          checkId={row.id}
+                          payee={row.payee}
+                          amount={Number(row.amount)}
+                          dueDate={row.due_date}
+                          checkNumber={null}
+                          departmentId={row.department_id}
+                          notes={row.notes}
+                          paymentMethod="TRANSFER"
+                          existingAllocations={allocationsByCheck.get(row.id)}
+                          departments={departments}
                         />
                         <CancelCheckButton checkId={row.id} variant="menu" />
                         <CancelAndReplaceCheckButton

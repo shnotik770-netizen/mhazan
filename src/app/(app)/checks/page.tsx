@@ -279,11 +279,15 @@ export default async function ChecksPage({
                     amount: number;
                     due_date: string;
                     bank_account_id: string;
+                    department_id: string | null;
+                    notes: string | null;
                     departments: { name: string } | null;
                     bank_accounts: { bank_name: string; account_number: string } | null;
                   }[]
                 }
                 bankAccounts={bankAccounts ?? []}
+                departments={departments ?? []}
+                allocationsByCheck={allocationsByCheck}
               />
             )}
 
