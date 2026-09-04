@@ -78,7 +78,10 @@ export function MiniCalculator({ onApply }: { onApply: (value: number) => void }
               {expr || "0"}
             </div>
             {error && <p className="text-xs text-danger">{error}</p>}
-            <div className="grid grid-cols-4 gap-2">
+            {/* dir="ltr" so the operator column (last item in each KEYS row)
+                lands on the right, like a normal calculator — left to the
+                app's own RTL flow, it would render mirrored to the left. */}
+            <div dir="ltr" className="grid grid-cols-4 gap-2">
               {KEYS.flat().map((key) => (
                 <button
                   key={key}
@@ -89,21 +92,19 @@ export function MiniCalculator({ onApply }: { onApply: (value: number) => void }
                   {key}
                 </button>
               ))}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={clear}
-                className="rounded-lg border border-border py-2 text-sm font-semibold text-danger hover:bg-background"
+                className="col-span-3 rounded-lg border border-border py-3 text-sm font-semibold text-danger hover:bg-background"
               >
                 נקה
               </button>
               <button
                 type="button"
                 onClick={compute}
-                className="rounded-lg bg-primary text-primary-foreground py-2 text-sm font-semibold"
+                className="rounded-lg bg-primary text-primary-foreground py-3 text-base font-semibold"
               >
-                = החל בשדה
+                =
               </button>
             </div>
           </div>

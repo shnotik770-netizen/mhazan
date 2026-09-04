@@ -220,9 +220,11 @@ export function UnifiedCheckForm({
           </button>
         </div>
 
-        {/* פרטי התשלום — מי, מאיפה, ולמה */}
+        {/* פרטי התשלום וסכום — הכל בקופסה אחת: מי, מאיפה, כמה ולאיזו מחלקה */}
         <section className="space-y-2">
-          <h3 className="text-sm font-semibold text-muted">פרטי התשלום</h3>
+          <h3 className="text-sm font-semibold text-muted">
+            פרטי התשלום{isSpread ? " (כל תשלום בנפרד)" : ""}
+          </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <select
               value={paymentMethod}
@@ -244,20 +246,9 @@ export function UnifiedCheckForm({
               onChange={(e) => setPayee(e.target.value)}
               placeholder="מוטב"
               list="supplier-names"
-              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-            />
-            <input
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="הערות"
               className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm md:col-span-2"
             />
           </div>
-        </section>
-
-        {/* סכום לתשלום — כמה, מתי, ולאיזו מחלקה */}
-        <section className="space-y-2">
-          <h3 className="text-sm font-semibold text-muted">סכום לתשלום{isSpread ? " (כל תשלום בנפרד)" : ""}</h3>
           <div className="space-y-2">
             {rows.map((row, i) => (
               <div key={i} className="rounded-lg border border-border p-3 space-y-2">
@@ -294,6 +285,14 @@ export function UnifiedCheckForm({
                       onChange={(e) => updateRow(i, { checkNumber: e.target.value })}
                       placeholder="מספר צ׳ק (ניתן להשאיר ריק)"
                       className="w-32 rounded border border-border bg-transparent px-2 py-1 text-sm"
+                    />
+                  )}
+                  {i === 0 && (
+                    <input
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="הערות"
+                      className="flex-1 min-w-[8rem] rounded border border-border bg-transparent px-2 py-1 text-sm"
                     />
                   )}
                   {rows.length > 1 && (
