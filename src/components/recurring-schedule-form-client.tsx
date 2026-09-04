@@ -185,6 +185,10 @@ export function NewRecurringScheduleForm({
             const f = e.target.value;
             setFrequency(f);
             if (f !== "MONTHLY" && type === "VARIABLE_DATE_ESTIMATED_AMOUNT") setType("FIXED_DATE_FIXED_AMOUNT");
+            if (f === "ONCE") {
+              setLimited(false);
+              setDurationMonths("");
+            }
           }}
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         >
@@ -260,31 +264,33 @@ export function NewRecurringScheduleForm({
           פיצול בין כמה מחלקות
         </label>
 
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
-            <input
-              type="checkbox"
-              checked={limited}
-              onChange={(e) => {
-                setLimited(e.target.checked);
-                if (!e.target.checked) setDurationMonths("");
-              }}
-            />
-            הגבלה למספר חודשים
-          </label>
-          {limited ? (
-            <input
-              type="number"
-              min="1"
-              value={durationMonths}
-              onChange={(e) => setDurationMonths(e.target.value)}
-              placeholder="כמה חודשים"
-              className="rounded border border-border bg-transparent px-2 py-1 text-sm w-24"
-            />
-          ) : (
-            <span className="text-xs text-muted">קבוע ללא הגבלת זמן</span>
-          )}
-        </div>
+        {frequency !== "ONCE" && (
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={limited}
+                onChange={(e) => {
+                  setLimited(e.target.checked);
+                  if (!e.target.checked) setDurationMonths("");
+                }}
+              />
+              הגבלה למספר חודשים
+            </label>
+            {limited ? (
+              <input
+                type="number"
+                min="1"
+                value={durationMonths}
+                onChange={(e) => setDurationMonths(e.target.value)}
+                placeholder="כמה חודשים"
+                className="rounded border border-border bg-transparent px-2 py-1 text-sm w-24"
+              />
+            ) : (
+              <span className="text-xs text-muted">קבוע ללא הגבלת זמן</span>
+            )}
+          </div>
+        )}
 
         <button
           disabled={isPending}
