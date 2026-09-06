@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteRecurringSchedule, setRecurringScheduleActive } from "@/app/(app)/settings/actions";
 import { NewRecurringScheduleForm } from "@/components/recurring-schedule-form-client";
@@ -60,13 +61,64 @@ function isArchived(s: ScheduleRow, today: string): boolean {
   return !s.is_active || Boolean(s.end_date && s.end_date < today);
 }
 
-// Recurring-schedule creation and management, on the checks page — the one
-// place this gets managed from (no longer duplicated into /expenses or
-// /settings). The management list expands inline (not a dialog) so it reads
-// as part of the page rather than something floating on top of it; the "add
-// new" and "edit" forms stay in a Modal since those are focused one-off
-// tasks rather than a view to browse.
+// כרטיס סיכום קטן שחי בדף הצ'קים — לא נושא את טבלת הניהול המלאה בעצמו (זו עברה לדף
+// ייעודי, /recurring-schedules, ולא נפתחת יותר כחלון צף מעל דף הצ'קים) אלא רק מקשר
+// אליה, לצד הוספה מהירה של חיוב קבוע חדש שנשארת נוחה כחלון קופץ קטן.
 export function RecurringSchedulesSection({
+  scheduleCount,
+  departments,
+  bankAccounts,
+  categories,
+}: {
+  scheduleCount: number;
+  departments: Department[];
+  bankAccounts: BankAccountOption[];
+  categories: CategoryOption[];
+}) {
+  const [addOpen, setAddOpen] = useState(false);
+
+  return (
+    <div className="card p-4 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="font-semibold">הרשאות וחיובים קבועים {scheduleCount > 0 && `(${scheduleCount})`}</h2>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/recurring-schedules"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold hover:bg-background"
+          >
+            ניהול הרשאות וחיובים קבועים
+          </Link>
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+          >
+            + חיוב קבוע חדש
+          </button>
+        </div>
+      </div>
+      {addOpen && (
+        <Modal onClose={() => setAddOpen(false)}>
+          <div className="card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">חיוב קבוע חדש</h2>
+              <button type="button" onClick={() => setAddOpen(false)} className="text-sm text-muted">
+                סגור
+              </button>
+            </div>
+            <NewRecurringScheduleForm departments={departments} bankAccounts={bankAccounts} categories={categories} />
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// טבלת הניהול המלאה — מוצגת כתוכן רגיל של דף /recurring-schedules, לא כחלון צף מעל
+// דף אחר. עריכת שורה בודדת עדיין נפתחת כחלון קטן (דפוס admin-table רגיל), רק רשימת
+// כל ההרשאות/חיובים עצמה כבר לא. הרשאות/חיובים שאינם עוד בתוקף (לא פעילים, או
+// שתאריך הסיום שלהם עבר) מוסתרים כברירת מחדל, מאחורי תיבת סימון "ארכיון".
+export function RecurringSchedulesManager({
   schedules,
   departments,
   bankAccounts,
@@ -78,7 +130,6 @@ export function RecurringSchedulesSection({
   categories: CategoryOption[];
 }) {
   const [addOpen, setAddOpen] = useState(false);
-  const [manageOpen, setManageOpen] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
   const [editSchedule, setEditSchedule] = useState<ScheduleRow | null>(null);
 
@@ -103,68 +154,56 @@ export function RecurringSchedulesSection({
   const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(visibleSchedules, columns);
 
   return (
-    <div className="card p-4 space-y-3">
+    <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="font-semibold">הרשאות וחיובים קבועים {schedules.length > 0 && `(${schedules.length})`}</h2>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setManageOpen((o) => !o)}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold hover:bg-background"
-          >
-            {manageOpen ? "סגירת ניהול" : "ניהול הרשאות וחיובים קבועים"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
-          >
-            + חיוב קבוע חדש
-          </button>
-        </div>
+        <p className="text-sm text-muted">{schedules.length} הרשאות וחיובים קבועים מוגדרים</p>
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+        >
+          + חיוב קבוע חדש
+        </button>
       </div>
-      {manageOpen && (
-        <div className="space-y-2 border-t border-border pt-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <label className="flex items-center gap-1 text-sm text-muted">
-              <input type="checkbox" checked={showArchive} onChange={(e) => setShowArchive(e.target.checked)} />
-              הצג גם ארכיון ({archivedSchedules.length} לא בתוקף)
-            </label>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  {columns.map((col) => (
-                    <SortFilterTh
-                      key={col.key}
-                      col={col}
-                      allRows={visibleSchedules}
-                      sort={sort}
-                      toggleSort={toggleSort}
-                      activeFilter={filters[col.key]}
-                      setColumnFilter={setColumnFilter}
-                    />
-                  ))}
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((s) => (
-                  <ScheduleRowItem key={s.id} schedule={s} onEdit={() => setEditSchedule(s)} />
-                ))}
-                {sorted.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="text-center text-muted py-4">
-                      {schedules.length === 0 ? "אין הרשאות וחיובים קבועים מוגדרים" : "אין תוצאות"}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+
+      <label className="flex items-center gap-1 text-sm text-muted">
+        <input type="checkbox" checked={showArchive} onChange={(e) => setShowArchive(e.target.checked)} />
+        הצג גם ארכיון ({archivedSchedules.length} לא בתוקף)
+      </label>
+
+      <div className="card p-4 overflow-x-auto">
+        <table className="data-table">
+          <thead>
+            <tr>
+              {columns.map((col) => (
+                <SortFilterTh
+                  key={col.key}
+                  col={col}
+                  allRows={visibleSchedules}
+                  sort={sort}
+                  toggleSort={toggleSort}
+                  activeFilter={filters[col.key]}
+                  setColumnFilter={setColumnFilter}
+                />
+              ))}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((s) => (
+              <ScheduleRowItem key={s.id} schedule={s} onEdit={() => setEditSchedule(s)} />
+            ))}
+            {sorted.length === 0 && (
+              <tr>
+                <td colSpan={8} className="text-center text-muted py-4">
+                  {schedules.length === 0 ? "אין הרשאות וחיובים קבועים מוגדרים" : "אין תוצאות"}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
       {addOpen && (
         <Modal onClose={() => setAddOpen(false)}>
           <div className="card p-4 space-y-3">

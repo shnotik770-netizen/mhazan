@@ -336,7 +336,8 @@ export async function confirmScheduleOccurrence(
 // confirming an amount for it — inserted as a REJECTED manual entry (same
 // uniqueness key as a real confirmation) so get_pending_schedule_confirmations
 // stops listing it, without a REJECTED row ever counting toward a
-// department's balance (only APPROVED rows do).
+// department's balance (only APPROVED rows do). Deliberately not a
+// zero-amount APPROVED row — manual_department_entries requires amount > 0.
 export async function ignoreScheduleOccurrence(scheduleId: string, periodDate: string): Promise<{ error?: string }> {
   const admin = await requireFinanceAdmin();
   const supabase = await createClient();
@@ -369,6 +370,9 @@ export async function ignoreScheduleOccurrence(scheduleId: string, periodDate: s
   }
 
   revalidatePath("/settings");
+  revalidatePath("/forecast");
+  revalidatePath("/ledger");
+  revalidatePath("/");
   return {};
 }
 

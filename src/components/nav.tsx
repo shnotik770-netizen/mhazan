@@ -16,6 +16,7 @@ const links = [
   { href: "/expenses", label: "הוצאות" },
   { href: "/ledger", label: "דוחות מחלקות" },
   { href: "/forecast", label: "תחזית תזרים", forecastOnly: true },
+  { href: "/recurring-schedules", label: "הרשאות וחיובים קבועים", adminOnly: true },
   { href: "/settings", label: "הגדרות", adminOnly: true },
 ];
 

@@ -102,7 +102,7 @@ function ConfirmationRow({ item, departments }: { item: PendingConfirmation; dep
   }
 
   function ignore() {
-    if (!confirm(`לסמן את "${item.scheduleName}" (${formatDate(item.periodDate)}) כאילו לא יצא הפעם?`)) return;
+    if (!confirm(`להתעלם מ"${item.scheduleName}" ל${formatDate(item.periodDate)} — כאילו לא יצא בכלל?`)) return;
     setError(null);
     startTransition(async () => {
       const result = await ignoreScheduleOccurrence(item.scheduleId, item.periodDate);
@@ -190,7 +190,13 @@ function ConfirmationRow({ item, departments }: { item: PendingConfirmation; dep
         >
           אשר
         </button>
-        <button disabled={isPending} onClick={ignore} className="text-xs text-muted underline">
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={ignore}
+          title="מסמן שהתקופה הזו לא יצאה בפועל — לא נרשמת כל הוצאה/הכנסה"
+          className="rounded border border-border text-sm px-3 py-1 disabled:opacity-50 hover:bg-background"
+        >
           התעלם — לא יצא הפעם
         </button>
       </div>
