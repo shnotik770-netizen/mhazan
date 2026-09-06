@@ -332,6 +332,55 @@ export async function confirmScheduleOccurrence(
   return {};
 }
 
+// Marks one occurrence of an estimated schedule as having not actually happened
+// this period — reuses the exact same insert shape/uniqueness key as a real
+// confirmation (amount 0, still status APPROVED) so it's recognized as "handled"
+// by the same pending-detection logic, but with zero effect on any total.
+export async function skipScheduleOccurrence(
+  scheduleId: string,
+  periodDate: string,
+  confirmedDate: string,
+  departmentId: string,
+): Promise<{ error?: string }> {
+  const admin = await requireFinanceAdmin();
+  if (!departmentId) return { error: "יש לבחור מחלקה" };
+  if (!confirmedDate) return { error: "יש להזין תאריך" };
+
+  const supabase = await createClient();
+  const { data: schedule, error: scheduleError } = await supabase
+    .from("recurring_schedules")
+    .select("name, direction, bank_account_id")
+    .eq("id", scheduleId)
+    .single();
+  if (scheduleError || !schedule) return { error: safeErrorMessage(scheduleError) ?? "הוראת הקבע לא נמצאה" };
+  if (!schedule.bank_account_id) return { error: "להוראת הקבע הזו אין חשבון בנק מוגדר" };
+
+  const { error } = await supabase.from("manual_department_entries").insert({
+    department_id: departmentId,
+    bank_account_id: schedule.bank_account_id,
+    direction: schedule.direction,
+    amount: 0,
+    entry_date: confirmedDate,
+    notes: `דולג — לא נכנס בפועל החודש (הוראת קבע: ${schedule.name})`,
+    status: "APPROVED",
+    approved_by: admin.id,
+    approved_at: new Date().toISOString(),
+    created_by: admin.id,
+    recurring_schedule_id: scheduleId,
+    recurring_period_date: periodDate,
+  });
+  if (error) {
+    const reason = error.code === "23505" ? "התקופה הזו כבר טופלה עבור המחלקה הזו" : safeErrorMessage(error);
+    return { error: reason };
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/forecast");
+  revalidatePath("/ledger");
+  revalidatePath("/");
+  return {};
+}
+
 export async function deleteRecurringSchedule(scheduleId: string): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   const supabase = await createClient();

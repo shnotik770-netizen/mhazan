@@ -318,7 +318,7 @@ export default async function ChecksPage({
 
       {isAdmin && (
         <RecurringSchedulesSection
-          schedules={scheduleRows}
+          scheduleCount={scheduleRows.length}
           departments={departments ?? []}
           bankAccounts={bankAccounts ?? []}
           categories={categories ?? []}

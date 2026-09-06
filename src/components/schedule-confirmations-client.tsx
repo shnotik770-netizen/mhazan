@@ -2,7 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { confirmScheduleOccurrence, type ScheduleConfirmationAllocation } from "@/app/(app)/settings/actions";
+import {
+  confirmScheduleOccurrence,
+  skipScheduleOccurrence,
+  type ScheduleConfirmationAllocation,
+} from "@/app/(app)/settings/actions";
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -97,6 +101,26 @@ function ConfirmationRow({ item, departments }: { item: PendingConfirmation; dep
     });
   }
 
+  function skip() {
+    setError(null);
+    // תרומת מחלקה כאן היא טכנית בלבד (הסכום 0 בכל מקרה) — לוקחים את המחלקה שכבר
+    // נבחרה, או את הראשונה מהפיצול, כדי שהתעלמות מתקופה מפוצלת לא תדרוש בחירה
+    const targetDepartmentId = split ? (item.splitAllocations[0]?.departmentId ?? "") : departmentId;
+    if (!targetDepartmentId) {
+      setError("יש לבחור מחלקה");
+      return;
+    }
+    if (!confirm(`להתעלם מ"${item.scheduleName}" ל${formatDate(item.periodDate)} — כאילו לא יצא בכלל?`)) return;
+    startTransition(async () => {
+      const result = await skipScheduleOccurrence(item.scheduleId, item.periodDate, confirmedDate, targetDepartmentId);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   const totalForSplit = split ? allocations.reduce((sum, a) => sum + (a.amount || 0), 0) : Number(amount) || 0;
 
   return (
@@ -172,6 +196,15 @@ function ConfirmationRow({ item, departments }: { item: PendingConfirmation; dep
           className="rounded bg-primary text-primary-foreground text-sm px-3 py-1 disabled:opacity-50"
         >
           אשר
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={skip}
+          title="מסמן שהתקופה הזו לא יצאה בפועל — לא נרשמת כל הוצאה/הכנסה"
+          className="rounded border border-border text-sm px-3 py-1 disabled:opacity-50 hover:bg-background"
+        >
+          התעלם — לא יצא
         </button>
       </div>
 

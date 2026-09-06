@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteRecurringSchedule, setRecurringScheduleActive } from "@/app/(app)/settings/actions";
 import { NewRecurringScheduleForm } from "@/components/recurring-schedule-form-client";
@@ -52,12 +53,63 @@ function departmentLabel(s: ScheduleRow) {
   return s.departmentName ?? `מפוצל (${s.allocations.length} מחלקות)`;
 }
 
-// Recurring-schedule creation and management, on the checks page — the one
-// place this gets managed from (no longer duplicated into /expenses or
-// /settings). The list itself lives behind a "manage" button rather than
-// always taking up space inline, since most visits to the checks page have
-// no reason to look at it.
+// כרטיס סיכום קטן שחי בדף הצ'קים — לא נושא את טבלת הניהול המלאה בעצמו (זו עברה לדף
+// ייעודי, /recurring-schedules, ולא נפתחת יותר כחלון צף מעל דף הצ'קים) אלא רק מקשר
+// אליה, לצד הוספה מהירה של הוראת קבע חדשה שנשארת נוחה כחלון קופץ קטן.
 export function RecurringSchedulesSection({
+  scheduleCount,
+  departments,
+  bankAccounts,
+  categories,
+}: {
+  scheduleCount: number;
+  departments: Department[];
+  bankAccounts: BankAccountOption[];
+  categories: CategoryOption[];
+}) {
+  const [addOpen, setAddOpen] = useState(false);
+
+  return (
+    <div className="card p-4 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="font-semibold">הוראות קבע {scheduleCount > 0 && `(${scheduleCount})`}</h2>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/recurring-schedules"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold hover:bg-background"
+          >
+            ניהול הוראות קבע קיימות
+          </Link>
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+          >
+            + הוראת קבע חדשה
+          </button>
+        </div>
+      </div>
+      {addOpen && (
+        <Modal onClose={() => setAddOpen(false)}>
+          <div className="card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">הוראת קבע חדשה</h2>
+              <button type="button" onClick={() => setAddOpen(false)} className="text-sm text-muted">
+                סגור
+              </button>
+            </div>
+            <NewRecurringScheduleForm departments={departments} bankAccounts={bankAccounts} categories={categories} />
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// טבלת הניהול המלאה — מוצגת כתוכן רגיל של דף /recurring-schedules, לא כחלון צף מעל
+// דף אחר. עריכת שורה בודדת עדיין נפתחת כחלון קטן (דפוס admin-table רגיל), רק רשימת
+// כל ההוראות עצמה כבר לא.
+export function RecurringSchedulesManager({
   schedules,
   departments,
   bankAccounts,
@@ -69,7 +121,6 @@ export function RecurringSchedulesSection({
   categories: CategoryOption[];
 }) {
   const [addOpen, setAddOpen] = useState(false);
-  const [manageOpen, setManageOpen] = useState(false);
   const [editSchedule, setEditSchedule] = useState<ScheduleRow | null>(null);
 
   const columns: ColumnDef<ScheduleRow>[] = [
@@ -88,70 +139,51 @@ export function RecurringSchedulesSection({
   const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(schedules, columns);
 
   return (
-    <div className="card p-4 space-y-3">
+    <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="font-semibold">הוראות קבע {schedules.length > 0 && `(${schedules.length})`}</h2>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setManageOpen(true)}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold hover:bg-background"
-          >
-            ניהול הוראות קבע קיימות
-          </button>
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
-          >
-            + הוראת קבע חדשה
-          </button>
-        </div>
+        <p className="text-sm text-muted">{schedules.length} הוראות קבע מוגדרות</p>
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+        >
+          + הוראת קבע חדשה
+        </button>
       </div>
-      {manageOpen && (
-        <Modal onClose={() => setManageOpen(false)}>
-          <div className="card p-4 space-y-3 w-[min(90vw,64rem)]">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold">ניהול הוראות קבע</h2>
-              <button type="button" onClick={() => setManageOpen(false)} className="text-sm text-muted">
-                סגור
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    {columns.map((col) => (
-                      <SortFilterTh
-                        key={col.key}
-                        col={col}
-                        allRows={schedules}
-                        sort={sort}
-                        toggleSort={toggleSort}
-                        activeFilter={filters[col.key]}
-                        setColumnFilter={setColumnFilter}
-                      />
-                    ))}
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map((s) => (
-                    <ScheduleRowItem key={s.id} schedule={s} onEdit={() => setEditSchedule(s)} />
-                  ))}
-                  {sorted.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="text-center text-muted py-4">
-                        {schedules.length === 0 ? "אין הוראות קבע מוגדרות" : "אין תוצאות"}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </Modal>
-      )}
+
+      <div className="card p-4 overflow-x-auto">
+        <table className="data-table">
+          <thead>
+            <tr>
+              {columns.map((col) => (
+                <SortFilterTh
+                  key={col.key}
+                  col={col}
+                  allRows={schedules}
+                  sort={sort}
+                  toggleSort={toggleSort}
+                  activeFilter={filters[col.key]}
+                  setColumnFilter={setColumnFilter}
+                />
+              ))}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((s) => (
+              <ScheduleRowItem key={s.id} schedule={s} onEdit={() => setEditSchedule(s)} />
+            ))}
+            {sorted.length === 0 && (
+              <tr>
+                <td colSpan={8} className="text-center text-muted py-4">
+                  {schedules.length === 0 ? "אין הוראות קבע מוגדרות" : "אין תוצאות"}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
       {addOpen && (
         <Modal onClose={() => setAddOpen(false)}>
           <div className="card p-4 space-y-3">
