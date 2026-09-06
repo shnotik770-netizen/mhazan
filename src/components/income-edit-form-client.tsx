@@ -18,6 +18,8 @@ export type IncomeEditRow = {
   receiptNumber: string | null;
   orderRef: string | null;
   notes: string | null;
+  commissionAmount: number | null;
+  commissionNote: string | null;
 };
 
 // Mirrors EditExpenseForm's shape/flow for checks/manual entries, but for
@@ -42,6 +44,8 @@ export function EditIncomeForm({
   const [receiptNumber, setReceiptNumber] = useState(row.receiptNumber ?? "");
   const [orderRef, setOrderRef] = useState(row.orderRef ?? "");
   const [notes, setNotes] = useState(row.notes ?? "");
+  const [commissionAmount, setCommissionAmount] = useState(row.commissionAmount != null ? String(row.commissionAmount) : "");
+  const [commissionNote, setCommissionNote] = useState(row.commissionNote ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isConverting, setIsConverting] = useState(false);
@@ -94,6 +98,11 @@ export function EditIncomeForm({
       setError("יש לבחור קטגוריה");
       return;
     }
+    const commissionNum = commissionAmount ? Number(commissionAmount) : null;
+    if (commissionNum !== null && (isNaN(commissionNum) || commissionNum < 0)) {
+      setError("עמלה לא תקינה");
+      return;
+    }
     setError(null);
     const input: IncomeEditInput = {
       date,
@@ -105,6 +114,8 @@ export function EditIncomeForm({
       receiptNumber,
       orderRef,
       notes,
+      commissionAmount: commissionNum,
+      commissionNote,
       markConvertedFromUsd: didConvertFromUsd,
     };
     startTransition(async () => {
@@ -222,6 +233,28 @@ export function EditIncomeForm({
           onChange={(e) => setNotes(e.target.value)}
           className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
         />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm text-muted mb-1">עמלה (אופציונלי)</label>
+          <input
+            type="number"
+            value={commissionAmount}
+            onChange={(e) => setCommissionAmount(e.target.value)}
+            placeholder="סכום העמלה"
+            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-sm text-muted mb-1">הסבר על העמלה</label>
+          <input
+            value={commissionNote}
+            onChange={(e) => setCommissionNote(e.target.value)}
+            placeholder="למשל: עמלת המרה, עמלת סליקה..."
+            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+          />
+        </div>
       </div>
 
       {error && <p className="text-sm text-danger">{error}</p>}

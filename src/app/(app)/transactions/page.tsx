@@ -59,7 +59,7 @@ export default async function TransactionsPage({
   let incomesQuery = supabase
     .from("incomes")
     .select(
-      "id, date, amount, donor_name, order_ref, notes, category_id, categories(name), owner_department_id, departments:owner_department_id(name), payment_method, type_text, receipt_number, converted_from_usd",
+      "id, date, amount, donor_name, order_ref, notes, category_id, categories(name), owner_department_id, departments:owner_department_id(name), payment_method, type_text, receipt_number, converted_from_usd, commission_amount, commission_note",
     )
     .order("date", { ascending: false })
     .limit(300);
@@ -131,6 +131,8 @@ export default async function TransactionsPage({
     type_text: string | null;
     receipt_number: string | null;
     converted_from_usd: boolean | null;
+    commission_amount: number | null;
+    commission_note: string | null;
   }[]) {
     unified.push({
       id: `income-${row.id}`,
@@ -160,6 +162,8 @@ export default async function TransactionsPage({
         receiptNumber: row.receipt_number,
         orderRef: row.order_ref,
         notes: row.notes,
+        commissionAmount: row.commission_amount,
+        commissionNote: row.commission_note,
       },
     });
   }

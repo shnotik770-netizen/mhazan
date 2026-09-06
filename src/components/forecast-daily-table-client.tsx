@@ -29,7 +29,7 @@ export function ForecastDailyTable({ rows }: { rows: [string, DayEntry][] }) {
     { key: "date", label: "תאריך", sortValue: (r) => r.date, filterValue: (r) => monthLabel(r.date.slice(0, 7)) },
     { key: "checks", label: "צ׳קים", sortValue: (r) => r.entry.checks },
     { key: "transfers", label: "העברות", sortValue: (r) => r.entry.transfers },
-    { key: "recurring", label: "הוראות קבע", sortValue: (r) => r.entry.recurring },
+    { key: "recurring", label: "חיובים קבועים", sortValue: (r) => r.entry.recurring },
     { key: "income", label: "צפי הכנסה", sortValue: (r) => r.entry.income },
     { key: "overdue", label: "פיגורים (ישנים)", sortValue: (r) => r.entry.overdue },
     { key: "total", label: "סה״כ שינוי יומי", sortValue: (r) => r.entry.total },

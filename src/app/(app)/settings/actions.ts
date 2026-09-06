@@ -301,8 +301,8 @@ export async function confirmScheduleOccurrence(
     .select("name, direction, bank_account_id")
     .eq("id", scheduleId)
     .single();
-  if (scheduleError || !schedule) return { error: safeErrorMessage(scheduleError) ?? "הוראת הקבע לא נמצאה" };
-  if (!schedule.bank_account_id) return { error: "להוראת הקבע הזו אין חשבון בנק מוגדר" };
+  if (scheduleError || !schedule) return { error: safeErrorMessage(scheduleError) ?? "החיוב הקבוע לא נמצא" };
+  if (!schedule.bank_account_id) return { error: "לחיוב הקבוע הזה אין חשבון בנק מוגדר" };
 
   const { error } = await supabase.from("manual_department_entries").insert(
     valid.map((a) => ({
@@ -311,7 +311,7 @@ export async function confirmScheduleOccurrence(
       direction: schedule.direction,
       amount: a.amount,
       entry_date: confirmedDate,
-      notes: `אישור הוראת קבע: ${schedule.name}`,
+      notes: `אישור חיוב קבוע: ${schedule.name}`,
       status: "APPROVED",
       approved_by: admin.id,
       approved_at: new Date().toISOString(),
@@ -329,6 +329,46 @@ export async function confirmScheduleOccurrence(
   revalidatePath("/forecast");
   revalidatePath("/ledger");
   revalidatePath("/");
+  return {};
+}
+
+// Marks one pending occurrence as "didn't happen this time" instead of
+// confirming an amount for it — inserted as a REJECTED manual entry (same
+// uniqueness key as a real confirmation) so get_pending_schedule_confirmations
+// stops listing it, without a REJECTED row ever counting toward a
+// department's balance (only APPROVED rows do).
+export async function ignoreScheduleOccurrence(scheduleId: string, periodDate: string): Promise<{ error?: string }> {
+  const admin = await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { data: schedule, error: scheduleError } = await supabase
+    .from("recurring_schedules")
+    .select("name, direction, bank_account_id, department_id, expected_amount, recurring_schedule_allocations(department_id)")
+    .eq("id", scheduleId)
+    .single();
+  if (scheduleError || !schedule) return { error: safeErrorMessage(scheduleError) ?? "החיוב הקבוע לא נמצא" };
+  if (!schedule.bank_account_id) return { error: "לחיוב הקבוע הזה אין חשבון בנק מוגדר" };
+  const departmentId = schedule.department_id ?? schedule.recurring_schedule_allocations?.[0]?.department_id;
+  if (!departmentId) return { error: "לא נמצאה מחלקה עבור החיוב הקבוע" };
+
+  const { error } = await supabase.from("manual_department_entries").insert({
+    department_id: departmentId,
+    bank_account_id: schedule.bank_account_id,
+    direction: schedule.direction,
+    amount: Number(schedule.expected_amount) || 1,
+    notes: `התעלמות מחיוב קבוע: ${schedule.name} (לא יצא בפועל)`,
+    status: "REJECTED",
+    approved_by: admin.id,
+    approved_at: new Date().toISOString(),
+    created_by: admin.id,
+    recurring_schedule_id: scheduleId,
+    recurring_period_date: periodDate,
+  });
+  if (error) {
+    const reason = error.code === "23505" ? "התקופה הזו כבר טופלה" : safeErrorMessage(error);
+    return { error: reason };
+  }
+
+  revalidatePath("/settings");
   return {};
 }
 

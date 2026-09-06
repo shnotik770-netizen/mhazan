@@ -753,8 +753,17 @@ export function IssueCheckRow({
     );
   }
 
+  // Every mode past "collapsed" opens in a Modal (rather than rendering
+  // inline inside the RowActionsMenu dropdown) because this form's
+  // department SearchableSelect is a Radix Popover — nested directly inside
+  // the dropdown's own Radix DropdownMenu, its floating panel silently
+  // failed to open (two floating layers competing for the same
+  // focus/dismiss handling), the same bug already fixed for every other
+  // edit form in this file.
+  let body: React.ReactNode;
+
   if (mode === "choose") {
-    return (
+    body = (
       <div className="flex flex-col gap-1">
         <p className="text-xs text-muted">חסרים פרטים — איך להנפיק?</p>
         <div className="flex flex-wrap gap-1">
@@ -779,15 +788,13 @@ export function IssueCheckRow({
         </div>
       </div>
     );
-  }
-
-  if (mode === "spread") {
+  } else if (mode === "spread") {
     const roundedAmounts = spreadRows.map((r) => r.amount);
     const lastAmount = roundedAmounts[roundedAmounts.length - 1] ?? 0;
     const baseAmount = roundedAmounts.length > 1 ? roundedAmounts[0] : 0;
     const roundingLeftover =
       roundedAmounts.length > 1 ? Math.round((lastAmount - baseAmount) * 100) / 100 : 0;
-    return (
+    body = (
       <div className="flex flex-col gap-1 min-w-[280px]">
         {hasExistingDepartmentSplit && (
           <p className="text-xs text-warning">
@@ -903,58 +910,64 @@ export function IssueCheckRow({
         {error && <p className="text-xs text-danger">{error}</p>}
       </div>
     );
+  } else {
+    body = (
+      <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value as "CHECK" | "TRANSFER")}
+            className="rounded border border-border bg-transparent px-1 py-0.5 text-xs"
+          >
+            <option value="CHECK">צ׳ק</option>
+            <option value="TRANSFER">העברה</option>
+          </select>
+          {paymentMethod === "CHECK" && (
+            <input
+              value={checkNumber}
+              onChange={(e) => setCheckNumber(e.target.value)}
+              placeholder="מספר צ׳ק"
+              className="w-24 rounded border border-border bg-transparent px-2 py-1 text-xs"
+            />
+          )}
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+          />
+          <label className="flex items-center gap-1 text-xs">
+            <input type="checkbox" checked={isSplitting} onChange={(e) => setIsSplitting(e.target.checked)} />
+            פצל
+          </label>
+          <button
+            disabled={isPending}
+            onClick={submitSingle}
+            className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
+          >
+            הנפק
+          </button>
+          <button onClick={() => setMode("choose")} className="text-xs text-muted">
+            חזרה
+          </button>
+        </div>
+        {isSplitting && (
+          <SplitAllocationEditor
+            departments={departments}
+            totalAmount={amount}
+            allocations={allocations}
+            onChange={setAllocations}
+          />
+        )}
+        {error && <p className="text-xs text-danger">{error}</p>}
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={paymentMethod}
-          onChange={(e) => setPaymentMethod(e.target.value as "CHECK" | "TRANSFER")}
-          className="rounded border border-border bg-transparent px-1 py-0.5 text-xs"
-        >
-          <option value="CHECK">צ׳ק</option>
-          <option value="TRANSFER">העברה</option>
-        </select>
-        {paymentMethod === "CHECK" && (
-          <input
-            value={checkNumber}
-            onChange={(e) => setCheckNumber(e.target.value)}
-            placeholder="מספר צ׳ק"
-            className="w-24 rounded border border-border bg-transparent px-2 py-1 text-xs"
-          />
-        )}
-        <input
-          type="date"
-          value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          className="rounded border border-border bg-transparent px-2 py-1 text-xs"
-        />
-        <label className="flex items-center gap-1 text-xs">
-          <input type="checkbox" checked={isSplitting} onChange={(e) => setIsSplitting(e.target.checked)} />
-          פצל
-        </label>
-        <button
-          disabled={isPending}
-          onClick={submitSingle}
-          className="rounded bg-primary text-primary-foreground text-xs px-3 py-1 disabled:opacity-50"
-        >
-          הנפק
-        </button>
-        <button onClick={() => setMode("choose")} className="text-xs text-muted">
-          חזרה
-        </button>
-      </div>
-      {isSplitting && (
-        <SplitAllocationEditor
-          departments={departments}
-          totalAmount={amount}
-          allocations={allocations}
-          onChange={setAllocations}
-        />
-      )}
-      {error && <p className="text-xs text-danger">{error}</p>}
-    </div>
+    <Modal onClose={() => setMode("collapsed")}>
+      <div className="card p-4">{body}</div>
+    </Modal>
   );
 }
 

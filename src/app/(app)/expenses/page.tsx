@@ -152,7 +152,7 @@ export default async function ExpensesPage() {
         id: row.id,
         isCheck: false,
         date: row.entry_date,
-        source: row.recurring_schedule_id ? "הוראת קבע" : "הוצאה ידנית",
+        source: row.recurring_schedule_id ? "חיוב קבוע" : "הוצאה ידנית",
         description: row.notes ?? "—",
         payeeName: "",
         notes: row.notes,

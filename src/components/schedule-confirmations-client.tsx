@@ -2,7 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { confirmScheduleOccurrence, type ScheduleConfirmationAllocation } from "@/app/(app)/settings/actions";
+import {
+  confirmScheduleOccurrence,
+  ignoreScheduleOccurrence,
+  type ScheduleConfirmationAllocation,
+} from "@/app/(app)/settings/actions";
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -35,7 +39,7 @@ export function ScheduleConfirmationsList({
       <div>
         <h2 className="font-semibold">אישור סכומים בפועל</h2>
         <p className="text-sm text-muted">
-          הוראות קבע עם סכום או תאריך משוער שהתאריך שלהן כבר עבר — יש לאשר את הסכום שהיה בפועל, ואפשר לשייך אותו למחלקה
+          חיובים קבועים עם סכום או תאריך משוער שהתאריך שלהם כבר עבר — יש לאשר את הסכום שהיה בפועל, ואפשר לשייך אותו למחלקה
           אחרת מזו שהוגדרה בהוראה או לפצל אותו בין כמה מחלקות.
         </p>
       </div>
@@ -89,6 +93,19 @@ function ConfirmationRow({ item, departments }: { item: PendingConfirmation; dep
 
     startTransition(async () => {
       const result = await confirmScheduleOccurrence(item.scheduleId, item.periodDate, confirmedDate, payload);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function ignore() {
+    if (!confirm(`לסמן את "${item.scheduleName}" (${formatDate(item.periodDate)}) כאילו לא יצא הפעם?`)) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await ignoreScheduleOccurrence(item.scheduleId, item.periodDate);
       if (result.error) {
         setError(result.error);
         return;
@@ -172,6 +189,9 @@ function ConfirmationRow({ item, departments }: { item: PendingConfirmation; dep
           className="rounded bg-primary text-primary-foreground text-sm px-3 py-1 disabled:opacity-50"
         >
           אשר
+        </button>
+        <button disabled={isPending} onClick={ignore} className="text-xs text-muted underline">
+          התעלם — לא יצא הפעם
         </button>
       </div>
 

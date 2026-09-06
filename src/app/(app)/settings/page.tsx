@@ -112,7 +112,7 @@ export default async function SettingsPage() {
 
       <section className="card p-4 flex items-center justify-between">
         <div>
-          <h2 className="font-semibold">הוראות קבע (מנוע תחזית)</h2>
+          <h2 className="font-semibold">הרשאות וחיובים קבועים (מנוע תחזית)</h2>
           <p className="text-sm text-muted">
             הוספה, עריכה, הפעלה/השבתה ואישור סכומים בפועל מתבצעים בדף &quot;ניהול צ׳קים והעברות&quot;.
           </p>

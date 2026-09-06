@@ -416,6 +416,11 @@ export type IncomeEditInput = {
   receiptNumber: string;
   orderRef: string;
   notes: string;
+  // Optional per-row commission/fee noted on this income (e.g. a bank or
+  // processor fee taken out of this specific gift) — purely informational,
+  // not wired into any balance or ledger calculation.
+  commissionAmount: number | null;
+  commissionNote: string;
   // Set only when the edit form's "convert from USD" helper was used on
   // this save — never sent as false, so an unrelated later edit never
   // clears an already-set badge.
@@ -435,6 +440,7 @@ export async function updateIncome(incomeId: string, input: IncomeEditInput): Pr
   if (!input.date) return { error: "יש להזין תאריך" };
   if (!input.amount || input.amount <= 0) return { error: "סכום לא תקין" };
   if (!input.categoryId) return { error: "יש לבחור קטגוריה" };
+  if (input.commissionAmount !== null && input.commissionAmount < 0) return { error: "עמלה לא יכולה להיות שלילית" };
   const supabase = await createClient();
 
   const { data: before } = await supabase.from("incomes").select("owner_department_id").eq("id", incomeId).single();
@@ -451,6 +457,8 @@ export async function updateIncome(incomeId: string, input: IncomeEditInput): Pr
       receipt_number: input.receiptNumber || null,
       order_ref: input.orderRef || null,
       notes: input.notes || null,
+      commission_amount: input.commissionAmount,
+      commission_note: input.commissionNote || null,
       ...(input.markConvertedFromUsd ? { converted_from_usd: true } : {}),
     })
     .eq("id", incomeId)

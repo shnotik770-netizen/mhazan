@@ -47,7 +47,7 @@ export function DepartmentMonthlyCashFlow({ rows }: { rows: MonthlyFlow[] }) {
 
   return (
     <div className="card p-4">
-      <h2 className="font-semibold">תזרים חודשי מלא — עבר ותחזית (כולל הוראות קבע)</h2>
+      <h2 className="font-semibold">תזרים חודשי מלא — עבר ותחזית (כולל חיובים קבועים)</h2>
       <div className="mt-3 space-y-3">
         <div className="flex flex-wrap items-center gap-2 text-sm no-print">
           <label className="text-muted">מחודש:</label>

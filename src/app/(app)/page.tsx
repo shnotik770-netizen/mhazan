@@ -65,7 +65,7 @@ export default async function DashboardPage() {
                 href="/checks"
                 className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
               >
-                + הוראת קבע חדשה
+                + חיוב קבוע חדש
               </Link>
               <Link
                 href="/settings"

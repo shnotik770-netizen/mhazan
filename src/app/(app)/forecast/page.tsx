@@ -205,7 +205,7 @@ export default async function ForecastPage({
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold">תחזית תזרים מזומנים</h1>
-        <p className="text-sm text-muted">יתרה צפויה = יתרת בנק נוכחית − צ׳קים בחוץ − הוראות קבע עתידיות + צפי הכנסות</p>
+        <p className="text-sm text-muted">יתרה צפויה = יתרת בנק נוכחית − צ׳קים בחוץ − חיובים קבועים עתידיים + צפי הכנסות</p>
       </div>
 
       <ForecastFilterBar
