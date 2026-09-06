@@ -1005,6 +1005,38 @@ export type Database = {
           },
         ]
       }
+      recurring_schedule_skipped_periods: {
+        Row: {
+          id: string
+          period_date: string
+          schedule_id: string
+          skipped_at: string
+          skipped_by: string | null
+        }
+        Insert: {
+          id?: string
+          period_date: string
+          schedule_id: string
+          skipped_at?: string
+          skipped_by?: string | null
+        }
+        Update: {
+          id?: string
+          period_date?: string
+          schedule_id?: string
+          skipped_at?: string
+          skipped_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_schedule_skipped_periods_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recurring_schedules: {
         Row: {
           bank_account_id: string | null

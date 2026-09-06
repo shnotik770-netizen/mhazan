@@ -333,36 +333,23 @@ export async function confirmScheduleOccurrence(
 }
 
 // Marks one pending occurrence as "didn't happen this time" instead of
-// confirming an amount for it — inserted as a REJECTED manual entry (same
-// uniqueness key as a real confirmation) so get_pending_schedule_confirmations
-// stops listing it, without a REJECTED row ever counting toward a
-// department's balance (only APPROVED rows do). Deliberately not a
-// zero-amount APPROVED row — manual_department_entries requires amount > 0.
+// confirming an amount for it. Deliberately its own table rather than a
+// manual_department_entries row: that table's RLS insert policy only ever
+// allows a finance admin to insert status='APPROVED' (never REJECTED), and
+// a zero-amount APPROVED row would violate its amount>0 check constraint —
+// there's no status/amount combination there that means "this didn't
+// happen" without either being rejected by the DB or silently counting
+// toward the department's balance. A dedicated skip-tracking table sidesteps
+// both: get_pending_schedule_confirmations excludes any (schedule, period)
+// found here, same as it already excludes confirmed ones.
 export async function ignoreScheduleOccurrence(scheduleId: string, periodDate: string): Promise<{ error?: string }> {
   const admin = await requireFinanceAdmin();
   const supabase = await createClient();
-  const { data: schedule, error: scheduleError } = await supabase
-    .from("recurring_schedules")
-    .select("name, direction, bank_account_id, department_id, expected_amount, recurring_schedule_allocations(department_id)")
-    .eq("id", scheduleId)
-    .single();
-  if (scheduleError || !schedule) return { error: safeErrorMessage(scheduleError) ?? "החיוב הקבוע לא נמצא" };
-  if (!schedule.bank_account_id) return { error: "לחיוב הקבוע הזה אין חשבון בנק מוגדר" };
-  const departmentId = schedule.department_id ?? schedule.recurring_schedule_allocations?.[0]?.department_id;
-  if (!departmentId) return { error: "לא נמצאה מחלקה עבור החיוב הקבוע" };
 
-  const { error } = await supabase.from("manual_department_entries").insert({
-    department_id: departmentId,
-    bank_account_id: schedule.bank_account_id,
-    direction: schedule.direction,
-    amount: Number(schedule.expected_amount) || 1,
-    notes: `התעלמות מחיוב קבוע: ${schedule.name} (לא יצא בפועל)`,
-    status: "REJECTED",
-    approved_by: admin.id,
-    approved_at: new Date().toISOString(),
-    created_by: admin.id,
-    recurring_schedule_id: scheduleId,
-    recurring_period_date: periodDate,
+  const { error } = await supabase.from("recurring_schedule_skipped_periods").insert({
+    schedule_id: scheduleId,
+    period_date: periodDate,
+    skipped_by: admin.id,
   });
   if (error) {
     const reason = error.code === "23505" ? "התקופה הזו כבר טופלה" : safeErrorMessage(error);
