@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { Command as CommandPrimitive } from "cmdk";
 import { usePortalContainer } from "@/lib/use-portal-container";
@@ -33,8 +33,7 @@ export function SearchableSelect({
   const selected = options.find((o) => o.id === value) ?? null;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const container = usePortalContainer(inputRef);
+  const { ref: inputRef, container } = usePortalContainer();
 
   // Opening always starts from the full option list (empty query) instead
   // of pre-filled with the current selection — otherwise re-opening a
@@ -67,6 +66,7 @@ export function SearchableSelect({
               if (v === "") onChange("");
             }}
             onFocus={() => handleOpenChange(true)}
+            onClick={() => handleOpenChange(true)}
             placeholder={placeholder}
             required={required && !value}
             className={className ?? "rounded border border-border bg-transparent px-2 py-1 text-sm"}

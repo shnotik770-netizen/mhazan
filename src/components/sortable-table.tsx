@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { usePortalContainer } from "@/lib/use-portal-container";
 
@@ -94,8 +94,7 @@ export function SortFilterTh<T>({
   setColumnFilter: (key: string, values: Set<string> | null) => void;
   }) {
   const [open, setOpen] = useState(false);
-  const filterTriggerRef = useRef<HTMLButtonElement>(null);
-  const container = usePortalContainer(filterTriggerRef);
+  const { ref: filterTriggerRef, container } = usePortalContainer();
   const options = useMemo(() => {
     if (!col.filterValue) return [];
     return Array.from(new Set(allRows.map((r) => col.filterValue!(r)))).sort((a, b) => a.localeCompare(b, "he"));

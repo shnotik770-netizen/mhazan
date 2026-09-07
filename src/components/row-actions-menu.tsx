@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { usePortalContainer } from "@/lib/use-portal-container";
 
@@ -15,8 +14,7 @@ import { usePortalContainer } from "@/lib/use-portal-container";
 // pending/error state, so plain buttons styled with `rowActionButtonClass`
 // are used instead, staying mounted (and the menu open) through that flow.
 export function RowActionsMenu({ children, label = "פעולות" }: { children: React.ReactNode; label?: string }) {
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const container = usePortalContainer(triggerRef);
+  const { ref: triggerRef, container } = usePortalContainer();
 
   return (
     <DropdownMenu.Root dir="rtl">
