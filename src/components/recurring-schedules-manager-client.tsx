@@ -145,13 +145,14 @@ export function RecurringSchedulesManager({
     {
       key: "date",
       label: "תאריך",
-      sortValue: (s) => (s.type === "VARIABLE_DATE_ESTIMATED_AMOUNT" ? "" : scheduleDateLabel(s)),
+      sortValue: (s) => (s.day_of_month === null && s.frequency === "MONTHLY" ? "" : scheduleDateLabel(s)),
+      filterValue: (s) => (s.day_of_month === null && s.frequency === "MONTHLY" ? "לא קבוע" : "קבוע"),
     },
     {
       key: "amount",
       label: "סכום צפוי",
       sortValue: (s) => s.expected_amount,
-      filterValue: (s) => (s.type === "FIXED_DATE_FIXED_AMOUNT" ? "קבוע" : "משוער"),
+      filterValue: (s) => (s.type === "FIXED_DATE_FIXED_AMOUNT" || s.type === "VARIABLE_DATE_FIXED_AMOUNT" ? "קבוע" : "משוער"),
     },
     { key: "end_date", label: "משך", sortValue: (s) => s.end_date ?? "" },
     { key: "active", label: "פעיל", sortValue: (s) => (s.is_active ? 1 : 0), filterValue: (s) => (s.is_active ? "פעיל" : "לא פעיל") },
@@ -276,7 +277,7 @@ function ScheduleRowItem({ schedule: s, onEdit }: { schedule: ScheduleRow; onEdi
       </td>
       <td>{frequencyLabel(s.frequency)}</td>
       <td>
-        {s.type === "VARIABLE_DATE_ESTIMATED_AMOUNT" ? (
+        {s.day_of_month === null && s.frequency === "MONTHLY" ? (
           <span className="badge bg-background text-muted">תאריך לא קבוע</span>
         ) : (
           scheduleDateLabel(s)
@@ -284,7 +285,9 @@ function ScheduleRowItem({ schedule: s, onEdit }: { schedule: ScheduleRow; onEdi
       </td>
       <td>
         {formatCurrency(s.expected_amount)}
-        {s.type !== "FIXED_DATE_FIXED_AMOUNT" && <span className="badge bg-background text-muted mr-1">משוער</span>}
+        {s.type !== "FIXED_DATE_FIXED_AMOUNT" && s.type !== "VARIABLE_DATE_FIXED_AMOUNT" && (
+          <span className="badge bg-background text-muted mr-1">משוער</span>
+        )}
       </td>
       <td className="text-xs text-muted">{s.end_date ? `עד ${formatDate(s.end_date)}` : "ללא הגבלה"}</td>
       <td>

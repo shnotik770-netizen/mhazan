@@ -82,12 +82,19 @@ export async function createRecurringSchedule(formData: FormData): Promise<void>
   const frequency = String(formData.get("frequency") ?? "MONTHLY");
   const type = String(formData.get("type") ?? "FIXED_DATE_FIXED_AMOUNT");
   // A variable-date monthly schedule (its whole point: the day isn't known
-  // in advance) is the one case that's allowed to skip day_of_month —
-  // every other combination still needs its date field, enforced again by
-  // the DB check constraint either way.
+  // in advance) is allowed to skip day_of_month — either because the type
+  // never has one (VARIABLE_DATE_ESTIMATED_AMOUNT) or because this
+  // particular schedule doesn't happen to have an approximate day set
+  // (VARIABLE_DATE_FIXED_AMOUNT, where a day is optional) — every other
+  // combination still needs its date field, enforced again by the DB check
+  // constraint either way.
   const dayOfMonthRaw = formData.get("day_of_month");
   const dayOfMonth =
-    (frequency === "MONTHLY" && type === "VARIABLE_DATE_ESTIMATED_AMOUNT" && !dayOfMonthRaw) || frequency === "WEEKLY" || frequency === "ONCE"
+    (frequency === "MONTHLY" &&
+      (type === "VARIABLE_DATE_ESTIMATED_AMOUNT" || type === "VARIABLE_DATE_FIXED_AMOUNT") &&
+      !dayOfMonthRaw) ||
+    frequency === "WEEKLY" ||
+    frequency === "ONCE"
       ? null
       : Number(dayOfMonthRaw);
 
@@ -150,7 +157,11 @@ export async function updateRecurringSchedule(scheduleId: string, formData: Form
   const type = String(formData.get("type") ?? "FIXED_DATE_FIXED_AMOUNT");
   const dayOfMonthRaw = formData.get("day_of_month");
   const dayOfMonth =
-    (frequency === "MONTHLY" && type === "VARIABLE_DATE_ESTIMATED_AMOUNT" && !dayOfMonthRaw) || frequency === "WEEKLY" || frequency === "ONCE"
+    (frequency === "MONTHLY" &&
+      (type === "VARIABLE_DATE_ESTIMATED_AMOUNT" || type === "VARIABLE_DATE_FIXED_AMOUNT") &&
+      !dayOfMonthRaw) ||
+    frequency === "WEEKLY" ||
+    frequency === "ONCE"
       ? null
       : Number(dayOfMonthRaw);
 

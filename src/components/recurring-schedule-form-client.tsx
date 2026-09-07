@@ -9,13 +9,37 @@ import {
   type ScheduleConfirmationAllocation,
 } from "@/app/(app)/settings/actions";
 import { SplitAllocationEditor, type Allocation } from "@/components/split-allocation-editor";
+import { ScheduleOccurrenceConfirmFields } from "@/components/schedule-occurrence-confirm-fields";
 import type { ScheduleRow } from "@/components/recurring-schedules-manager-client";
-import { todayIso } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
 type BankAccountOption = { id: string; bank_name: string; account_number: string };
 type CategoryOption = { id: string; name: string };
+
+// A schedule whose amount and/or date aren't both fully fixed is inherently
+// ambiguous to edit: did the actual figure for this one month just come in
+// different, or should the rule itself change from now on? We ask this up
+// front, the moment an eligible schedule is opened for editing, instead of
+// only after the admin happens to retype a different amount/date — that
+// older approach couldn't handle confirming this month's *unchanged*
+// figure, and only asked reactively once something had already changed.
+function isScopeAmbiguous(s: Pick<ScheduleRow, "frequency" | "type">): boolean {
+  return s.frequency === "MONTHLY" && s.type !== "FIXED_DATE_FIXED_AMOUNT";
+}
+
+// The period a MONTHLY schedule's current-month occurrence falls on — the
+// 1st of the month when there's no day_of_month (either variable-date
+// type), otherwise that day. Must match get_pending_schedule_confirmations'
+// / materialize_known_recurring_occurrences' own period_date computation so
+// a confirmation recorded here is recognized as covering that occurrence
+// (and doesn't keep showing up as still-pending afterward).
+function currentMonthlyPeriodDate(dayOfMonth: number | null): string {
+  const d = new Date();
+  d.setDate(1);
+  if (dayOfMonth) d.setDate(dayOfMonth);
+  return d.toISOString().slice(0, 10);
+}
 
 // Same form for creating a new schedule and editing an existing one's
 // rule — passing `existing` switches every field's initial value to the
@@ -37,6 +61,14 @@ export function NewRecurringScheduleForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  // Editing an eligible existing schedule starts on a scope question
+  // instead of the form itself — see isScopeAmbiguous. A brand-new schedule,
+  // or an existing one with no such ambiguity (FIXED_DATE_FIXED_AMOUNT, or
+  // not MONTHLY), has nothing to ask and goes straight to the form.
+  const [scope, setScope] = useState<"ask" | "forever" | "this-month">(
+    existing && isScopeAmbiguous(existing) ? "ask" : "forever",
+  );
 
   const existingIsSplit = (existing?.allocations.length ?? 0) >= 2;
   const [name, setName] = useState(existing?.name ?? "");
@@ -64,29 +96,21 @@ export function NewRecurringScheduleForm({
   const [categoryId, setCategoryId] = useState(existing?.categoryId ?? "");
   const [limited, setLimited] = useState(Boolean(existing?.end_date));
   const [durationMonths, setDurationMonths] = useState("");
-  const [askScope, setAskScope] = useState(false);
+  // Only meaningful for type VARIABLE_DATE_FIXED_AMOUNT: whether this
+  // schedule happens to have an approximate day at all, or notifies across
+  // the whole month instead (see that option's own label below).
+  const [hasApproxDay, setHasApproxDay] = useState(() =>
+    existing?.type === "VARIABLE_DATE_FIXED_AMOUNT" ? existing.day_of_month !== null : true,
+  );
 
   // A schedule's "recurring day" button already fixes the date it fires on
   // every month/week/year — showing a separate date picker alongside it
   // (only meaningful for ONCE) would be redundant, so only the field that
-  // actually matters for the selected frequency is shown.
-  const isVariableMonthly = frequency === "MONTHLY" && type === "VARIABLE_DATE_ESTIMATED_AMOUNT";
+  // actually matters for the selected frequency/type is shown.
+  const isFullyVariableMonthly = frequency === "MONTHLY" && type === "VARIABLE_DATE_ESTIMATED_AMOUNT";
+  const isOptionalDayMonthly = frequency === "MONTHLY" && type === "VARIABLE_DATE_FIXED_AMOUNT";
+  const showsDayPicker = frequency === "MONTHLY" && !isFullyVariableMonthly && (!isOptionalDayMonthly || hasApproxDay);
   const allocatedSum = allocations.reduce((sum, a) => sum + (a.amount || 0), 0);
-
-  // An amount/date on an estimated schedule is a running guess, not a fixed
-  // fact — a change to it is ambiguous: did this month just come in
-  // different, or should the whole rule change from now on? Only ask when
-  // there's actually something to be ambiguous about (editing an existing
-  // MONTHLY estimated-type schedule, and the amount or its day actually
-  // changed) — a brand-new schedule or a fixed-amount one has no "this
-  // month only" meaning.
-  const amountOrDateChanged =
-    Boolean(existing) &&
-    frequency === "MONTHLY" &&
-    type !== "FIXED_DATE_FIXED_AMOUNT" &&
-    (Number(expectedAmount) !== existing!.expected_amount ||
-      (type === "FIXED_DATE_ESTIMATED_AMOUNT" &&
-        new Date(`${startDate}T00:00:00`).getDate() !== existing!.day_of_month));
 
   function reset() {
     setName("");
@@ -100,6 +124,7 @@ export function NewRecurringScheduleForm({
     setCategoryId("");
     setLimited(false);
     setDurationMonths("");
+    setHasApproxDay(true);
   }
 
   function validate(): string | null {
@@ -125,20 +150,6 @@ export function NewRecurringScheduleForm({
       setError(validationError);
       return;
     }
-    if (amountOrDateChanged) {
-      setAskScope(true);
-      return;
-    }
-    finalizeSubmit(true);
-  }
-
-  // `forever` decides whether the new amount/day become the rule itself
-  // (updateRecurringSchedule persists them) or only this month's actual
-  // figure (the rule keeps its original amount/day, and the new figure is
-  // recorded as a one-off confirmed occurrence instead) — see
-  // `amountOrDateChanged` above for when this choice is actually offered.
-  function finalizeSubmit(forever: boolean) {
-    setAskScope(false);
     startTransition(async () => {
       try {
         const fd = new FormData();
@@ -146,13 +157,11 @@ export function NewRecurringScheduleForm({
         fd.set("direction", "EXPENSE");
         fd.set("type", type);
         fd.set("frequency", frequency);
-        const ruleAmount = forever ? expectedAmount : String(existing!.expected_amount);
-        if (frequency === "MONTHLY" && !isVariableMonthly) {
-          const ruleDay = forever ? new Date(`${startDate}T00:00:00`).getDate() : existing!.day_of_month;
-          fd.set("day_of_month", String(ruleDay));
+        if (showsDayPicker) {
+          fd.set("day_of_month", String(new Date(`${startDate}T00:00:00`).getDate()));
         }
         if (frequency === "ONCE") fd.set("one_time_date", oneTimeDate);
-        fd.set("expected_amount", ruleAmount);
+        fd.set("expected_amount", expectedAmount);
         fd.set("bank_account_id", bankAccountId);
         fd.set("category_id", categoryId);
         if (limited && durationMonths) {
@@ -170,23 +179,6 @@ export function NewRecurringScheduleForm({
         }
         if (existing) {
           await updateRecurringSchedule(existing.id, fd);
-          if (!forever) {
-            const day = new Date(`${startDate}T00:00:00`).getDate();
-            const periodDate =
-              type === "VARIABLE_DATE_ESTIMATED_AMOUNT"
-                ? todayIso()
-                : (() => {
-                    const d = new Date();
-                    d.setDate(1);
-                    d.setDate(day);
-                    return d.toISOString().slice(0, 10);
-                  })();
-            const payload: ScheduleConfirmationAllocation[] = split
-              ? allocations.filter((a) => a.departmentId && a.amount > 0)
-              : [{ departmentId, amount: Number(expectedAmount) }];
-            const result = await confirmScheduleOccurrence(existing.id, periodDate, periodDate, payload);
-            if (result.error) throw new Error(result.error);
-          }
           onSaved?.();
         } else {
           await createRecurringSchedule(fd);
@@ -199,8 +191,83 @@ export function NewRecurringScheduleForm({
     });
   }
 
+  // "this month only" never touches the rule itself — it just records this
+  // one occurrence's real figure, exactly like confirming it from "אישור
+  // סכומים בפועל" would, only reached from the edit button instead of
+  // waiting for that list to flag it.
+  function confirmThisMonth(confirmedDate: string, payload: ScheduleConfirmationAllocation[]) {
+    setError(null);
+    startTransition(async () => {
+      const periodDate = currentMonthlyPeriodDate(existing!.day_of_month);
+      const result = await confirmScheduleOccurrence(existing!.id, periodDate, confirmedDate, payload);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      onSaved?.();
+      router.refresh();
+    });
+  }
+
+  if (scope === "ask" && existing) {
+    return (
+      <div className="rounded-lg border border-warning bg-background p-3 space-y-2 text-sm">
+        <p>
+          לחיוב הזה יש סכום ו/או תאריך שאינם קבועים לגמרי — האם העריכה היא שינוי הכלל עצמו מעכשיו והלאה, או רק אישור/עדכון
+          מה באמת יהיה או היה החודש הזה, בלי לשנות את הכלל?
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setScope("this-month")}
+            className="rounded border border-border px-3 py-1 hover:bg-background"
+          >
+            רק החודש הנוכחי
+          </button>
+          <button
+            type="button"
+            onClick={() => setScope("forever")}
+            className="rounded bg-primary text-primary-foreground px-3 py-1"
+          >
+            שינוי הכלל (לתמיד)
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (scope === "this-month" && existing) {
+    return (
+      <div className="space-y-2">
+        <ScheduleOccurrenceConfirmFields
+          departments={departments}
+          isSplit={existingIsSplit}
+          expectedAmount={existing.expected_amount}
+          departmentId={existing.departmentId}
+          splitAllocations={existing.allocations}
+          initialConfirmedDate={currentMonthlyPeriodDate(existing.day_of_month)}
+          isPending={isPending}
+          error={error}
+          onSubmit={confirmThisMonth}
+          submitLabel="שמירה — רק החודש הנוכחי"
+        />
+        <button type="button" onClick={() => setScope("ask")} className="text-xs text-muted underline">
+          חזרה
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2 pt-2">
+      {existing && isScopeAmbiguous(existing) && (
+        <p className="text-xs text-muted">
+          עורך כעת את הכלל עצמו, לתמיד —{" "}
+          <button type="button" onClick={() => setScope("ask")} className="underline">
+            במקום זאת לעדכן רק את החודש הנוכחי
+          </button>
+        </p>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
         <input
           value={name}
@@ -234,6 +301,7 @@ export function NewRecurringScheduleForm({
           <option value="FIXED_DATE_FIXED_AMOUNT">תאריך קבוע עם סכום קבוע</option>
           <option value="FIXED_DATE_ESTIMATED_AMOUNT">תאריך קבוע עם סכום משוער</option>
           <option value="VARIABLE_DATE_ESTIMATED_AMOUNT">תאריך לא קבוע עם סכום משוער (חודשי בלבד)</option>
+          <option value="VARIABLE_DATE_FIXED_AMOUNT">תאריך משוער עם סכום קבוע (חודשי בלבד)</option>
         </select>
 
         <select
@@ -241,7 +309,9 @@ export function NewRecurringScheduleForm({
           onChange={(e) => {
             const f = e.target.value;
             setFrequency(f);
-            if (f !== "MONTHLY" && type === "VARIABLE_DATE_ESTIMATED_AMOUNT") setType("FIXED_DATE_FIXED_AMOUNT");
+            if (f !== "MONTHLY" && (type === "VARIABLE_DATE_ESTIMATED_AMOUNT" || type === "VARIABLE_DATE_FIXED_AMOUNT")) {
+              setType("FIXED_DATE_FIXED_AMOUNT");
+            }
             if (f === "ONCE") {
               setLimited(false);
               setDurationMonths("");
@@ -253,7 +323,7 @@ export function NewRecurringScheduleForm({
           <option value="ONCE">חד פעמי</option>
         </select>
 
-        {frequency === "MONTHLY" && !isVariableMonthly && (
+        {showsDayPicker && (
           <input
             type="date"
             value={startDate}
@@ -270,8 +340,14 @@ export function NewRecurringScheduleForm({
             className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           />
         )}
-        {isVariableMonthly && (
+        {isFullyVariableMonthly && (
           <div className="text-xs text-muted flex items-center">התאריך ייקבע כל חודש בעת אישור הסכום בפועל</div>
+        )}
+        {isOptionalDayMonthly && (
+          <label className="flex items-center gap-1 text-xs text-muted">
+            <input type="checkbox" checked={hasApproxDay} onChange={(e) => setHasApproxDay(e.target.checked)} />
+            {hasApproxDay ? "יש יום קבוע בחודש" : "אין יום קבוע — יוצג לאורך כל החודש"}
+          </label>
         )}
 
         <input
@@ -365,31 +441,6 @@ export function NewRecurringScheduleForm({
           allocations={allocations}
           onChange={setAllocations}
         />
-      )}
-
-      {askScope && (
-        <div className="rounded-lg border border-warning bg-background p-3 space-y-2 text-sm">
-          <p>שינית סכום או תאריך של חיוב עם סכום/תאריך משוער — האם זה שינוי לחודש הנוכחי בלבד, או שהחיוב עצמו משתנה מעכשיו והלאה?</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              disabled={isPending}
-              onClick={() => finalizeSubmit(false)}
-              className="rounded border border-border px-3 py-1 disabled:opacity-50"
-            >
-              רק לחודש הנוכחי
-            </button>
-            <button
-              disabled={isPending}
-              onClick={() => finalizeSubmit(true)}
-              className="rounded bg-primary text-primary-foreground px-3 py-1 disabled:opacity-50"
-            >
-              לתמיד
-            </button>
-            <button onClick={() => setAskScope(false)} className="text-xs text-muted">
-              ביטול
-            </button>
-          </div>
-        </div>
       )}
 
       {error && <p className="text-sm text-danger">{error}</p>}
