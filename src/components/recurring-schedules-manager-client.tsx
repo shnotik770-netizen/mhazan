@@ -147,7 +147,12 @@ export function RecurringSchedulesManager({
       label: "תאריך",
       sortValue: (s) => (s.type === "VARIABLE_DATE_ESTIMATED_AMOUNT" ? "" : scheduleDateLabel(s)),
     },
-    { key: "amount", label: "סכום צפוי", sortValue: (s) => s.expected_amount },
+    {
+      key: "amount",
+      label: "סכום צפוי",
+      sortValue: (s) => s.expected_amount,
+      filterValue: (s) => (s.type === "FIXED_DATE_FIXED_AMOUNT" ? "קבוע" : "משוער"),
+    },
     { key: "end_date", label: "משך", sortValue: (s) => s.end_date ?? "" },
     { key: "active", label: "פעיל", sortValue: (s) => (s.is_active ? 1 : 0), filterValue: (s) => (s.is_active ? "פעיל" : "לא פעיל") },
   ];
