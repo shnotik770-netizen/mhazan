@@ -264,7 +264,7 @@ export function DepartmentTransactionsTable({
                   {isAdmin && (r.kind === "check" || r.kind === "income" || r.kind === "manual") && (
                     <EditDescriptionButton id={r.id} kind={r.kind} currentValue={r.description} />
                   )}
-                  {isAdmin && (r.kind === "check" || r.kind === "income") && (
+                  {isAdmin && (r.kind === "check" || r.kind === "income" || r.kind === "manual") && (
                     <LedgerFlagToggle id={r.id} kind={r.kind} skipDepartmentLedger={r.isOld} />
                   )}
                 </RowActionsMenu>

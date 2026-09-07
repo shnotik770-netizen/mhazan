@@ -844,7 +844,7 @@ export type Database = {
           bank_account_id: string
           created_at: string
           created_by: string | null
-          department_id: string
+          department_id: string | null
           direction: string
           entry_date: string | null
           id: string
@@ -852,6 +852,7 @@ export type Database = {
           notes: string | null
           recurring_period_date: string | null
           recurring_schedule_id: string | null
+          skip_department_ledger: boolean
           status: string
         }
         Insert: {
@@ -861,7 +862,7 @@ export type Database = {
           bank_account_id: string
           created_at?: string
           created_by?: string | null
-          department_id: string
+          department_id?: string | null
           direction: string
           entry_date?: string | null
           id?: string
@@ -869,6 +870,7 @@ export type Database = {
           notes?: string | null
           recurring_period_date?: string | null
           recurring_schedule_id?: string | null
+          skip_department_ledger?: boolean
           status?: string
         }
         Update: {
@@ -878,7 +880,7 @@ export type Database = {
           bank_account_id?: string
           created_at?: string
           created_by?: string | null
-          department_id?: string
+          department_id?: string | null
           direction?: string
           entry_date?: string | null
           id?: string
@@ -886,6 +888,7 @@ export type Database = {
           notes?: string | null
           recurring_period_date?: string | null
           recurring_schedule_id?: string | null
+          skip_department_ledger?: boolean
           status?: string
         }
         Relationships: [

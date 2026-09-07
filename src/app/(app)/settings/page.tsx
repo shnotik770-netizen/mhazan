@@ -5,6 +5,7 @@ import { NewUserForm, UsersTable } from "@/components/user-access-client";
 import { BankAccountsTable } from "@/components/dashboard-tables-client";
 import { NedarimSettingsSection } from "@/components/nedarim-settings-client";
 import { PasteExistingChecksForm } from "@/components/checks-paste-client";
+import { PasteManualEntriesForm } from "@/components/paste-manual-entries-form";
 import { createBankAccount } from "./actions";
 
 export default async function SettingsPage() {
@@ -133,6 +134,17 @@ export default async function SettingsPage() {
           </p>
         </div>
         <PasteExistingChecksForm bankAccounts={bankAccounts ?? []} departments={departments ?? []} />
+      </section>
+
+      <section className="card p-4 flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="font-semibold">הדבקת רשימת הכנסות / הוצאות</h2>
+          <p className="text-sm text-muted">
+            הדבקה מרוכזת של כמה הכנסות/הוצאות בבת אחת (מחלקה, סוג, סכום, תאריך, הערות) עבור חשבון בנק אחד — שורה בלי
+            מחלקה מזוהה נשמרת &quot;ממתין לסיווג&quot; במקום להידחות.
+          </p>
+        </div>
+        <PasteManualEntriesForm departments={departments ?? []} bankAccounts={bankAccounts ?? []} />
       </section>
 
       <NedarimSettingsSection lastSyncedAt={lastNedarimSync?.synced_at ?? null} />

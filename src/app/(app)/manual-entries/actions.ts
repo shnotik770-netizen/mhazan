@@ -27,6 +27,9 @@ export async function createManualEntry(input: {
   bankAccountId: string;
 }): Promise<{ error?: string }> {
   if (!input.entryDate) return { error: "יש להזין תאריך" };
+  // This single-entry form always requires a department — unlike the bulk
+  // paste flow (createManualEntryBatch), where a row missing one is
+  // deliberately allowed to stay "ממתין לסיווג" rather than being lost.
   if (!input.departmentId) return { error: "יש לבחור מחלקה" };
   if (!input.bankAccountId) return { error: "יש לבחור חשבון בנק" };
   const user = await requireUser();
@@ -56,20 +59,25 @@ export async function createManualEntry(input: {
 }
 
 export type ManualEntryBatchRow = {
-  departmentId: string;
+  // Nullable so a bulk-pasted row missing a department can still be saved
+  // — it lands "ממתין לסיווג" (same as an unclassified check) instead of
+  // being rejected outright, and gets assigned a department later via the
+  // normal edit form.
+  departmentId: string | null;
   direction: "INCOME" | "EXPENSE";
   amount: number;
   entryDate: string;
   notes: string | null;
   bankAccountId: string;
+  skipDepartmentLedger?: boolean;
 };
 
 export type ManualEntryBatchOutcome = { success: boolean; reason?: string };
 
-// Bulk version of createManualEntry: type several rows at once (each its
-// own amount/direction/department/notes) and save them all in one click.
-// Each row is inserted individually — same as every other batch entry
-// point in the app — so one bad row never blocks the rest from saving.
+// Bulk version of createManualEntry: type (or paste) several rows at once
+// (each its own amount/direction/department/notes) and save them all in
+// one click. Each row is inserted individually — same as every other batch
+// entry point in the app — so one bad row never blocks the rest from saving.
 export async function createManualEntryBatch(rows: ManualEntryBatchRow[]): Promise<{ outcomes: ManualEntryBatchOutcome[] }> {
   const user = await requireUser();
   const supabase = await createClient();
@@ -80,10 +88,6 @@ export async function createManualEntryBatch(rows: ManualEntryBatchRow[]): Promi
   for (const row of rows) {
     if (!row.entryDate) {
       outcomes.push({ success: false, reason: "יש להזין תאריך" });
-      continue;
-    }
-    if (!row.departmentId) {
-      outcomes.push({ success: false, reason: "יש לבחור מחלקה" });
       continue;
     }
     if (!row.bankAccountId) {
@@ -101,6 +105,7 @@ export async function createManualEntryBatch(rows: ManualEntryBatchRow[]): Promi
       entry_date: row.entryDate,
       notes: row.notes,
       bank_account_id: row.bankAccountId,
+      skip_department_ledger: row.skipDepartmentLedger ?? false,
       created_by: user.id,
       status: isAdmin ? "APPROVED" : "PENDING",
       approved_by: isAdmin ? user.id : null,
@@ -110,7 +115,7 @@ export async function createManualEntryBatch(rows: ManualEntryBatchRow[]): Promi
       outcomes.push({ success: false, reason: safeErrorMessage(error) });
     } else {
       outcomes.push({ success: true });
-      departmentIds.add(row.departmentId);
+      if (row.departmentId) departmentIds.add(row.departmentId);
     }
   }
 
@@ -212,7 +217,14 @@ export async function createInterDepartmentTransfer(input: {
 // re-entering it.
 export async function updateManualEntry(
   entryId: string,
-  input: { amount: number; entryDate: string; departmentId: string; notes: string | null; bankAccountId?: string },
+  input: {
+    amount: number;
+    entryDate: string;
+    departmentId: string | null;
+    notes: string | null;
+    bankAccountId?: string;
+    skipDepartmentLedger?: boolean;
+  },
 ): Promise<{ error?: string }> {
   await requireFinanceAdmin();
   if (!input.entryDate) return { error: "יש להזין תאריך" };
@@ -230,6 +242,7 @@ export async function updateManualEntry(
       department_id: input.departmentId,
       notes: input.notes,
       ...(input.bankAccountId ? { bank_account_id: input.bankAccountId } : {}),
+      ...(input.skipDepartmentLedger !== undefined ? { skip_department_ledger: input.skipDepartmentLedger } : {}),
     })
     .eq("id", entryId);
   if (error) return { error: safeErrorMessage(error) };
@@ -258,6 +271,23 @@ export async function updateManualEntryNotes(entryId: string, notes: string): Pr
   if (error) return { error: safeErrorMessage(error) };
   revalidateEntryPaths(existing?.department_id);
   return {};
+}
+
+// Mirrors updateCheckLedgerFlag/updateIncomeLedgerFlag: reclassify a manual
+// entry tagged "old" (skip_department_ledger) while reviewing a department
+// report — confirm it's really old history that shouldn't count again, or
+// flip it back to counting toward the department's balance.
+export async function updateManualEntryLedgerFlag(entryId: string, skipDepartmentLedger: boolean): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase
+    .from("manual_department_entries")
+    .update({ skip_department_ledger: skipDepartmentLedger })
+    .eq("id", entryId)
+    .select("department_id")
+    .single();
+  revalidateEntryPaths(updated?.department_id);
+  return { error: safeErrorMessage(error) };
 }
 
 export async function deleteManualEntry(entryId: string): Promise<{ error?: string }> {

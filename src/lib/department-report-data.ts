@@ -129,7 +129,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       .order("due_date", { ascending: false }),
     supabase
       .from("manual_department_entries")
-      .select("id, entry_date, amount, direction, notes, recurring_schedule_id, is_inter_department_transfer")
+      .select("id, entry_date, amount, direction, notes, recurring_schedule_id, is_inter_department_transfer, skip_department_ledger")
       .eq("department_id", departmentId)
       .eq("status", "APPROVED")
       .order("entry_date", { ascending: false }),
@@ -252,7 +252,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       typeCategory: kindLabel,
       description: e.notes || fallbackLabel,
       amount: e.direction === "INCOME" ? Number(e.amount) : -Number(e.amount),
-      isOld: false,
+      isOld: e.skip_department_ledger,
       kind: "manual",
     };
   });

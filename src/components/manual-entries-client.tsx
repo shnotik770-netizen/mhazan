@@ -301,7 +301,7 @@ export function NewManualEntryFormMulti({
                 <tr key={row.key}>
                   <td>
                     <select
-                      value={row.departmentId}
+                      value={row.departmentId ?? ""}
                       onChange={(e) => updateDepartment(row.key, e.target.value)}
                       className="rounded border border-border bg-transparent px-1 py-1 text-xs"
                     >

@@ -4,7 +4,14 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateCheckLedgerFlag } from "@/app/(app)/checks/actions";
 import { updateIncomeLedgerFlag } from "@/app/(app)/incomes/actions";
+import { updateManualEntryLedgerFlag } from "@/app/(app)/manual-entries/actions";
 import { rowActionButtonClass } from "@/components/row-actions-menu";
+
+const ACTION_BY_KIND = {
+  check: updateCheckLedgerFlag,
+  income: updateIncomeLedgerFlag,
+  manual: updateManualEntryLedgerFlag,
+};
 
 // Shown next to a department-report row that's tagged "old" (or not) —
 // lets an admin reviewing the list flip a specific row the other way:
@@ -16,7 +23,7 @@ export function LedgerFlagToggle({
   skipDepartmentLedger,
 }: {
   id: string;
-  kind: "check" | "income";
+  kind: "check" | "income" | "manual";
   skipDepartmentLedger: boolean;
 }) {
   const router = useRouter();
@@ -24,8 +31,7 @@ export function LedgerFlagToggle({
 
   function toggle() {
     startTransition(async () => {
-      const action = kind === "check" ? updateCheckLedgerFlag : updateIncomeLedgerFlag;
-      await action(id, !skipDepartmentLedger);
+      await ACTION_BY_KIND[kind](id, !skipDepartmentLedger);
       router.refresh();
     });
   }

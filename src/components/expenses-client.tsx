@@ -681,12 +681,6 @@ export function EditExpenseForm({
       setError("סכום לא תקין");
       return;
     }
-    // A check/transfer is allowed to stay unclassified ("ממתין לסיווג") —
-    // only a manual entry, which has no such pending state, still requires one.
-    if (!row.isCheck && !departmentId) {
-      setError("יש לבחור מחלקה");
-      return;
-    }
     setError(null);
     startTransition(async () => {
       const result = row.isCheck
@@ -705,8 +699,9 @@ export function EditExpenseForm({
         : await updateManualEntry(row.id, {
             amount: amountNum,
             entryDate: date,
-            departmentId,
+            departmentId: departmentId || null,
             notes: notes || null,
+            skipDepartmentLedger: isOld,
           });
       if (result.error) {
         setError(result.error);
@@ -824,6 +819,15 @@ export function EditExpenseForm({
             <input type="checkbox" checked={hasInvoice} onChange={(e) => setHasInvoice(e.target.checked)} />
             יש חשבונית
           </label>
+          <label className="flex items-center gap-1.5 text-sm">
+            <input type="checkbox" checked={isOld} onChange={(e) => setIsOld(e.target.checked)} />
+            סימון כישן (לא לכלול במאזן המחלקה)
+          </label>
+        </div>
+      )}
+
+      {!row.isCheck && (
+        <div className="flex flex-wrap items-center gap-4 rounded-lg bg-background p-3">
           <label className="flex items-center gap-1.5 text-sm">
             <input type="checkbox" checked={isOld} onChange={(e) => setIsOld(e.target.checked)} />
             סימון כישן (לא לכלול במאזן המחלקה)
