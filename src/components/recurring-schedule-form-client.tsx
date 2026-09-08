@@ -328,7 +328,11 @@ export function NewRecurringScheduleForm({
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            title="היום בחודש שנבחר כאן קובע את יום החיוב החוזר בכל חודש"
+            title={
+              isOptionalDayMonthly
+                ? "תאריך משוער בלבד — ההתראה תתחיל להופיע לקראת היום הזה בכל חודש, גם אם בפועל זה יורד ביום קצת שונה"
+                : "היום בחודש שנבחר כאן קובע את יום החיוב החוזר בכל חודש"
+            }
             className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           />
         )}
@@ -346,7 +350,7 @@ export function NewRecurringScheduleForm({
         {isOptionalDayMonthly && (
           <label className="flex items-center gap-1 text-xs text-muted">
             <input type="checkbox" checked={hasApproxDay} onChange={(e) => setHasApproxDay(e.target.checked)} />
-            {hasApproxDay ? "יש יום קבוע בחודש" : "אין יום קבוע — יוצג לאורך כל החודש"}
+            {hasApproxDay ? "יש לי תאריך משוער ליום מסוים" : "אין לי תאריך משוער — יוצג לאורך כל החודש"}
           </label>
         )}
 

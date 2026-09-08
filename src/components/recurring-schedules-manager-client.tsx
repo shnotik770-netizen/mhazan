@@ -30,6 +30,15 @@ function scheduleDateLabel(s: { frequency: string; day_of_month: number | null; 
   return "—";
 }
 
+// These two types never have a *guaranteed* date — VARIABLE_DATE_ESTIMATED_AMOUNT
+// never carries a day_of_month at all, and VARIABLE_DATE_FIXED_AMOUNT's is only
+// ever an optional best guess (used to start its notification window near
+// that day instead of from the 1st of the month) — providing one doesn't
+// promote it to a "fixed" date, so it's always labeled as an estimate.
+function isVariableDateType(type: string) {
+  return type === "VARIABLE_DATE_ESTIMATED_AMOUNT" || type === "VARIABLE_DATE_FIXED_AMOUNT";
+}
+
 export type ScheduleRow = {
   id: string;
   name: string;
@@ -145,8 +154,8 @@ export function RecurringSchedulesManager({
     {
       key: "date",
       label: "תאריך",
-      sortValue: (s) => (s.day_of_month === null && s.frequency === "MONTHLY" ? "" : scheduleDateLabel(s)),
-      filterValue: (s) => (s.day_of_month === null && s.frequency === "MONTHLY" ? "לא קבוע" : "קבוע"),
+      sortValue: (s) => (isVariableDateType(s.type) ? "" : scheduleDateLabel(s)),
+      filterValue: (s) => (isVariableDateType(s.type) ? "משוער" : "קבוע"),
     },
     {
       key: "amount",
@@ -277,8 +286,10 @@ function ScheduleRowItem({ schedule: s, onEdit }: { schedule: ScheduleRow; onEdi
       </td>
       <td>{frequencyLabel(s.frequency)}</td>
       <td>
-        {s.day_of_month === null && s.frequency === "MONTHLY" ? (
-          <span className="badge bg-background text-muted">תאריך לא קבוע</span>
+        {isVariableDateType(s.type) ? (
+          <span className="badge bg-background text-muted">
+            {s.day_of_month ? `משוער — סביב ה-${s.day_of_month} לחודש` : "משוער — לאורך כל החודש"}
+          </span>
         ) : (
           scheduleDateLabel(s)
         )}
