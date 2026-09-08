@@ -492,6 +492,16 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
   });
   const forecastByMonth = new Map<string, { income: number; expense: number }>();
   for (const row of forecastRows ?? []) {
+    // The RPC's own "OVERDUE" bucket re-surfaces every still-unpaid check/
+    // transfer whose due date has already passed, dated to today, so a bank
+    // forecast page can show it as an imminent outflow. But an overdue due
+    // date is by definition <= today, meaning that same check/transfer is
+    // already sitting in `pastRows`/`historicalByMonth` above (expenseRows
+    // includes every non-cancelled check regardless of paid/unpaid status).
+    // Counting it again here would double it for whichever month today
+    // falls in — skip it; only genuinely future-dated projections belong in
+    // the forecast half of this table.
+    if (row.category === "OVERDUE") continue;
     const m = row.forecast_date!.slice(0, 7);
     const g = forecastByMonth.get(m) ?? { income: 0, expense: 0 };
     const change = Number(row.expected_change);
