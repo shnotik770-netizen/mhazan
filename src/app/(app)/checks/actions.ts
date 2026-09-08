@@ -263,6 +263,7 @@ export async function convertPendingCheckToSpread(
     internalBeneficiary: null,
     notes: original.notes,
     bankAccountId: original.bank_account_id,
+    categoryId: original.category_id,
     hasInvoice: original.has_invoice,
     rows: rowsWithAllocations,
   });
@@ -284,6 +285,7 @@ export async function createPaymentSpread(input: {
   internalBeneficiary: string | null;
   notes: string | null;
   bankAccountId: string;
+  categoryId: string | null;
   hasInvoice: boolean;
   rows: {
     date: string | null;
@@ -328,6 +330,7 @@ export async function createPaymentSpread(input: {
         check_number: row.checkNumber || null,
         issued_at: row.checkNumber ? new Date().toISOString() : null,
         department_id: isSplit ? null : row.departmentId,
+        category_id: input.categoryId,
         internal_beneficiary: input.internalBeneficiary || null,
         spread_id: spread.id,
         has_invoice: input.hasInvoice,

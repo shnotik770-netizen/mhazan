@@ -73,7 +73,7 @@ export default async function TransactionsPage({
     .limit(300);
   let manualQuery = supabase
     .from("manual_department_entries")
-    .select("id, entry_date, amount, direction, notes, status, department_id, departments(name)")
+    .select("id, entry_date, amount, direction, notes, status, department_id, departments(name), category_id, categories(name)")
     .eq("status", "APPROVED")
     .order("entry_date", { ascending: false })
     .limit(300);
@@ -212,6 +212,8 @@ export default async function TransactionsPage({
     status: string;
     department_id: string | null;
     departments: { name: string } | null;
+    category_id: string | null;
+    categories: { name: string } | null;
   }[]) {
     if (type !== "ALL" && type !== row.direction) continue;
     unified.push({
@@ -222,8 +224,8 @@ export default async function TransactionsPage({
       amount: Number(row.amount),
       departmentId: row.department_id,
       departmentName: row.departments?.name ?? null,
-      categoryId: null,
-      categoryName: null,
+      categoryId: row.category_id,
+      categoryName: row.categories?.name ?? null,
       sourceKey: "MANUAL",
       source: SOURCE_LABELS.MANUAL,
       incomeEdit: null,

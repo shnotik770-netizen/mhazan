@@ -12,6 +12,7 @@ import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
 type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | null };
+type CategoryOption = { id: string; name: string };
 
 type Row = {
   date: string;
@@ -34,12 +35,21 @@ function blankRow(): Row {
 export function UnifiedCheckForm({
   bankAccounts,
   departments,
+  categories,
+  supplierNames,
   open: controlledOpen,
   onOpenChange,
   hideTrigger = false,
 }: {
   bankAccounts: BankAccount[];
   departments: Department[];
+  categories: CategoryOption[];
+  // Existing supplier names for the payee field's browser-native
+  // autocomplete (typing filters the list; finishing without picking a
+  // suggestion still just saves whatever was typed). Rendered as this
+  // component's own <datalist> rather than relying on one elsewhere in the
+  // page, since this form can be opened from pages that never render one.
+  supplierNames: string[];
   // Uncontrolled by default (renders its own "+ דרישת תשלום חדשה" button,
   // as used on the checks page). Passing `open`/`onOpenChange` lets an
   // external trigger (the quick-actions FAB) drive it instead, with
@@ -56,6 +66,7 @@ export function UnifiedCheckForm({
   const [payee, setPayee] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"CHECK" | "TRANSFER">("CHECK");
   const [bankAccountId, setBankAccountId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
   const [notes, setNotes] = useState("");
   const [skipDepartmentLedger, setSkipDepartmentLedger] = useState(false);
   const [hasInvoice, setHasInvoice] = useState(false);
@@ -72,6 +83,7 @@ export function UnifiedCheckForm({
 
   function resetFields() {
     setPayee("");
+    setCategoryId("");
     setNotes("");
     setSkipDepartmentLedger(false);
     setHasInvoice(false);
@@ -136,7 +148,7 @@ export function UnifiedCheckForm({
           dueDate: row.date || null,
           checkNumber: row.checkNumber || null,
           departmentId: isSplitting ? null : row.departmentId || null,
-          categoryId: null,
+          categoryId: categoryId || null,
           internalBeneficiary: null,
           notes: notes || null,
           skipDepartmentLedger,
@@ -160,6 +172,7 @@ export function UnifiedCheckForm({
         internalBeneficiary: null,
         notes: notes || null,
         bankAccountId,
+        categoryId: categoryId || null,
         hasInvoice,
         rows: rows.map((r) => ({
           date: r.date || null,
@@ -245,9 +258,26 @@ export function UnifiedCheckForm({
               value={payee}
               onChange={(e) => setPayee(e.target.value)}
               placeholder="מוטב"
-              list="supplier-names"
+              list="unified-check-form-supplier-names"
               className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm md:col-span-2"
             />
+            <datalist id="unified-check-form-supplier-names">
+              {supplierNames.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm md:col-span-2"
+            >
+              <option value="">קטגוריה (אופציונלי)...</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="space-y-2">
             {rows.map((row, i) => (
