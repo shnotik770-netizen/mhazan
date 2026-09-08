@@ -9,6 +9,7 @@ import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
 type BankAccount = Tables<"bank_accounts">;
+type CategoryOption = { id: string; name: string };
 
 type DraftRow = {
   key: number;
@@ -18,6 +19,7 @@ type DraftRow = {
   amount: number;
   entryDate: string;
   notes: string;
+  categoryId: string;
   error?: string;
 };
 
@@ -52,13 +54,13 @@ function guessDirection(text: string): "INCOME" | "EXPENSE" | null {
   return null;
 }
 
-function guessDepartment(text: string, departments: Department[]): string {
+function guessByName<T extends { id: string; name: string }>(text: string, options: T[]): string {
   const normalized = text.trim().toLowerCase();
   if (!normalized) return "";
-  const exact = departments.find((d) => d.name.toLowerCase() === normalized);
+  const exact = options.find((o) => o.name.toLowerCase() === normalized);
   if (exact) return exact.id;
-  const partial = departments.find(
-    (d) => d.name.toLowerCase().includes(normalized) || normalized.includes(d.name.toLowerCase()),
+  const partial = options.find(
+    (o) => o.name.toLowerCase().includes(normalized) || normalized.includes(o.name.toLowerCase()),
   );
   return partial?.id ?? "";
 }
@@ -69,6 +71,7 @@ const HEADER_FIELD_MAP: Record<string, string> = {
   סכום: "amount",
   תאריך: "date",
   הערות: "notes",
+  קטגוריה: "category",
 };
 
 function normalizeHeaderText(text: string): string {
@@ -78,8 +81,10 @@ function normalizeHeaderText(text: string): string {
 // A row whose department couldn't be matched (blank column, or text that
 // doesn't match any department name) isn't rejected — it still saves, just
 // "ממתין לסיווג" like an unclassified check, so nothing pasted is ever
-// silently dropped for a missing column.
-function parsePastedRows(text: string, departments: Department[]): DraftRow[] {
+// silently dropped for a missing column. A category that can't be matched
+// simply stays unset — it's a plain optional tag, not something a row
+// needs to wait on.
+function parsePastedRows(text: string, departments: Department[], categories: CategoryOption[]): DraftRow[] {
   const lines = text
     .trim()
     .split("\n")
@@ -87,7 +92,7 @@ function parsePastedRows(text: string, departments: Department[]): DraftRow[] {
     .filter((cols) => cols.some((c) => c.length > 0));
   if (lines.length === 0) return [];
 
-  let colIndex = { department: 0, direction: 1, amount: 2, date: 3, notes: 4 };
+  let colIndex = { department: 0, direction: 1, amount: 2, date: 3, notes: 4, category: -1 };
   let dataLines = lines;
   const headerMapped: Record<string, number> = {};
   lines[0].forEach((col, idx) => {
@@ -103,38 +108,43 @@ function parsePastedRows(text: string, departments: Department[]): DraftRow[] {
       amount: headerMapped.amount,
       date: headerMapped.date ?? 3,
       notes: headerMapped.notes ?? 4,
+      category: headerMapped.category ?? -1,
     };
     dataLines = lines.slice(1);
   }
 
   return dataLines.map((cols) => {
     const departmentText = cols[colIndex.department] ?? "";
+    const categoryText = colIndex.category >= 0 ? (cols[colIndex.category] ?? "") : "";
     return {
       key: nextRowKey++,
-      departmentId: guessDepartment(departmentText, departments),
+      departmentId: guessByName(departmentText, departments),
       departmentText,
       direction: guessDirection(cols[colIndex.direction] ?? "") ?? "EXPENSE",
       amount: Number((cols[colIndex.amount] ?? "").replace(/[^\d.-]/g, "")) || 0,
       entryDate: normalizeDate(cols[colIndex.date] ?? ""),
       notes: cols[colIndex.notes] ?? "",
+      categoryId: guessByName(categoryText, categories),
     };
   });
 }
 
-// A one-time bulk paste of income/expense rows against a specific bank
-// account — the two questions up front (which account, and whether this
-// whole batch is old history) apply once to the entire list instead of
-// being asked per row, since a pasted batch almost always comes from one
-// bank statement covering one period.
-export function PasteManualEntriesForm({
+// The modal body itself, with no button/Modal of its own — shared by the
+// standalone Settings-page button below and by NewManualEntryButton, which
+// folds this in as its "הדבקת רשימה" mode so bulk-paste is reachable from
+// everywhere a manual entry can be created, not just Settings.
+export function PasteManualEntriesFormInner({
   departments,
   bankAccounts,
+  categories,
+  onClose,
 }: {
   departments: Department[];
   bankAccounts: BankAccount[];
+  categories: CategoryOption[];
+  onClose?: () => void;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [bankAccountId, setBankAccountId] = useState("");
   const [isOld, setIsOld] = useState(false);
   const [pasteText, setPasteText] = useState("");
@@ -142,22 +152,13 @@ export function PasteManualEntriesForm({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function close() {
-    setOpen(false);
-    setBankAccountId("");
-    setIsOld(false);
-    setPasteText("");
-    setRows([]);
-    setError(null);
-  }
-
   function parse() {
     setError(null);
     if (!bankAccountId) {
       setError("יש לבחור חשבון בנק לפני הפירוש");
       return;
     }
-    const parsed = parsePastedRows(pasteText, departments);
+    const parsed = parsePastedRows(pasteText, departments, categories);
     if (parsed.length === 0) {
       setError("לא זוהו שורות בטקסט שהודבק");
       return;
@@ -187,6 +188,7 @@ export function PasteManualEntriesForm({
         amount: r.amount,
         entryDate: r.entryDate,
         notes: r.notes || null,
+        categoryId: r.categoryId || null,
         bankAccountId,
         skipDepartmentLedger: isOld,
       }));
@@ -201,10 +203,187 @@ export function PasteManualEntriesForm({
       }
       setRows(nextRows);
       router.refresh();
-      if (nextRows.length === 0) setPasteText("");
+      if (nextRows.length === 0) {
+        setPasteText("");
+        if (onClose) onClose();
+      }
     });
   }
 
+  return (
+    <div className="card p-4 space-y-3 w-[min(95vw,64rem)]">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">הדבקת רשימת הכנסות / הוצאות</h2>
+        {onClose && (
+          <button type="button" onClick={onClose} className="text-sm text-muted">
+            סגור
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm text-muted mb-1">לאיזה חשבון בנק שייכת הרשימה?</label>
+          <SearchableSelect
+            value={bankAccountId}
+            onChange={setBankAccountId}
+            options={bankAccounts.map((b) => ({ id: b.id, label: `${b.bank_name} (${b.account_number})` }))}
+            placeholder="בחר חשבון בנק..."
+            required
+            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+          />
+        </div>
+        <label className="flex items-center gap-1.5 text-sm sm:mt-6">
+          <input type="checkbox" checked={isOld} onChange={(e) => setIsOld(e.target.checked)} />
+          זו רשימה ישנה — לא לכלול בחישוב היתרה הנוכחית של המחלקות
+        </label>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="space-y-2">
+          <label className="block text-sm text-muted mb-1">
+            הדבק כאן — עמודות: מחלקה, סוג (הכנסה/הוצאה), סכום, תאריך, קטגוריה (אופציונלי), הערות
+          </label>
+          <textarea
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            rows={8}
+            dir="ltr"
+            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-mono"
+            placeholder={"מחלקה\tסוג\tסכום\tתאריך\tהערות"}
+          />
+          <button
+            type="button"
+            disabled={!pasteText.trim()}
+            onClick={parse}
+            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          >
+            פרש רשימה
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>מחלקה</th>
+                  <th>סוג</th>
+                  <th>סכום</th>
+                  <th>תאריך</th>
+                  <th>קטגוריה</th>
+                  <th>הערות</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.key}>
+                    <td>
+                      <SearchableSelect
+                        value={row.departmentId}
+                        onChange={(id) => update(row.key, { departmentId: id })}
+                        options={departments.map((d) => ({ id: d.id, label: d.name }))}
+                        placeholder={row.departmentText ? `"${row.departmentText}"?` : "בהמתנה"}
+                        className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                      />
+                      {!row.departmentId && <span className="text-xs text-warning">ממתין לסיווג</span>}
+                    </td>
+                    <td>
+                      <select
+                        value={row.direction}
+                        onChange={(e) => update(row.key, { direction: e.target.value as "INCOME" | "EXPENSE" })}
+                        className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                      >
+                        <option value="EXPENSE">הוצאה</option>
+                        <option value="INCOME">הכנסה</option>
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={row.amount || ""}
+                        onChange={(e) => update(row.key, { amount: Number(e.target.value) || 0 })}
+                        className="w-24 rounded border border-border bg-transparent px-1 py-1 text-xs"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="date"
+                        value={row.entryDate}
+                        onChange={(e) => update(row.key, { entryDate: e.target.value })}
+                        className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                      />
+                    </td>
+                    <td>
+                      <select
+                        value={row.categoryId}
+                        onChange={(e) => update(row.key, { categoryId: e.target.value })}
+                        className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                      >
+                        <option value="">ללא קטגוריה</option>
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        value={row.notes}
+                        onChange={(e) => update(row.key, { notes: e.target.value })}
+                        className="w-32 rounded border border-border bg-transparent px-1 py-1 text-xs"
+                      />
+                    </td>
+                    <td>
+                      <button type="button" onClick={() => removeRow(row.key)} className="text-xs text-danger">
+                        ✕
+                      </button>
+                      {row.error && <p className="text-xs text-danger">{row.error}</p>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={saveAll}
+              className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              {isPending ? "שומר…" : `שמור ${rows.length} שורות`}
+            </button>
+            <button type="button" onClick={() => setRows([])} className="text-sm text-muted">
+              חזרה לעריכת ההדבקה
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && <p className="text-sm text-danger">{error}</p>}
+    </div>
+  );
+}
+
+// A one-time bulk paste of income/expense rows against a specific bank
+// account — the two questions up front (which account, and whether this
+// whole batch is old history) apply once to the entire list instead of
+// being asked per row, since a pasted batch almost always comes from one
+// bank statement covering one period. Standalone button+modal wrapper for
+// Settings; see PasteManualEntriesFormInner for the shared body.
+export function PasteManualEntriesForm({
+  departments,
+  bankAccounts,
+  categories,
+}: {
+  departments: Department[];
+  bankAccounts: BankAccount[];
+  categories: CategoryOption[];
+}) {
+  const [open, setOpen] = useState(false);
   return (
     <>
       <button
@@ -215,144 +394,13 @@ export function PasteManualEntriesForm({
         הדבקת רשימת הכנסות / הוצאות
       </button>
       {open && (
-        <Modal onClose={close}>
-          <div className="card p-4 space-y-3 w-[min(95vw,64rem)]">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold">הדבקת רשימת הכנסות / הוצאות</h2>
-              <button type="button" onClick={close} className="text-sm text-muted">
-                סגור
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm text-muted mb-1">לאיזה חשבון בנק שייכת הרשימה?</label>
-                <SearchableSelect
-                  value={bankAccountId}
-                  onChange={setBankAccountId}
-                  options={bankAccounts.map((b) => ({ id: b.id, label: `${b.bank_name} (${b.account_number})` }))}
-                  placeholder="בחר חשבון בנק..."
-                  required
-                  className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-                />
-              </div>
-              <label className="flex items-center gap-1.5 text-sm sm:mt-6">
-                <input type="checkbox" checked={isOld} onChange={(e) => setIsOld(e.target.checked)} />
-                זו רשימה ישנה — לא לכלול בחישוב היתרה הנוכחית של המחלקות
-              </label>
-            </div>
-
-            {rows.length === 0 ? (
-              <div className="space-y-2">
-                <label className="block text-sm text-muted mb-1">
-                  הדבק כאן — עמודות: מחלקה, סוג (הכנסה/הוצאה), סכום, תאריך, הערות
-                </label>
-                <textarea
-                  value={pasteText}
-                  onChange={(e) => setPasteText(e.target.value)}
-                  rows={8}
-                  dir="ltr"
-                  className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-mono"
-                  placeholder={"מחלקה\tסוג\tסכום\tתאריך\tהערות"}
-                />
-                <button
-                  type="button"
-                  disabled={!pasteText.trim()}
-                  onClick={parse}
-                  className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
-                >
-                  פרש רשימה
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="overflow-x-auto">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>מחלקה</th>
-                        <th>סוג</th>
-                        <th>סכום</th>
-                        <th>תאריך</th>
-                        <th>הערות</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((row) => (
-                        <tr key={row.key}>
-                          <td>
-                            <SearchableSelect
-                              value={row.departmentId}
-                              onChange={(id) => update(row.key, { departmentId: id })}
-                              options={departments.map((d) => ({ id: d.id, label: d.name }))}
-                              placeholder={row.departmentText ? `"${row.departmentText}"?` : "בהמתנה"}
-                              className="rounded border border-border bg-transparent px-1 py-1 text-xs"
-                            />
-                            {!row.departmentId && <span className="text-xs text-warning">ממתין לסיווג</span>}
-                          </td>
-                          <td>
-                            <select
-                              value={row.direction}
-                              onChange={(e) => update(row.key, { direction: e.target.value as "INCOME" | "EXPENSE" })}
-                              className="rounded border border-border bg-transparent px-1 py-1 text-xs"
-                            >
-                              <option value="EXPENSE">הוצאה</option>
-                              <option value="INCOME">הכנסה</option>
-                            </select>
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              value={row.amount || ""}
-                              onChange={(e) => update(row.key, { amount: Number(e.target.value) || 0 })}
-                              className="w-24 rounded border border-border bg-transparent px-1 py-1 text-xs"
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="date"
-                              value={row.entryDate}
-                              onChange={(e) => update(row.key, { entryDate: e.target.value })}
-                              className="rounded border border-border bg-transparent px-1 py-1 text-xs"
-                            />
-                          </td>
-                          <td>
-                            <input
-                              value={row.notes}
-                              onChange={(e) => update(row.key, { notes: e.target.value })}
-                              className="w-32 rounded border border-border bg-transparent px-1 py-1 text-xs"
-                            />
-                          </td>
-                          <td>
-                            <button type="button" onClick={() => removeRow(row.key)} className="text-xs text-danger">
-                              ✕
-                            </button>
-                            {row.error && <p className="text-xs text-danger">{row.error}</p>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    onClick={saveAll}
-                    className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
-                  >
-                    {isPending ? "שומר…" : `שמור ${rows.length} שורות`}
-                  </button>
-                  <button type="button" onClick={() => setRows([])} className="text-sm text-muted">
-                    חזרה לעריכת ההדבקה
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {error && <p className="text-sm text-danger">{error}</p>}
-          </div>
+        <Modal onClose={() => setOpen(false)}>
+          <PasteManualEntriesFormInner
+            departments={departments}
+            bankAccounts={bankAccounts}
+            categories={categories}
+            onClose={() => setOpen(false)}
+          />
         </Modal>
       )}
     </>

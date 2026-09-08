@@ -18,46 +18,6 @@ function revalidateEntryPaths(departmentId?: string | null) {
   if (departmentId) revalidatePath(`/reports/${departmentId}`);
 }
 
-export async function createManualEntry(input: {
-  departmentId: string;
-  direction: "INCOME" | "EXPENSE";
-  amount: number;
-  entryDate: string;
-  notes: string | null;
-  bankAccountId: string;
-}): Promise<{ error?: string }> {
-  if (!input.entryDate) return { error: "יש להזין תאריך" };
-  // This single-entry form always requires a department — unlike the bulk
-  // paste flow (createManualEntryBatch), where a row missing one is
-  // deliberately allowed to stay "ממתין לסיווג" rather than being lost.
-  if (!input.departmentId) return { error: "יש לבחור מחלקה" };
-  if (!input.bankAccountId) return { error: "יש לבחור חשבון בנק" };
-  const user = await requireUser();
-  const supabase = await createClient();
-  const isAdmin = user.profile.role === "FINANCE_ADMIN";
-
-  // A plain insert is enough now: if the bank account used belongs to a
-  // different department than this entry, a trigger on the table
-  // automatically creates the inter-department ledger entry — no separate
-  // "third party" selection or cross-department write required.
-  const { error } = await supabase.from("manual_department_entries").insert({
-    department_id: input.departmentId,
-    direction: input.direction,
-    amount: input.amount,
-    entry_date: input.entryDate,
-    notes: input.notes,
-    bank_account_id: input.bankAccountId,
-    created_by: user.id,
-    status: isAdmin ? "APPROVED" : "PENDING",
-    approved_by: isAdmin ? user.id : null,
-    approved_at: isAdmin ? new Date().toISOString() : null,
-  });
-
-  if (error) return { error: safeErrorMessage(error) };
-  revalidateEntryPaths(input.departmentId);
-  return {};
-}
-
 export type ManualEntryBatchRow = {
   // Nullable so a bulk-pasted row missing a department can still be saved
   // — it lands "ממתין לסיווג" (same as an unclassified check) instead of
@@ -69,6 +29,7 @@ export type ManualEntryBatchRow = {
   entryDate: string;
   notes: string | null;
   bankAccountId: string;
+  categoryId?: string | null;
   skipDepartmentLedger?: boolean;
 };
 
@@ -105,6 +66,7 @@ export async function createManualEntryBatch(rows: ManualEntryBatchRow[]): Promi
       entry_date: row.entryDate,
       notes: row.notes,
       bank_account_id: row.bankAccountId,
+      category_id: row.categoryId || null,
       skip_department_ledger: row.skipDepartmentLedger ?? false,
       created_by: user.id,
       status: isAdmin ? "APPROVED" : "PENDING",
@@ -223,6 +185,7 @@ export async function updateManualEntry(
     departmentId: string | null;
     notes: string | null;
     bankAccountId?: string;
+    categoryId?: string | null;
     skipDepartmentLedger?: boolean;
   },
 ): Promise<{ error?: string }> {
@@ -242,6 +205,7 @@ export async function updateManualEntry(
       department_id: input.departmentId,
       notes: input.notes,
       ...(input.bankAccountId ? { bank_account_id: input.bankAccountId } : {}),
+      ...(input.categoryId !== undefined ? { category_id: input.categoryId } : {}),
       ...(input.skipDepartmentLedger !== undefined ? { skip_department_ledger: input.skipDepartmentLedger } : {}),
     })
     .eq("id", entryId);

@@ -144,7 +144,7 @@ export default async function SettingsPage() {
             מחלקה מזוהה נשמרת &quot;ממתין לסיווג&quot; במקום להידחות.
           </p>
         </div>
-        <PasteManualEntriesForm departments={departments ?? []} bankAccounts={bankAccounts ?? []} />
+        <PasteManualEntriesForm departments={departments ?? []} bankAccounts={bankAccounts ?? []} categories={categories ?? []} />
       </section>
 
       <NedarimSettingsSection lastSyncedAt={lastNedarimSync?.synced_at ?? null} />

@@ -842,6 +842,7 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           bank_account_id: string
+          category_id: string | null
           created_at: string
           created_by: string | null
           department_id: string | null
@@ -860,6 +861,7 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           bank_account_id: string
+          category_id?: string | null
           created_at?: string
           created_by?: string | null
           department_id?: string | null
@@ -878,6 +880,7 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           bank_account_id?: string
+          category_id?: string | null
           created_at?: string
           created_by?: string | null
           department_id?: string | null
@@ -897,6 +900,20 @@ export type Database = {
             columns: ["bank_account_id"]
             isOneToOne: false
             referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_department_entries_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_department_entries_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
             referencedColumns: ["id"]
           },
           {

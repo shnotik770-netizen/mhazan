@@ -19,11 +19,12 @@ export default async function LedgerPage({
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
   const supabase = await createClient();
 
-  const [{ data: balances }, { data: departments }, { data: bankAccounts }, { data: grants }, bankAccountLedgerPairs] =
+  const [{ data: balances }, { data: departments }, { data: bankAccounts }, { data: categories }, { data: grants }, bankAccountLedgerPairs] =
     await Promise.all([
       supabase.from("v_inter_department_balances").select("*"),
       supabase.from("departments").select("*").order("name"),
       supabase.from("bank_accounts").select("*").order("bank_name"),
+      supabase.from("categories").select("id, name").order("name"),
       supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
       getBankAccountLedgerData(),
     ]);
@@ -72,7 +73,7 @@ export default async function LedgerPage({
           <p className="text-sm text-muted">בחרו מחלקה כדי לראות את הדוח שלה. ניתן להוסיף הכנסה/הוצאה ידנית לכל מחלקה, לא רק לזו שפתוחה כרגע.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} />
+          <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} categories={categories ?? []} />
           {isAdmin && <InterDepartmentTransferButton departments={departments ?? []} />}
         </div>
       </div>

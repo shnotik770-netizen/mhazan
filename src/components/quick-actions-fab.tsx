@@ -3,20 +3,28 @@
 import { useState } from "react";
 import Link from "next/link";
 import { UnifiedCheckForm } from "@/components/unified-check-form";
-import { NewManualEntryButton } from "@/components/manual-entries-client";
+import { InterDepartmentTransferForm, NewManualEntryButton } from "@/components/manual-entries-client";
 import { Modal } from "@/components/modal";
 import { ExpectedIncomeBatchForm } from "@/components/expected-income-batch-form";
 import { getQuickActionRefData } from "@/app/(app)/quick-actions-actions";
 
 type RefData = Awaited<ReturnType<typeof getQuickActionRefData>>;
-type ModalActionKey = "payment_request" | "expected_income" | "manual_entry";
+type ModalActionKey = "payment_request" | "expected_income" | "manual_entry" | "manual_entry_paste" | "inter_department_transfer";
 
 // Every quick action shows up in two places — the floating "+" speed-dial
 // (QuickActionsFab) and a plain button grid on the dashboard
 // (QuickActionsPanel) — both built on the same ACTIONS list and the same
 // useQuickActionsState() below, so a new action only needs to be added
 // once here. A "link" action just navigates; a "modal" action opens the
-// matching form via openAction().
+// matching form via openAction(). Both components are only ever rendered
+// for a finance admin (gated at each call site), so nothing here needs its
+// own role check.
+//
+// Includes every screen an admin might otherwise only stumble onto via
+// "הגדרות" (categories/departments/suppliers/audit log all live there, with
+// no other link to them) plus every standalone action button that
+// otherwise exists on just one specific page — the point of this list is
+// that nothing in the system requires knowing where it's buried.
 type ActionDef =
   | { key: ModalActionKey; label: string; type: "modal" }
   | { key: string; label: string; type: "link"; href: string };
@@ -25,10 +33,22 @@ const ACTIONS: ActionDef[] = [
   { key: "payment_request", label: "דרישת תשלום חדשה", type: "modal" },
   { key: "expected_income", label: "הכנסה צפויה חדשה", type: "modal" },
   { key: "manual_entry", label: "הכנסה / הוצאה ידנית", type: "modal" },
+  { key: "manual_entry_paste", label: "הדבקת רשימת הכנסות / הוצאות", type: "modal" },
+  { key: "inter_department_transfer", label: "העברה בין מחלקות", type: "modal" },
   { key: "paste_income", label: "הדבק הכנסות", type: "link", href: "/incomes/new" },
   { key: "quick_issuance", label: "הנפקה מהירה", type: "link", href: "/checks#issuance-queue" },
   { key: "forecast", label: "מעבר לתחזית", type: "link", href: "/forecast" },
   { key: "due_checks", label: "צ׳קים והעברות שהגיע תאריכם", type: "link", href: "/checks#due-checks" },
+  { key: "checks", label: "צ׳קים והעברות", type: "link", href: "/checks" },
+  { key: "transactions", label: "כל התנועות", type: "link", href: "/transactions" },
+  { key: "expenses", label: "הוצאות", type: "link", href: "/expenses" },
+  { key: "ledger", label: "דוחות מחלקות", type: "link", href: "/ledger" },
+  { key: "recurring_schedules", label: "הרשאות וחיובים קבועים", type: "link", href: "/recurring-schedules" },
+  { key: "categories", label: "ניהול קטגוריות", type: "link", href: "/categories" },
+  { key: "departments", label: "ניהול מחלקות", type: "link", href: "/departments" },
+  { key: "suppliers", label: "ניהול ספקים", type: "link", href: "/suppliers" },
+  { key: "audit_log", label: "יומן ביקורת", type: "link", href: "/audit-log" },
+  { key: "settings", label: "הגדרות מערכת", type: "link", href: "/settings" },
 ];
 
 function useQuickActionsState() {
@@ -66,10 +86,29 @@ function useQuickActionsState() {
         <NewManualEntryButton
           departments={refData.departments}
           bankAccounts={refData.bankAccounts}
+          categories={refData.categories}
           open
           onOpenChange={(v) => !v && setActiveAction(null)}
           hideTrigger
         />
+      )}
+      {activeAction === "manual_entry_paste" && refData && (
+        <NewManualEntryButton
+          departments={refData.departments}
+          bankAccounts={refData.bankAccounts}
+          categories={refData.categories}
+          open
+          onOpenChange={(v) => !v && setActiveAction(null)}
+          hideTrigger
+          initialMode="paste"
+        />
+      )}
+      {activeAction === "inter_department_transfer" && refData && (
+        <Modal onClose={() => setActiveAction(null)}>
+          <div className="p-4">
+            <InterDepartmentTransferForm departments={refData.departments} onSaved={() => setActiveAction(null)} />
+          </div>
+        </Modal>
       )}
     </>
   );
@@ -90,7 +129,7 @@ export function QuickActionsFab() {
     <>
       <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2 no-print">
         {menuOpen && (
-          <div className="flex flex-col items-end gap-2 mb-1">
+          <div className="flex flex-col items-end gap-2 mb-1 max-h-[70vh] overflow-y-auto py-1 px-0.5">
             {ACTIONS.map((a) =>
               a.type === "link" ? (
                 <Link

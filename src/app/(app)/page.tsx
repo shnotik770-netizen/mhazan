@@ -16,6 +16,7 @@ export default async function DashboardPage() {
     { data: pendingSummary },
     { data: ledgerBalances },
     { data: departments },
+    { data: categories },
     { data: grants },
     { data: pendingManualEntries },
   ] = await Promise.all([
@@ -23,6 +24,7 @@ export default async function DashboardPage() {
     supabase.from("v_pending_queue_summary").select("*"),
     supabase.from("v_inter_department_balances").select("*"),
     supabase.from("departments").select("*"),
+    supabase.from("categories").select("id, name").order("name"),
     supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
     isAdmin
       ? supabase
@@ -129,7 +131,7 @@ export default async function DashboardPage() {
 
       {myDepartments.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
-          <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} />
+          <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} categories={categories ?? []} />
           {isAdmin && <InterDepartmentTransferButton departments={departments ?? []} />}
         </div>
       )}

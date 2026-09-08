@@ -10,11 +10,13 @@ import {
 } from "@/app/(app)/manual-entries/actions";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
+import { PasteManualEntriesFormInner } from "@/components/paste-manual-entries-form";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
 type BankAccount = Tables<"bank_accounts">;
+type CategoryOption = { id: string; name: string };
 
 type DraftEntryRow = ManualEntryBatchRow & { key: number; error?: string };
 
@@ -23,16 +25,24 @@ let nextEntryKey = 1;
 // A top-of-page button that opens the manual-entry form in a modal,
 // instead of the form sitting permanently as its own box under the
 // report — the form is an occasional action, not something that needs
-// to always take up space on the page.
+// to always take up space on the page. A second trigger right beside it
+// opens the same modal in "paste a list" mode — folded in here, instead of
+// living as its own separate button somewhere else, so every place this
+// component already appears (dashboard, department report, quick actions)
+// automatically gets bulk-paste too instead of it only being reachable
+// from Settings.
 export function NewManualEntryButton({
   departments,
   bankAccounts,
+  categories,
   open: controlledOpen,
   onOpenChange,
   hideTrigger = false,
+  initialMode = "manual",
 }: {
   departments: Department[];
   bankAccounts: BankAccount[];
+  categories: CategoryOption[];
   // Uncontrolled by default (renders its own trigger button). Passing
   // `open`/`onOpenChange` lets an external trigger (the quick-actions FAB)
   // drive it instead, with `hideTrigger` suppressing the built-in button —
@@ -40,26 +50,61 @@ export function NewManualEntryButton({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   hideTrigger?: boolean;
+  // Lets an external trigger that only wants the paste flow (a dedicated
+  // quick action) open straight into it instead of always landing on the
+  // manual grid first — only meaningful together with hideTrigger, since
+  // the built-in two-button trigger always sets the mode explicitly itself.
+  initialMode?: "manual" | "paste";
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const [mode, setMode] = useState<"manual" | "paste">(initialMode);
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
   if (departments.length === 0) return null;
   return (
     <>
       {!hideTrigger && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
-        >
-          + הכנסה / הוצאה
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setMode("manual");
+              setOpen(true);
+            }}
+            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+          >
+            + הכנסה / הוצאה
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("paste");
+              setOpen(true);
+            }}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold hover:bg-background"
+          >
+            הדבקת רשימה
+          </button>
+        </div>
       )}
       {open && (
         <Modal onClose={() => setOpen(false)}>
           <div className="p-4">
-            <NewManualEntryFormMulti departments={departments} bankAccounts={bankAccounts} onSaved={() => setOpen(false)} />
+            {mode === "manual" ? (
+              <NewManualEntryFormMulti
+                departments={departments}
+                bankAccounts={bankAccounts}
+                categories={categories}
+                onSaved={() => setOpen(false)}
+              />
+            ) : (
+              <PasteManualEntriesFormInner
+                departments={departments}
+                bankAccounts={bankAccounts}
+                categories={categories}
+                onClose={() => setOpen(false)}
+              />
+            )}
           </div>
         </Modal>
       )}
@@ -95,7 +140,7 @@ export function InterDepartmentTransferButton({ departments }: { departments: De
   );
 }
 
-function InterDepartmentTransferForm({ departments, onSaved }: { departments: Department[]; onSaved?: () => void }) {
+export function InterDepartmentTransferForm({ departments, onSaved }: { departments: Department[]; onSaved?: () => void }) {
   const router = useRouter();
   const [debtorDepartmentId, setDebtorDepartmentId] = useState("");
   const [creditorDepartmentId, setCreditorDepartmentId] = useState("");
@@ -210,19 +255,23 @@ function blankEntryRow(departments: Department[]): DraftEntryRow {
     entryDate: "",
     notes: null,
     bankAccountId: dept?.home_bank_account_id ?? "",
+    categoryId: null,
   };
 }
 
 // Several manual entries at once — each its own amount/direction/
-// department/notes — typed in one grid and saved with a single click,
-// same pattern as the bulk check/expense-request entry forms elsewhere.
+// department/category/notes — typed in one grid and saved with a single
+// click, same pattern as the bulk check/expense-request entry forms
+// elsewhere. A single entry is simply this same grid with one row.
 export function NewManualEntryFormMulti({
   departments,
   bankAccounts,
+  categories,
   onSaved,
 }: {
   departments: Department[];
   bankAccounts: BankAccount[];
+  categories: CategoryOption[];
   onSaved?: () => void;
 }) {
   const router = useRouter();
@@ -286,6 +335,7 @@ export function NewManualEntryFormMulti({
               <th>סוג</th>
               <th>סכום</th>
               <th>תאריך</th>
+              <th>קטגוריה</th>
               <th>הערות</th>
               <th>חשבון בנק</th>
               <th></th>
@@ -337,6 +387,20 @@ export function NewManualEntryFormMulti({
                       onChange={(v) => update(row.key, { entryDate: v })}
                       className="rounded border border-border bg-transparent px-1 py-1 text-xs"
                     />
+                  </td>
+                  <td>
+                    <select
+                      value={row.categoryId ?? ""}
+                      onChange={(e) => update(row.key, { categoryId: e.target.value || null })}
+                      className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                    >
+                      <option value="">ללא קטגוריה</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td>
                     <input
