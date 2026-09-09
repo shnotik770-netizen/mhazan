@@ -95,7 +95,7 @@ function useQuickActionsState() {
         <UnifiedCheckForm
           bankAccounts={refData.bankAccounts}
           departments={refData.departments}
-          categories={refData.categories}
+          categories={refData.categories.map((c) => ({ id: c.id, name: c.name, departmentId: c.department_id }))}
           supplierNames={refData.supplierNames}
           open
           onOpenChange={(v) => !v && setActiveAction(null)}

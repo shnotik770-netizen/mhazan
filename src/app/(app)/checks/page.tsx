@@ -212,7 +212,7 @@ export default async function ChecksPage({
             <UnifiedCheckForm
               bankAccounts={bankAccounts ?? []}
               departments={departments ?? []}
-              categories={categories ?? []}
+              categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name, departmentId: c.department_id }))}
               supplierNames={supplierNames}
             />
             <BankReconciliationPanel bankAccounts={bankAccounts ?? []} />

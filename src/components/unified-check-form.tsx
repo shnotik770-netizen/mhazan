@@ -12,7 +12,7 @@ import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
 type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | null };
-type CategoryOption = { id: string; name: string };
+type CategoryOption = { id: string; name: string; departmentId: string | null };
 
 type Row = {
   date: string;
@@ -110,6 +110,22 @@ export function UnifiedCheckForm({
 
   function removeRow(i: number) {
     setRows((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+  }
+
+  // A category always belongs to exactly one department, so picking one is
+  // also a statement of which department this payment is for — pick a
+  // department manually first if you like, but choosing a category then
+  // immediately overrides it to whichever department actually owns that
+  // category, on every row, rather than leaving a mismatched pair on
+  // screen. Doesn't apply while splitting a row across departments, where
+  // there's no single department to override.
+  function selectCategory(id: string) {
+    setCategoryId(id);
+    if (isSplitting) return;
+    const category = categories.find((c) => c.id === id);
+    if (!category?.departmentId) return;
+    const departmentId = category.departmentId;
+    setRows((prev) => prev.map((r) => ({ ...r, departmentId })));
   }
 
   // Splits the amount and date already entered in the first payment row
@@ -266,18 +282,6 @@ export function UnifiedCheckForm({
                 <option key={name} value={name} />
               ))}
             </datalist>
-            <select
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm md:col-span-2"
-            >
-              <option value="">קטגוריה (אופציונלי)...</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
           </div>
           <div className="space-y-2">
             {rows.map((row, i) => (
@@ -342,6 +346,20 @@ export function UnifiedCheckForm({
               </div>
             ))}
           </div>
+          <select
+            value={categoryId}
+            onChange={(e) => selectCategory(e.target.value)}
+            disabled={isSplitting}
+            title={isSplitting ? "לא זמין בזמן פיצול בין מחלקות" : "בחירת קטגוריה תקבע גם את המחלקה, לפי איזו מחלקה שייכת הקטגוריה"}
+            className="w-full sm:w-auto rounded-lg border border-border bg-transparent px-3 py-2 text-sm disabled:opacity-50"
+          >
+            <option value="">קטגוריה (אופציונלי)...</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
         </section>
 
         {/* הגדרות איך הסכום נספר — נפרד מהפריסה בפועל של הצ׳קים */}
