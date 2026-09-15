@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, normalizeSearchQuery } from "@/lib/format";
 import { SearchableSelect } from "@/components/searchable-select";
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { DateInput } from "@/components/date-input";
@@ -90,14 +90,14 @@ export function ExpensesTable({
     if (onlyUnclassified && r.departmentName) return false;
     if (fromDate && (!r.date || r.date < fromDate)) return false;
     if (toDate && (!r.date || r.date > toDate)) return false;
-    if (!query.trim()) return true;
-    const q = query.trim().toLowerCase();
+    const q = normalizeSearchQuery(query);
+    if (!q) return true;
     return (
-      r.description.toLowerCase().includes(q) ||
-      (r.departmentName ?? "").toLowerCase().includes(q) ||
-      (r.categoryName ?? "").toLowerCase().includes(q) ||
-      (r.bankAccountName ?? "").toLowerCase().includes(q) ||
-      (r.checkNumber ?? "").toLowerCase().includes(q)
+      normalizeSearchQuery(r.description).includes(q) ||
+      normalizeSearchQuery(r.departmentName ?? "").includes(q) ||
+      normalizeSearchQuery(r.categoryName ?? "").includes(q) ||
+      normalizeSearchQuery(r.bankAccountName ?? "").includes(q) ||
+      normalizeSearchQuery(r.checkNumber ?? "").includes(q)
     );
   });
 

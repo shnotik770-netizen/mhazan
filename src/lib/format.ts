@@ -2,6 +2,22 @@ export function formatCurrency(amount: number, currency = "ILS") {
   return new Intl.NumberFormat("he-IL", { style: "currency", currency }).format(amount);
 }
 
+// Free-text search boxes across the app sit in an RTL page but are just as
+// often used to look up a plain number (a check number, an amount) as a
+// Hebrew name. Typing or pasting a number next to RTL text — including
+// copying it straight out of an RTL table cell — can silently carry
+// invisible bidi control characters (LRM/RLM/embedding marks) along with
+// it; `.trim()` alone doesn't remove them since they aren't whitespace, so
+// a search for a check number can fail to match its own exact value even
+// though both sides look identical on screen. Every free-text search
+// should normalize through this instead of a bare `.trim().toLowerCase()`.
+export function normalizeSearchQuery(text: string): string {
+  return text
+    .replace(/[​-‏‪-‮⁦-⁩]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 export function formatDate(date: string) {
   return new Intl.DateTimeFormat("he-IL").format(new Date(date));
 }
