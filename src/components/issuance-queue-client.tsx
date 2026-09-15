@@ -65,10 +65,10 @@ function InlineDueDateCell({ checkId, dueDate }: { checkId: string; dueDate: str
     setValue(dueDate ?? "");
   }
 
-  function commit() {
-    if (value === (dueDate ?? "")) return;
+  function commit(finalValue: string) {
+    if (finalValue === (dueDate ?? "")) return;
     startTransition(async () => {
-      await updateCheckDueDate(checkId, value || null);
+      await updateCheckDueDate(checkId, finalValue || null);
       router.refresh();
     });
   }

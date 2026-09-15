@@ -827,8 +827,7 @@ export function IssueCheckRow({
               onChange={(value) => {
                 setSpreadRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, date: value } : r)));
               }}
-              onBlur={(e) => {
-                const value = e.target.value;
+              onBlur={(value) => {
                 // Cascading into the rest of the series only happens once
                 // the first payment's date is actually finished (on blur),
                 // not on every keystroke while it's still being typed —
