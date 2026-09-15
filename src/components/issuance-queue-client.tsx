@@ -186,6 +186,11 @@ export function IssuanceQueueTable({
   const [quickRows, setQuickRows] = useState<QuickRow[]>([]);
   const [quickError, setQuickError] = useState<string | null>(null);
   const [quickPending, startQuickTransition] = useTransition();
+  // Tracks which row (by id, not index — indices shift when skip rows are
+  // inserted/removed) is the current "עד כאן הונפק" boundary, so clicking
+  // the same row's button again is recognized as "undo this" rather than
+  // re-applying it.
+  const [issuedFromRowId, setIssuedFromRowId] = useState<string | null>(null);
 
   const searched = rows.filter((r) => {
     if (!query.trim()) return true;
@@ -280,6 +285,7 @@ export function IssuanceQueueTable({
       })),
     );
     setQuickError(null);
+    setIssuedFromRowId(null);
     setQuickOpen(true);
   }
 
@@ -296,13 +302,24 @@ export function IssuanceQueueTable({
   // the earlier rows (already accounted for) as they were. Unchecked rows
   // consume no number (see recomputeSequence), so this also frees up the
   // rest of the sequence instead of reserving it for nothing.
+  //
+  // Clicking the same row's button again undoes it: re-checks this row and
+  // everything after it (same bank account), resuming quick issuance in
+  // order from exactly the row that was clicked — instead of forcing the
+  // admin to re-tick each row's checkbox by hand one at a time.
   function markIssuedFromHere(idx: number) {
+    const rowId = quickRows[idx]?.id;
+    if (!rowId) return;
+    const isUndo = issuedFromRowId === rowId;
     setQuickRows((prev) => {
       const bankAccountId = prev[idx]?.bankAccountId;
       return recomputeSequence(
-        prev.map((r, i) => (i >= idx && r.bankAccountId === bankAccountId && !r.isSkip ? { ...r, include: false } : r)),
+        prev.map((r, i) =>
+          i >= idx && r.bankAccountId === bankAccountId && !r.isSkip ? { ...r, include: isUndo } : r,
+        ),
       );
     });
+    setIssuedFromRowId(isUndo ? null : rowId);
   }
 
   // "דלג על מספר (צ׳ק תקול)": the physical check blank meant for THIS row
@@ -619,10 +636,18 @@ export function IssuanceQueueTable({
                                 <button
                                   type="button"
                                   onClick={() => markIssuedFromHere(i)}
-                                  className="text-xs text-muted underline whitespace-nowrap"
-                                  title="מבטל את הסימון משורה זו והלאה"
+                                  className={
+                                    issuedFromRowId === r.id
+                                      ? "text-xs text-primary underline whitespace-nowrap font-semibold"
+                                      : "text-xs text-muted underline whitespace-nowrap"
+                                  }
+                                  title={
+                                    issuedFromRowId === r.id
+                                      ? "לחיצה נוספת תבטל ותחזיר את ההנפקה המהירה משורה זו והלאה"
+                                      : "מבטל את הסימון משורה זו והלאה"
+                                  }
                                 >
-                                  עד כאן הונפק
+                                  {issuedFromRowId === r.id ? "בטל — המשך מכאן" : "עד כאן הונפק"}
                                 </button>
                                 <button
                                   type="button"

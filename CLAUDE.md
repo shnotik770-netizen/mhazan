@@ -4,6 +4,21 @@
 
 Always summarize work for the user in Hebrew, every time — not just when explicitly asked.
 
+# Deploy gate
+
+Commit finished work locally (with `git commit`) but do **not** `git push` — pushing to
+`claude/multi-dept-financial-system-7s0mjj` triggers an automatic Railway deploy, and the user
+must explicitly approve each deploy first. After committing, tell the user (in Hebrew) what's
+ready and wait for their go-ahead before pushing. Only push once they've said to. This applies
+to every change, not just risky ones.
+
+# Action log
+
+Every meaningful change gets a dated Hebrew entry in `CHANGELOG.md` (already required below) —
+this is also how the user re-opens a fresh conversation thread cheaply without burning tokens
+re-explaining history: read `CHANGELOG.md` (newest entry on top) to reconstruct what's already
+been done and what's still pending (e.g. a commit sitting locally, not yet approved for push).
+
 # Security checklist — apply to every change
 
 This is a live financial system. Before considering any change to a server action, API route, DB migration, or auth/permission logic finished, check it against these 20 points (use the `security-audit-20` skill for a full audit; apply this list as a lighter-weight gate on every smaller change):

@@ -4,6 +4,9 @@ Next.js (App Router) + Supabase implementation of a multi-department institution
 ledger: internal inter-department settlement, checks/pending-allocation tracking,
 and a recurring-schedule cash-flow forecast engine.
 
+> כל שינוי ופעולה שבוצעו במערכת מתועדים ב-[CHANGELOG.md](./CHANGELOG.md) (רשומה חדשה
+> למעלה) — פתיחת שרשור חדש יכולה להתחיל משם במקום להסביר מחדש את כל ההיסטוריה.
+
 ## Stack
 
 - **Frontend:** Next.js 16 (App Router, Server Components + Server Actions), TypeScript, Tailwind CSS
