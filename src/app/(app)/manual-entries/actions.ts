@@ -174,6 +174,33 @@ export async function createInterDepartmentTransfer(input: {
   return {};
 }
 
+export type InterDepartmentTransferBatchRow = {
+  debtorDepartmentId: string;
+  creditorDepartmentId: string;
+  amount: number;
+  entryDate: string;
+  notes: string | null;
+};
+
+export type InterDepartmentTransferOutcome = { success: boolean; reason?: string };
+
+// Bulk version of createInterDepartmentTransfer: several transfers at once
+// (the manual-entry grid's own "+ שורה" toggles into this mode instead of
+// requiring a separate one-at-a-time transfer screen). Delegates each row
+// to createInterDepartmentTransfer itself — same validation, same
+// permission check, same one-bad-row-doesn't-block-the-rest pattern as
+// every other batch entry point here — rather than duplicating that logic.
+export async function createInterDepartmentTransferBatch(
+  rows: InterDepartmentTransferBatchRow[],
+): Promise<{ outcomes: InterDepartmentTransferOutcome[] }> {
+  const outcomes: InterDepartmentTransferOutcome[] = [];
+  for (const row of rows) {
+    const result = await createInterDepartmentTransfer(row);
+    outcomes.push(result.error ? { success: false, reason: result.error } : { success: true });
+  }
+  return { outcomes };
+}
+
 // Lets an admin correct an already-approved manual entry (amount, date,
 // department, notes) from the /expenses screen instead of deleting and
 // re-entering it.

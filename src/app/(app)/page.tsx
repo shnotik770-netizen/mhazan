@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { formatCurrency } from "@/lib/format";
-import { InterDepartmentTransferButton, NewManualEntryButton, PendingManualEntriesTable } from "@/components/manual-entries-client";
+import { NewManualEntryButton, PendingManualEntriesTable } from "@/components/manual-entries-client";
 import { QuickActionsPanel } from "@/components/quick-actions-fab";
 import { BankAccountsTable, LedgerBalancesTable } from "@/components/dashboard-tables-client";
 
@@ -131,8 +131,12 @@ export default async function DashboardPage() {
 
       {myDepartments.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
-          <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} categories={categories ?? []} />
-          {isAdmin && <InterDepartmentTransferButton departments={departments ?? []} />}
+          <NewManualEntryButton
+            departments={myDepartments}
+            bankAccounts={bankAccounts ?? []}
+            categories={categories ?? []}
+            isAdmin={isAdmin}
+          />
         </div>
       )}
 

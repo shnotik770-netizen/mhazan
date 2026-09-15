@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { DepartmentReport } from "@/components/department-report";
-import { InterDepartmentTransferButton, NewManualEntryButton } from "@/components/manual-entries-client";
+import { NewManualEntryButton } from "@/components/manual-entries-client";
 import { LedgerNetPositionTable } from "@/components/ledger-tables-client";
 import { DepartmentPickerSelect } from "@/components/department-picker-select-client";
 import { getBankAccountLedgerData } from "@/lib/bank-account-ledger-data";
@@ -73,8 +73,12 @@ export default async function LedgerPage({
           <p className="text-sm text-muted">בחרו מחלקה כדי לראות את הדוח שלה. ניתן להוסיף הכנסה/הוצאה ידנית לכל מחלקה, לא רק לזו שפתוחה כרגע.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <NewManualEntryButton departments={myDepartments} bankAccounts={bankAccounts ?? []} categories={categories ?? []} />
-          {isAdmin && <InterDepartmentTransferButton departments={departments ?? []} />}
+          <NewManualEntryButton
+            departments={myDepartments}
+            bankAccounts={bankAccounts ?? []}
+            categories={categories ?? []}
+            isAdmin={isAdmin}
+          />
         </div>
       </div>
 

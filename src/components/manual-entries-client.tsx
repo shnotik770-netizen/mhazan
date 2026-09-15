@@ -3,9 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  createInterDepartmentTransfer,
+  createInterDepartmentTransferBatch,
   createManualEntryBatch,
   reviewManualEntry,
+  type InterDepartmentTransferBatchRow,
   type ManualEntryBatchRow,
 } from "@/app/(app)/manual-entries/actions";
 import { DateInput } from "@/components/date-input";
@@ -35,6 +36,7 @@ export function NewManualEntryButton({
   departments,
   bankAccounts,
   categories,
+  isAdmin = false,
   open: controlledOpen,
   onOpenChange,
   hideTrigger = false,
@@ -43,6 +45,10 @@ export function NewManualEntryButton({
   departments: Department[];
   bankAccounts: BankAccount[];
   categories: CategoryOption[];
+  // Only a finance admin may record a transfer between two OTHER
+  // departments' debt — this gates the "העברה בין מחלקות" toggle inside the
+  // grid (same permission boundary the old standalone transfer button had).
+  isAdmin?: boolean;
   // Uncontrolled by default (renders its own trigger button). Passing
   // `open`/`onOpenChange` lets an external trigger (the quick-actions FAB)
   // drive it instead, with `hideTrigger` suppressing the built-in button —
@@ -50,14 +56,15 @@ export function NewManualEntryButton({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   hideTrigger?: boolean;
-  // Lets an external trigger that only wants the paste flow (a dedicated
-  // quick action) open straight into it instead of always landing on the
+  // Lets an external trigger that only wants the paste flow, or that wants
+  // to land straight in inter-department-transfer mode (a dedicated quick
+  // action), open straight into it instead of always landing on the plain
   // manual grid first — only meaningful together with hideTrigger, since
-  // the built-in two-button trigger always sets the mode explicitly itself.
-  initialMode?: "manual" | "paste";
+  // the built-in trigger buttons always set the mode explicitly themselves.
+  initialMode?: "manual" | "paste" | "transfer";
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
-  const [mode, setMode] = useState<"manual" | "paste">(initialMode);
+  const [mode, setMode] = useState<"manual" | "paste" | "transfer">(initialMode);
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
   if (departments.length === 0) return null;
@@ -90,158 +97,27 @@ export function NewManualEntryButton({
       {open && (
         <Modal onClose={() => setOpen(false)}>
           <div className="p-4">
-            {mode === "manual" ? (
-              <NewManualEntryFormMulti
-                departments={departments}
-                bankAccounts={bankAccounts}
-                categories={categories}
-                onSaved={() => setOpen(false)}
-              />
-            ) : (
+            {mode === "paste" ? (
               <PasteManualEntriesFormInner
                 departments={departments}
                 bankAccounts={bankAccounts}
                 categories={categories}
                 onClose={() => setOpen(false)}
               />
+            ) : (
+              <NewManualEntryFormMulti
+                departments={departments}
+                bankAccounts={bankAccounts}
+                categories={categories}
+                isAdmin={isAdmin}
+                initialFormMode={mode === "transfer" ? "transfer" : "entries"}
+                onSaved={() => setOpen(false)}
+              />
             )}
           </div>
         </Modal>
       )}
     </>
-  );
-}
-
-// Records that one department owes another — e.g. "חבד לנוער חייבת 800 ₪
-// לבית הספר" — instead of the admin having to work out the right
-// department/bank-account combination themselves via the plain manual
-// entry form. See createInterDepartmentTransfer for exactly what gets
-// written depending on whether the two departments share a home account.
-export function InterDepartmentTransferButton({ departments }: { departments: Department[] }) {
-  const [open, setOpen] = useState(false);
-  if (departments.length < 2) return null;
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-lg border border-border px-4 py-2 text-sm font-semibold"
-      >
-        העברה בין מחלקות
-      </button>
-      {open && (
-        <Modal onClose={() => setOpen(false)}>
-          <div className="p-4">
-            <InterDepartmentTransferForm departments={departments} onSaved={() => setOpen(false)} />
-          </div>
-        </Modal>
-      )}
-    </>
-  );
-}
-
-export function InterDepartmentTransferForm({ departments, onSaved }: { departments: Department[]; onSaved?: () => void }) {
-  const router = useRouter();
-  const [debtorDepartmentId, setDebtorDepartmentId] = useState("");
-  const [creditorDepartmentId, setCreditorDepartmentId] = useState("");
-  const [amount, setAmount] = useState(0);
-  const [entryDate, setEntryDate] = useState("");
-  const [notes, setNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  function submit() {
-    setError(null);
-    startTransition(async () => {
-      const result = await createInterDepartmentTransfer({
-        debtorDepartmentId,
-        creditorDepartmentId,
-        amount,
-        entryDate,
-        notes: notes || null,
-      });
-      if (result.error) {
-        setError(result.error);
-      } else {
-        router.refresh();
-        onSaved?.();
-      }
-    });
-  }
-
-  return (
-    <div className="card p-4 space-y-3">
-      <h2 className="font-semibold">העברה בין מחלקות</h2>
-      <p className="text-xs text-muted">
-        רישום שמחלקה אחת חייבת לשנייה. אם לשתי המחלקות אותו חשבון בית — זו הקצאה פנימית בלבד (מינוס לחייבת, פלוס
-        לזכאית, בלי תנועת בנק אמיתית). אם החשבונות שונים, נרשמת הוצאה לחייבת דרך חשבון הבנק של הזכאית, וחוב בין
-        המחלקות נוצר אוטומטית ב&quot;התחשבנות הפנימית&quot;.
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div>
-          <label className="block text-sm text-muted mb-1">מחלקה חייבת</label>
-          <select
-            value={debtorDepartmentId}
-            onChange={(e) => setDebtorDepartmentId(e.target.value)}
-            className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm"
-          >
-            <option value="">בחר מחלקה...</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm text-muted mb-1">מחלקה זכאית</label>
-          <select
-            value={creditorDepartmentId}
-            onChange={(e) => setCreditorDepartmentId(e.target.value)}
-            className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm"
-          >
-            <option value="">בחר מחלקה...</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm text-muted mb-1">סכום</label>
-          <input
-            type="number"
-            value={amount || ""}
-            onChange={(e) => setAmount(Number(e.target.value) || 0)}
-            className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-sm text-muted mb-1">תאריך</label>
-          <DateInput value={entryDate} onChange={setEntryDate} required className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm" />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="block text-sm text-muted mb-1">הערות</label>
-          <input
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm"
-          />
-        </div>
-      </div>
-      {error && <p className="text-sm text-danger">{error}</p>}
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          disabled={isPending || !debtorDepartmentId || !creditorDepartmentId || amount <= 0 || !entryDate}
-          onClick={submit}
-          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
-        >
-          {isPending ? "שומר…" : "שמור"}
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -259,23 +135,47 @@ function blankEntryRow(departments: Department[]): DraftEntryRow {
   };
 }
 
+type DraftTransferRow = InterDepartmentTransferBatchRow & { key: number; error?: string };
+
+let nextTransferKey = 1;
+
+function blankTransferRow(): DraftTransferRow {
+  return { key: nextTransferKey++, debtorDepartmentId: "", creditorDepartmentId: "", amount: 0, entryDate: "", notes: null };
+}
+
 // Several manual entries at once — each its own amount/direction/
 // department/category/notes — typed in one grid and saved with a single
 // click, same pattern as the bulk check/expense-request entry forms
 // elsewhere. A single entry is simply this same grid with one row.
+//
+// A finance admin can also toggle the whole grid into "העברה בין מחלקות"
+// mode — recording that one department owes another (e.g. "חבד לנוער
+// חייבת 800 ₪ לבית הספר") is conceptually a different shape of row
+// (debtor/creditor department pair instead of one department + bank
+// account), so it swaps the columns rather than trying to force it into
+// the same row shape. This used to be a wholly separate button/screen
+// limited to one transfer at a time; folding it in here as a toggle
+// avoids a second, mostly-redundant entry point while also picking up
+// the multi-row grid for free.
 export function NewManualEntryFormMulti({
   departments,
   bankAccounts,
   categories,
+  isAdmin = false,
+  initialFormMode = "entries",
   onSaved,
 }: {
   departments: Department[];
   bankAccounts: BankAccount[];
   categories: CategoryOption[];
+  isAdmin?: boolean;
+  initialFormMode?: "entries" | "transfer";
   onSaved?: () => void;
 }) {
   const router = useRouter();
+  const [formMode, setFormMode] = useState<"entries" | "transfer">(initialFormMode);
   const [rows, setRows] = useState<DraftEntryRow[]>(() => [blankEntryRow(departments)]);
+  const [transferRows, setTransferRows] = useState<DraftTransferRow[]>(() => [blankTransferRow()]);
   const [isPending, startTransition] = useTransition();
 
   function update(key: number, patch: Partial<DraftEntryRow>) {
@@ -321,13 +221,176 @@ export function NewManualEntryFormMulti({
     });
   }
 
+  function updateTransfer(key: number, patch: Partial<DraftTransferRow>) {
+    setTransferRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  }
+
+  function addTransferRow() {
+    setTransferRows((prev) => [...prev, blankTransferRow()]);
+  }
+
+  function removeTransferRow(key: number) {
+    setTransferRows((prev) => (prev.length > 1 ? prev.filter((r) => r.key !== key) : prev));
+  }
+
+  function saveAllTransfers() {
+    const savable = transferRows.filter(
+      (r) => r.debtorDepartmentId && r.creditorDepartmentId && r.debtorDepartmentId !== r.creditorDepartmentId && r.amount > 0 && r.entryDate,
+    );
+    if (savable.length === 0) return;
+    startTransition(async () => {
+      const { outcomes } = await createInterDepartmentTransferBatch(
+        savable.map(({ key: _key, error: _error, ...rest }) => rest),
+      );
+      const nextRows: DraftTransferRow[] = [];
+      savable.forEach((row, i) => {
+        const outcome = outcomes[i];
+        if (!outcome.success) nextRows.push({ ...row, error: outcome.reason });
+      });
+      for (const r of transferRows) {
+        if (!savable.includes(r)) nextRows.push(r);
+      }
+      const allSaved = nextRows.length === 0;
+      setTransferRows(allSaved ? [blankTransferRow()] : nextRows);
+      router.refresh();
+      if (allSaved) onSaved?.();
+    });
+  }
+
   if (departments.length === 0) return null;
+
+  const canTransfer = isAdmin && departments.length >= 2;
 
   return (
     <div className="card p-4 space-y-3">
-      <h2 className="font-semibold">רישום ידני של הכנסה / הוצאה</h2>
-      <p className="text-xs text-muted">כל רישום ממתין לאישור מנהל כספים לפני שהוא נכנס לדוחות המחלקה.</p>
-      <div className="overflow-x-auto">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="font-semibold">{formMode === "transfer" ? "העברה בין מחלקות" : "רישום ידני של הכנסה / הוצאה"}</h2>
+        {canTransfer && (
+          <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setFormMode("entries")}
+              className={`rounded px-2 py-1 ${formMode === "entries" ? "bg-primary text-primary-foreground" : "text-muted"}`}
+            >
+              רישום רגיל
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormMode("transfer")}
+              className={`rounded px-2 py-1 ${formMode === "transfer" ? "bg-primary text-primary-foreground" : "text-muted"}`}
+            >
+              העברה בין מחלקות
+            </button>
+          </div>
+        )}
+      </div>
+      {formMode === "transfer" ? (
+        <>
+          <p className="text-xs text-muted">
+            רישום שמחלקה אחת חייבת לשנייה. אם לשתי המחלקות אותו חשבון בית — זו הקצאה פנימית בלבד (מינוס לחייבת, פלוס
+            לזכאית, בלי תנועת בנק אמיתית). אם החשבונות שונים, נרשמת הוצאה לחייבת דרך חשבון הבנק של הזכאית, וחוב בין
+            המחלקות נוצר אוטומטית ב&quot;התחשבנות הפנימית&quot;.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>מחלקה חייבת</th>
+                  <th>מחלקה זכאית</th>
+                  <th>סכום</th>
+                  <th>תאריך</th>
+                  <th>הערות</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {transferRows.map((row) => (
+                  <tr key={row.key}>
+                    <td>
+                      <select
+                        value={row.debtorDepartmentId}
+                        onChange={(e) => updateTransfer(row.key, { debtorDepartmentId: e.target.value })}
+                        className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                      >
+                        <option value="">בחר מחלקה...</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        value={row.creditorDepartmentId}
+                        onChange={(e) => updateTransfer(row.key, { creditorDepartmentId: e.target.value })}
+                        className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                      >
+                        <option value="">בחר מחלקה...</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={row.amount || ""}
+                        onChange={(e) => updateTransfer(row.key, { amount: Number(e.target.value) || 0 })}
+                        className="w-20 rounded border border-border bg-transparent px-1 py-1 text-xs"
+                      />
+                    </td>
+                    <td>
+                      <DateInput
+                        value={row.entryDate}
+                        onChange={(v) => updateTransfer(row.key, { entryDate: v })}
+                        className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        value={row.notes ?? ""}
+                        onChange={(e) => updateTransfer(row.key, { notes: e.target.value || null })}
+                        placeholder="הערות"
+                        className="w-28 rounded border border-border bg-transparent px-1 py-1 text-xs"
+                      />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => removeTransferRow(row.key)}
+                        disabled={transferRows.length === 1}
+                        className="text-xs text-danger disabled:opacity-30"
+                      >
+                        ✕
+                      </button>
+                      {row.error && <p className="text-xs text-danger">{row.error}</p>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={addTransferRow} className="text-xs text-primary underline">
+              + שורה
+            </button>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={saveAllTransfers}
+              className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              {isPending ? "שומר…" : "שמור הכל"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-xs text-muted">כל רישום ממתין לאישור מנהל כספים לפני שהוא נכנס לדוחות המחלקה.</p>
+          <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
@@ -445,19 +508,21 @@ export function NewManualEntryFormMulti({
           </tbody>
         </table>
       </div>
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={addRow} className="text-xs text-primary underline">
-          + שורה
-        </button>
-        <button
-          type="button"
-          disabled={isPending}
-          onClick={saveAll}
-          className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
-        >
-          {isPending ? "שומר…" : "שמור הכל"}
-        </button>
-      </div>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={addRow} className="text-xs text-primary underline">
+              + שורה
+            </button>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={saveAll}
+              className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              {isPending ? "שומר…" : "שמור הכל"}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

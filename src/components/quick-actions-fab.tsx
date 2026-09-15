@@ -3,13 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import { UnifiedCheckForm } from "@/components/unified-check-form";
-import { InterDepartmentTransferForm, NewManualEntryButton } from "@/components/manual-entries-client";
+import { NewManualEntryButton } from "@/components/manual-entries-client";
 import { Modal } from "@/components/modal";
 import { ExpectedIncomeBatchForm } from "@/components/expected-income-batch-form";
 import { getQuickActionRefData } from "@/app/(app)/quick-actions-actions";
 
 type RefData = Awaited<ReturnType<typeof getQuickActionRefData>>;
-type ModalActionKey = "payment_request" | "expected_income" | "manual_entry" | "manual_entry_paste" | "inter_department_transfer";
+// Inter-department transfer is intentionally NOT its own key here — it's a
+// toggle inside the "manual_entry" modal (see NewManualEntryFormMulti)
+// instead of a separate quick action/button, so the list below doesn't
+// carry a near-duplicate entry alongside plain manual entry.
+type ModalActionKey = "payment_request" | "expected_income" | "manual_entry" | "manual_entry_paste";
 
 // Every quick action shows up in two places — the floating "+" speed-dial
 // (QuickActionsFab) and a plain button grid on the dashboard
@@ -49,7 +53,6 @@ const ACTIONS: ActionDef[] = [
   { key: "expected_income", label: "הכנסה צפויה חדשה", type: "modal", group: "create" },
   { key: "manual_entry", label: "הכנסה / הוצאה ידנית", type: "modal", group: "create" },
   { key: "manual_entry_paste", label: "הדבקת רשימת הכנסות / הוצאות", type: "modal", group: "create" },
-  { key: "inter_department_transfer", label: "העברה בין מחלקות", type: "modal", group: "create" },
   { key: "paste_income", label: "הדבק הכנסות", type: "link", href: "/incomes/new", group: "create" },
   { key: "quick_issuance", label: "הנפקה מהירה", type: "link", href: "/checks#issuance-queue", group: "checks" },
   { key: "due_checks", label: "צ׳קים והעברות שהגיע תאריכם", type: "link", href: "/checks#due-checks", group: "checks" },
@@ -110,6 +113,7 @@ function useQuickActionsState() {
           departments={refData.departments}
           bankAccounts={refData.bankAccounts}
           categories={refData.categories}
+          isAdmin
           open
           onOpenChange={(v) => !v && setActiveAction(null)}
           hideTrigger
@@ -120,18 +124,12 @@ function useQuickActionsState() {
           departments={refData.departments}
           bankAccounts={refData.bankAccounts}
           categories={refData.categories}
+          isAdmin
           open
           onOpenChange={(v) => !v && setActiveAction(null)}
           hideTrigger
           initialMode="paste"
         />
-      )}
-      {activeAction === "inter_department_transfer" && refData && (
-        <Modal onClose={() => setActiveAction(null)}>
-          <div className="p-4">
-            <InterDepartmentTransferForm departments={refData.departments} onSaved={() => setActiveAction(null)} />
-          </div>
-        </Modal>
       )}
     </>
   );
