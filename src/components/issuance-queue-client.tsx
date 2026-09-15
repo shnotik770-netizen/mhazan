@@ -32,6 +32,7 @@ type QueueRow = {
   amount: number | null;
   department_id: string | null;
   department_name: string | null;
+  category_id: string | null;
   payment_method: string | null;
   check_number: string | null;
   due_date: string | null;
@@ -41,6 +42,8 @@ type QueueRow = {
   bank_name: string | null;
   account_number: string | null;
 };
+
+type CategoryOption = { id: string; name: string; departmentId: string | null };
 
 type AllocationInfo = { departmentId: string; departmentName: string | null; amount: number };
 
@@ -168,11 +171,13 @@ export function IssuanceQueueTable({
   rows,
   departments,
   bankAccounts,
+  categories = [],
   allocationsByCheck,
 }: {
   rows: QueueRow[];
   departments: Department[];
   bankAccounts: BankAccount[];
+  categories?: CategoryOption[];
   allocationsByCheck: Map<string, AllocationInfo[]>;
 }) {
   const router = useRouter();
@@ -529,6 +534,8 @@ export function IssuanceQueueTable({
                     dueDate={c.due_date}
                     checkNumber={c.check_number}
                     departmentId={c.department_id}
+                    categoryId={c.category_id}
+                    categories={categories}
                     notes={c.notes}
                     paymentMethod={c.payment_method ?? undefined}
                     bankAccountId={c.bank_account_id}

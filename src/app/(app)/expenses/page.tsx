@@ -36,7 +36,9 @@ export default async function ExpensesPage() {
     .limit(300);
   let manualQuery = supabase
     .from("manual_department_entries")
-    .select("id, entry_date, amount, notes, department_id, departments(name), recurring_schedule_id, skip_department_ledger")
+    .select(
+      "id, entry_date, amount, notes, department_id, category_id, departments(name), categories(name), recurring_schedule_id, skip_department_ledger",
+    )
     .eq("status", "APPROVED")
     .eq("direction", "EXPENSE")
     .order("entry_date", { ascending: false })
@@ -145,7 +147,9 @@ export default async function ExpensesPage() {
         amount: number;
         notes: string | null;
         department_id: string | null;
+        category_id: string | null;
         departments: { name: string } | null;
+        categories: { name: string } | null;
         recurring_schedule_id: string | null;
         skip_department_ledger: boolean;
       };
@@ -160,8 +164,8 @@ export default async function ExpensesPage() {
         amount: Number(row.amount),
         departmentId: row.department_id,
         departmentName: row.departments?.name ?? null,
-        categoryId: null,
-        categoryName: null,
+        categoryId: row.category_id,
+        categoryName: row.categories?.name ?? null,
         bankAccountName: null,
         bankAccountId: null,
         status: "APPROVED",

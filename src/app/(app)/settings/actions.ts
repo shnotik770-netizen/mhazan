@@ -309,7 +309,7 @@ export async function confirmScheduleOccurrence(
   const supabase = await createClient();
   const { data: schedule, error: scheduleError } = await supabase
     .from("recurring_schedules")
-    .select("name, direction, bank_account_id")
+    .select("name, direction, bank_account_id, category_id")
     .eq("id", scheduleId)
     .single();
   if (scheduleError || !schedule) return { error: safeErrorMessage(scheduleError) ?? "החיוב הקבוע לא נמצא" };
@@ -319,6 +319,7 @@ export async function confirmScheduleOccurrence(
     valid.map((a) => ({
       department_id: a.departmentId,
       bank_account_id: schedule.bank_account_id as string,
+      category_id: schedule.category_id,
       direction: schedule.direction,
       amount: a.amount,
       entry_date: confirmedDate,

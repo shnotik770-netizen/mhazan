@@ -30,6 +30,7 @@ type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | n
 // needing the full row shape (balance, department, etc.) that BankAccount
 // above carries for the request forms.
 type MinimalBankAccount = { id: string; bank_name: string; account_number: string };
+type CategoryOption = { id: string; name: string; departmentId: string | null };
 
 
 export function CheckStatusControls({
@@ -410,10 +411,12 @@ export function CancelAndReplaceCheckButton({
 export function DeptExpenseRequestForm({
   departments,
   bankAccounts,
+  categories = [],
   canSetDates,
 }: {
   departments: Department[];
   bankAccounts: BankAccount[];
+  categories?: CategoryOption[];
   canSetDates: boolean;
 }) {
   const router = useRouter();
@@ -423,10 +426,23 @@ export function DeptExpenseRequestForm({
   const [payee, setPayee] = useState("");
   const [amount, setAmount] = useState(0);
   const [dueDate, setDueDate] = useState("");
+  const [categoryId, setCategoryId] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Only categories that belong to the chosen department (or to no
+  // department at all — a category shared across every department) make
+  // sense here, since the department was already fixed by the picker above;
+  // switching department clears a category that no longer fits it.
+  const categoryOptions = categories.filter((c) => !c.departmentId || c.departmentId === departmentId);
+
+  function changeDepartment(id: string) {
+    setDepartmentId(id);
+    const current = categories.find((c) => c.id === categoryId);
+    if (current?.departmentId && current.departmentId !== id) setCategoryId("");
+  }
 
   function submit() {
     setError(null);
@@ -439,6 +455,7 @@ export function DeptExpenseRequestForm({
         payee,
         amount,
         dueDate: canSetDates && dueDate ? dueDate : null,
+        categoryId: categoryId || null,
         notes: notes || null,
       });
       if (result.error) {
@@ -448,6 +465,7 @@ export function DeptExpenseRequestForm({
         setPayee("");
         setAmount(0);
         setDueDate("");
+        setCategoryId("");
         setNotes("");
         router.refresh();
       }
@@ -470,7 +488,7 @@ export function DeptExpenseRequestForm({
         ) : (
           <SearchableSelect
             value={departmentId}
-            onChange={setDepartmentId}
+            onChange={changeDepartment}
             options={departments.map((d) => ({ id: d.id, label: d.name }))}
             required
             className="rounded border border-border bg-transparent px-2 py-1 text-sm"
@@ -514,6 +532,20 @@ export function DeptExpenseRequestForm({
             onChange={setDueDate}
             className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           />
+        )}
+        {categoryOptions.length > 0 && (
+          <select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+          >
+            <option value="">קטגוריה (אופציונלי)...</option>
+            {categoryOptions.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
         )}
         <input
           value={notes}
@@ -981,6 +1013,8 @@ export function EditCheckButton({
   dueDate,
   checkNumber,
   departmentId,
+  categoryId,
+  categories = [],
   notes,
   paymentMethod,
   existingAllocations,
@@ -992,6 +1026,8 @@ export function EditCheckButton({
   dueDate: string | null;
   checkNumber: string | null;
   departmentId: string | null;
+  categoryId?: string | null;
+  categories?: CategoryOption[];
   notes: string | null;
   paymentMethod?: string;
   existingAllocations?: CheckAllocationInput[];
@@ -1004,6 +1040,7 @@ export function EditCheckButton({
   const [editDueDate, setEditDueDate] = useState(dueDate ?? "");
   const [editCheckNumber, setEditCheckNumber] = useState(checkNumber ?? "");
   const [editDepartmentId, setEditDepartmentId] = useState(departmentId ?? "");
+  const [editCategoryId, setEditCategoryId] = useState(categoryId ?? "");
   const [editNotes, setEditNotes] = useState(notes ?? "");
   const [editPaymentMethod, setEditPaymentMethod] = useState<"CHECK" | "TRANSFER">(
     paymentMethod === "TRANSFER" ? "TRANSFER" : "CHECK",
@@ -1022,6 +1059,7 @@ export function EditCheckButton({
         dueDate: editDueDate || null,
         checkNumber: editCheckNumber || null,
         departmentId: editDepartmentId || null,
+        categoryId: editCategoryId || null,
         notes: editNotes || null,
         paymentMethod: editPaymentMethod,
         allocations: isSplitting ? allocations : [],
@@ -1098,6 +1136,20 @@ export function EditCheckButton({
                 onChange={setAllocations}
               />
             )}
+            {categories.length > 0 && (
+              <select
+                value={editCategoryId}
+                onChange={(e) => setEditCategoryId(e.target.value)}
+                className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+              >
+                <option value="">קטגוריה (אופציונלי)...</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               value={editNotes}
               onChange={(e) => setEditNotes(e.target.value)}
@@ -1131,6 +1183,8 @@ export function EditDeleteCheckRow({
   dueDate,
   checkNumber,
   departmentId,
+  categoryId,
+  categories,
   notes,
   paymentMethod,
   bankAccountId,
@@ -1144,6 +1198,8 @@ export function EditDeleteCheckRow({
   dueDate: string | null;
   checkNumber: string | null;
   departmentId: string | null;
+  categoryId?: string | null;
+  categories?: CategoryOption[];
   notes: string | null;
   paymentMethod?: string;
   bankAccountId?: string | null;
@@ -1173,6 +1229,8 @@ export function EditDeleteCheckRow({
         dueDate={dueDate}
         checkNumber={checkNumber}
         departmentId={departmentId}
+        categoryId={categoryId}
+        categories={categories}
         notes={notes}
         paymentMethod={paymentMethod}
         existingAllocations={existingAllocations}

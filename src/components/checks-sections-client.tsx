@@ -17,6 +17,7 @@ import { groupByBank, bankColorFor, BankGroupHeading } from "@/components/bank-g
 
 type AllocationInfo = { departmentId: string; departmentName: string | null; amount: number };
 type BankAccount = { id: string; bank_name: string; account_number: string };
+type CategoryOption = { id: string; name: string; departmentId: string | null };
 
 // Small chevron button at the header's edge that collapses/expands a
 // section's body — every section on the checks page uses this so a long
@@ -102,6 +103,7 @@ type PaymentRequestRow = {
   amount: number | null;
   department_id: string | null;
   department_name: string | null;
+  category_id: string | null;
   notes: string | null;
   payment_method: string | null;
   due_date: string | null;
@@ -116,12 +118,14 @@ export function PendingApprovalTable({
   isAdmin,
   bankAccounts,
   departments,
+  categories = [],
   allocationsByCheck,
 }: {
   rows: PaymentRequestRow[];
   isAdmin: boolean;
   bankAccounts: BankAccount[];
   departments: Tables<"departments">[];
+  categories?: CategoryOption[];
   allocationsByCheck: Map<string, AllocationInfo[]>;
 }) {
   const [query, setQuery] = useState("");
@@ -183,6 +187,8 @@ export function PendingApprovalTable({
                         dueDate={c.due_date}
                         checkNumber={c.check_number}
                         departmentId={c.department_id}
+                        categoryId={c.category_id}
+                        categories={categories}
                         notes={c.notes}
                         paymentMethod={c.payment_method ?? undefined}
                         existingAllocations={allocationsByCheck.get(c.id!)}
@@ -225,6 +231,7 @@ type OverdueTransferRow = {
   due_date: string;
   bank_account_id: string;
   department_id: string | null;
+  category_id: string | null;
   notes: string | null;
   departments: { name: string } | null;
   bank_accounts: { bank_name: string; account_number: string } | null;
@@ -240,11 +247,13 @@ export function OverdueTransfersTable({
   rows,
   bankAccounts,
   departments,
+  categories = [],
   allocationsByCheck,
 }: {
   rows: OverdueTransferRow[];
   bankAccounts: BankAccount[];
   departments: Tables<"departments">[];
+  categories?: CategoryOption[];
   allocationsByCheck: Map<string, AllocationInfo[]>;
 }) {
   const [query, setQuery] = useState("");
@@ -313,6 +322,8 @@ export function OverdueTransfersTable({
                           dueDate={row.due_date}
                           checkNumber={null}
                           departmentId={row.department_id}
+                          categoryId={row.category_id}
+                          categories={categories}
                           notes={row.notes}
                           paymentMethod="TRANSFER"
                           existingAllocations={allocationsByCheck.get(row.id)}

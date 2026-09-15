@@ -9,6 +9,7 @@ import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
 type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | null };
+type CategoryOption = { id: string; name: string; departmentId: string | null };
 
 type DraftExpenseRow = BulkExpenseRequestRow & { key: number; error?: string };
 
@@ -19,10 +20,12 @@ let nextKey = 1;
 export function BulkExpenseRequestFormMulti({
   departments,
   bankAccounts,
+  categories = [],
   canSetDates,
 }: {
   departments: Department[];
   bankAccounts: BankAccount[];
+  categories?: CategoryOption[];
   canSetDates: boolean;
 }) {
   const router = useRouter();
@@ -39,6 +42,7 @@ export function BulkExpenseRequestFormMulti({
       payee: "",
       amount: 0,
       dueDate: null,
+      categoryId: null,
       notes: null,
     };
   }
@@ -50,6 +54,20 @@ export function BulkExpenseRequestFormMulti({
 
   function update(key: number, patch: Partial<DraftExpenseRow>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  }
+
+  // Switching a row's department clears a category that belonged to a
+  // different one — same reasoning as the single-request form: the
+  // category and department shouldn't end up mismatched.
+  function changeRowDepartment(key: number, departmentId: string) {
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.key !== key) return r;
+        const current = categories.find((c) => c.id === r.categoryId);
+        const clearCategory = current?.departmentId && current.departmentId !== departmentId;
+        return { ...r, departmentId, categoryId: clearCategory ? null : r.categoryId };
+      }),
+    );
   }
 
   function addRow() {
@@ -107,6 +125,7 @@ export function BulkExpenseRequestFormMulti({
               <th>מוטב</th>
               <th>סכום</th>
               {canSetDates && <th>תאריך</th>}
+              {categories.length > 0 && <th>קטגוריה</th>}
               <th>הערות</th>
               <th></th>
             </tr>
@@ -118,7 +137,7 @@ export function BulkExpenseRequestFormMulti({
                   <td>
                     <SearchableSelect
                       value={row.departmentId}
-                      onChange={(id) => update(row.key, { departmentId: id })}
+                      onChange={(id) => changeRowDepartment(row.key, id)}
                       options={departments.map((d) => ({ id: d.id, label: d.name }))}
                       required
                       className="rounded border border-border bg-transparent px-1 py-1 text-xs w-28"
@@ -167,6 +186,24 @@ export function BulkExpenseRequestFormMulti({
                       onChange={(v) => update(row.key, { dueDate: v || null })}
                       className="rounded border border-border bg-transparent px-1 py-1 text-xs"
                     />
+                  </td>
+                )}
+                {categories.length > 0 && (
+                  <td>
+                    <select
+                      value={row.categoryId ?? ""}
+                      onChange={(e) => update(row.key, { categoryId: e.target.value || null })}
+                      className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                    >
+                      <option value="">ללא</option>
+                      {categories
+                        .filter((c) => !c.departmentId || c.departmentId === row.departmentId)
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                    </select>
                   </td>
                 )}
                 <td>

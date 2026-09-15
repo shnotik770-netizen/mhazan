@@ -143,6 +143,7 @@ export async function createDeptExpenseRequest(input: {
   payee: string;
   amount: number;
   dueDate: string | null;
+  categoryId?: string | null;
   notes: string | null;
 }): Promise<{ error?: string }> {
   const currentUser = await requireUser();
@@ -155,6 +156,7 @@ export async function createDeptExpenseRequest(input: {
     payee: input.payee,
     amount: input.amount,
     due_date: input.dueDate || null,
+    category_id: input.categoryId || null,
     notes: input.notes,
     created_by: currentUser.id,
   });
@@ -864,6 +866,7 @@ export type PayeeExpenseRow = {
   status: string;
   department_id: string | null;
   departmentName: string | null;
+  category_id: string | null;
   categoryName: string | null;
   notes: string | null;
   spread_id: string | null;
@@ -881,6 +884,7 @@ export type PayeeExpenseRow = {
 export async function getExpensesByPayee(payee: string, departmentId?: string): Promise<{
   rows: PayeeExpenseRow[];
   departments: Tables<"departments">[];
+  categories: { id: string; name: string; departmentId: string | null }[];
   allocationsByCheck: Record<string, CheckAllocationInput[]>;
 }> {
   await requireUser();
@@ -888,7 +892,7 @@ export async function getExpensesByPayee(payee: string, departmentId?: string): 
   let checksQuery = supabase
     .from("checks")
     .select(
-      "id, due_date, amount, payment_method, check_number, status, department_id, notes, spread_id, departments(name), categories(name)",
+      "id, due_date, amount, payment_method, check_number, status, department_id, category_id, notes, spread_id, departments(name), categories(name)",
     )
     .ilike("payee", payee)
     .not("due_date", "is", null)
@@ -896,9 +900,10 @@ export async function getExpensesByPayee(payee: string, departmentId?: string): 
     .order("due_date", { ascending: false });
   if (departmentId) checksQuery = checksQuery.eq("department_id", departmentId);
 
-  const [{ data }, { data: departments }] = await Promise.all([
+  const [{ data }, { data: departments }, { data: allCategories }] = await Promise.all([
     checksQuery,
     supabase.from("departments").select("*").order("name"),
+    supabase.from("categories").select("id, name, department_id").order("name"),
   ]);
 
   const rows = (data ?? []) as unknown as {
@@ -909,6 +914,7 @@ export async function getExpensesByPayee(payee: string, departmentId?: string): 
     check_number: string | null;
     status: string;
     department_id: string | null;
+    category_id: string | null;
     notes: string | null;
     spread_id: string | null;
     departments: { name: string } | null;
@@ -935,11 +941,13 @@ export async function getExpensesByPayee(payee: string, departmentId?: string): 
       status: r.status,
       department_id: r.department_id,
       departmentName: r.departments?.name ?? null,
+      category_id: r.category_id,
       categoryName: r.categories?.name ?? null,
       notes: r.notes,
       spread_id: r.spread_id,
     })),
     departments: departments ?? [],
+    categories: (allCategories ?? []).map((c) => ({ id: c.id, name: c.name, departmentId: c.department_id })),
     allocationsByCheck,
   };
 }
@@ -1036,6 +1044,7 @@ export type BulkExpenseRequestRow = {
   payee: string;
   amount: number;
   dueDate: string | null;
+  categoryId?: string | null;
   notes: string | null;
 };
 
@@ -1058,6 +1067,7 @@ export async function createDeptExpenseRequestBatch(
       payee: row.payee,
       amount: row.amount,
       due_date: row.dueDate || null,
+      category_id: row.categoryId || null,
       notes: row.notes,
       created_by: currentUser.id,
     });

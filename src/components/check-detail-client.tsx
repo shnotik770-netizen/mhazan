@@ -280,6 +280,7 @@ export function PayeeLink({ payee, departmentId }: { payee: string; departmentId
 function PayeeExpensesModal({ payee, departmentId, onClose }: { payee: string; departmentId?: string; onClose: () => void }) {
   const [rows, setRows] = useState<PayeeExpenseRow[]>([]);
   const [departments, setDepartments] = useState<Tables<"departments">[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string; departmentId: string | null }[]>([]);
   const [allocationsByCheck, setAllocationsByCheck] = useState<Record<string, CheckAllocationInput[]>>({});
   const [loading, setLoading] = useState(true);
 
@@ -291,6 +292,7 @@ function PayeeExpensesModal({ payee, departmentId, onClose }: { payee: string; d
       if (cancelled) return;
       setRows(result.rows);
       setDepartments(result.departments);
+      setCategories(result.categories);
       setAllocationsByCheck(result.allocationsByCheck);
       setLoading(false);
     }
@@ -329,6 +331,7 @@ function PayeeExpensesModal({ payee, departmentId, onClose }: { payee: string; d
                   payee={payee}
                   spreadTotals={spreadTotals}
                   departments={departments}
+                  categories={categories}
                   allocationsByCheck={allocationsByCheck}
                 />
               </div>
@@ -345,12 +348,14 @@ function PayeeExpensesTable({
   payee,
   spreadTotals,
   departments,
+  categories,
   allocationsByCheck,
 }: {
   rows: PayeeExpenseRow[];
   payee: string;
   spreadTotals: Map<string, number>;
   departments: Tables<"departments">[];
+  categories: { id: string; name: string; departmentId: string | null }[];
   allocationsByCheck: Record<string, CheckAllocationInput[]>;
 }) {
   const columns: ColumnDef<PayeeExpenseRow>[] = [
@@ -414,6 +419,8 @@ function PayeeExpensesTable({
                   dueDate={r.due_date}
                   checkNumber={r.check_number}
                   departmentId={r.department_id}
+                  categoryId={r.category_id}
+                  categories={categories}
                   notes={r.notes}
                   paymentMethod={r.payment_method}
                   existingAllocations={allocationsByCheck[r.id] ?? []}

@@ -698,6 +698,7 @@ export function EditExpenseForm({
             amount: amountNum,
             entryDate: date,
             departmentId: departmentId || null,
+            categoryId: categoryId || null,
             notes: notes || null,
             skipDepartmentLedger: isOld,
           });
@@ -768,18 +769,16 @@ export function EditExpenseForm({
             />
           )}
         </div>
-        {row.isCheck && (
-          <div>
-            <label className="block text-sm text-muted mb-1">קטגוריה</label>
-            <SearchableSelect
-              value={categoryId}
-              onChange={setCategoryId}
-              options={categories.map((c) => ({ id: c.id, label: c.name }))}
-              placeholder="ללא קטגוריה"
-              className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-            />
-          </div>
-        )}
+        <div>
+          <label className="block text-sm text-muted mb-1">קטגוריה</label>
+          <SearchableSelect
+            value={categoryId}
+            onChange={setCategoryId}
+            options={categories.map((c) => ({ id: c.id, label: c.name }))}
+            placeholder="ללא קטגוריה"
+            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+          />
+        </div>
       </div>
 
       {row.isCheck && isSplitting && (

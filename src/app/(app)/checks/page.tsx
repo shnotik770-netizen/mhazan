@@ -238,11 +238,13 @@ export default async function ChecksPage({
           <DeptExpenseRequestForm
             departments={myDepartments}
             bankAccounts={bankAccounts ?? []}
+            categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name, departmentId: c.department_id }))}
             canSetDates={user.profile.can_set_check_dates}
           />
           <BulkExpenseRequestFormMulti
             departments={myDepartments}
             bankAccounts={bankAccounts ?? []}
+            categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name, departmentId: c.department_id }))}
             canSetDates={user.profile.can_set_check_dates}
           />
         </div>
@@ -285,6 +287,7 @@ export default async function ChecksPage({
                     due_date: string;
                     bank_account_id: string;
                     department_id: string | null;
+                    category_id: string | null;
                     notes: string | null;
                     departments: { name: string } | null;
                     bank_accounts: { bank_name: string; account_number: string } | null;
@@ -292,6 +295,7 @@ export default async function ChecksPage({
                 }
                 bankAccounts={bankAccounts ?? []}
                 departments={departments ?? []}
+                categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name, departmentId: c.department_id }))}
                 allocationsByCheck={allocationsByCheck}
               />
             )}
@@ -346,6 +350,7 @@ export default async function ChecksPage({
               rows={sortedNeedingIssuance}
               departments={departments ?? []}
               bankAccounts={bankAccounts ?? []}
+              categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name, departmentId: c.department_id }))}
               allocationsByCheck={allocationsByCheck}
             />
           </CollapsibleSection>
@@ -366,6 +371,7 @@ export default async function ChecksPage({
               isAdmin={isAdmin}
               bankAccounts={bankAccounts ?? []}
               departments={departments ?? []}
+              categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name, departmentId: c.department_id }))}
               allocationsByCheck={allocationsByCheck}
             />
           </CollapsibleSection>
