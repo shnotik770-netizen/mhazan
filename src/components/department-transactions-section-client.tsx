@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { DepartmentTransactionsTable } from "@/components/department-report-table-client";
+import { DateInput } from "@/components/date-input";
 
 type ForecastDetail = {
   donorName: string;
@@ -143,21 +144,19 @@ export function DepartmentTransactionsSection({
           </select>
           <div className="flex items-center gap-1">
             <span className="text-xs text-muted">מתאריך</span>
-            <input
-              type="date"
+            <DateInput
               value={fromDate}
-              onChange={(e) => {
-                setFromDate(e.target.value);
+              onChange={(v) => {
+                setFromDate(v);
                 setMonth("");
               }}
               className="rounded border border-border bg-transparent px-2 py-1 text-sm"
             />
             <span className="text-xs text-muted">עד תאריך</span>
-            <input
-              type="date"
+            <DateInput
               value={toDate}
-              onChange={(e) => {
-                setToDate(e.target.value);
+              onChange={(v) => {
+                setToDate(v);
                 setMonth("");
               }}
               className="rounded border border-border bg-transparent px-2 py-1 text-sm"

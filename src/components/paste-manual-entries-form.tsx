@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createManualEntryBatch, type ManualEntryBatchRow } from "@/app/(app)/manual-entries/actions";
 import { Modal } from "@/components/modal";
 import { SearchableSelect } from "@/components/searchable-select";
+import { DateInput } from "@/components/date-input";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -308,10 +309,9 @@ export function PasteManualEntriesFormInner({
                       />
                     </td>
                     <td>
-                      <input
-                        type="date"
+                      <DateInput
                         value={row.entryDate}
-                        onChange={(e) => update(row.key, { entryDate: e.target.value })}
+                        onChange={(v) => update(row.key, { entryDate: v })}
                         className="rounded border border-border bg-transparent px-1 py-1 text-xs"
                       />
                     </td>

@@ -39,6 +39,21 @@ export function todayIso(): string {
   return toLocalISODate(new Date());
 }
 
+// A native <input type="date">'s year segment is a fixed 4-character
+// field: typing just "26" and moving on commits as "0026", not "2026" —
+// browsers zero-pad an incomplete year instead of expanding it. Nobody is
+// ever entering a real date from the first century, so any year under 100
+// is unambiguously this mistake and gets silently corrected back to the
+// current millennium instead of saving (or worse, sorting/filtering) as a
+// date a couple thousand years off.
+export function expandTwoDigitYear(isoDate: string): string {
+  const m = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return isoDate;
+  const year = Number(m[1]);
+  if (year >= 100) return isoDate;
+  return `${year + 2000}-${m[2]}-${m[3]}`;
+}
+
 // Adds calendar months to a "YYYY-MM-DD" date, preserving local
 // year/month/day throughout (see toLocalISODate above for why this never
 // routes through toISOString()).

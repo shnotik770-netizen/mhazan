@@ -6,6 +6,7 @@ import { createCheck, createPaymentSpread, type CheckAllocationInput } from "@/a
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
 import { MiniCalculator } from "@/components/mini-calculator";
 import { SearchableSelect } from "@/components/searchable-select";
+import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
 import { addMonthsToDate, todayIso } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -287,12 +288,11 @@ export function UnifiedCheckForm({
             {rows.map((row, i) => (
               <div key={i} className="rounded-lg border border-border p-3 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="date"
+                  <DateInput
                     value={row.date}
-                    onChange={(e) => updateRow(i, { date: e.target.value })}
+                    onChange={(v) => updateRow(i, { date: v })}
                     className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-                    title="ניתן להשאיר ריק"
+                    title="ניתן להשאיר ריק — Ctrl+; למילוי תאריך היום"
                   />
                   <div className="flex items-center gap-1">
                     <input

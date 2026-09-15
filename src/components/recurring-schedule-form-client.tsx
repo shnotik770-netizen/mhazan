@@ -10,6 +10,7 @@ import {
 } from "@/app/(app)/settings/actions";
 import { SplitAllocationEditor, type Allocation } from "@/components/split-allocation-editor";
 import { ScheduleOccurrenceConfirmFields } from "@/components/schedule-occurrence-confirm-fields";
+import { DateInput } from "@/components/date-input";
 import type { ScheduleRow } from "@/components/recurring-schedules-manager-client";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -324,10 +325,9 @@ export function NewRecurringScheduleForm({
         </select>
 
         {showsDayPicker && (
-          <input
-            type="date"
+          <DateInput
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={setStartDate}
             title={
               isOptionalDayMonthly
                 ? "תאריך משוער בלבד — ההתראה תתחיל להופיע לקראת היום הזה בכל חודש, גם אם בפועל זה יורד ביום קצת שונה"
@@ -337,10 +337,9 @@ export function NewRecurringScheduleForm({
           />
         )}
         {frequency === "ONCE" && (
-          <input
-            type="date"
+          <DateInput
             value={oneTimeDate}
-            onChange={(e) => setOneTimeDate(e.target.value)}
+            onChange={setOneTimeDate}
             className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           />
         )}

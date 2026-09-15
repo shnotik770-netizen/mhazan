@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatCurrency, formatDate, todayIso } from "@/lib/format";
 import { useSimulation } from "@/components/forecast-simulation-client";
+import { DateInput } from "@/components/date-input";
 
 // Pick any single date and see the projected bank balance on that day —
 // carried forward from the last dated forecast item on or before it — plus
@@ -36,10 +37,9 @@ export function ForecastDayLookup() {
     <div className="card p-4 space-y-2">
       <h2 className="font-semibold">צפי יתרה לתאריך מסוים</h2>
       <div className="flex items-center gap-2">
-        <input
-          type="date"
+        <DateInput
           value={date}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={setDate}
           className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
         />
       </div>

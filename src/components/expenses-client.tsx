@@ -254,19 +254,17 @@ export function ExpensesTable({
         </label>
         <label className="flex items-center gap-2 text-sm text-muted">
           מתאריך
-          <input
-            type="date"
+          <DateInput
             value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
+            onChange={setFromDate}
             className="rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm"
           />
         </label>
         <label className="flex items-center gap-2 text-sm text-muted">
           עד תאריך
-          <input
-            type="date"
+          <DateInput
             value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
+            onChange={setToDate}
             className="rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm"
           />
         </label>

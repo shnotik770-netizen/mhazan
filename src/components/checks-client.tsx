@@ -158,10 +158,9 @@ export function VerifyTransferButton({
           התאריך הרשום הוא {currentDueDate} — אם ההעברה בוצעה בפועל בתאריך אחר, עדכנו כאן:
         </p>
         <div className="flex items-center gap-1">
-          <input
-            type="date"
+          <DateInput
             value={actualDate}
-            onChange={(e) => setActualDate(e.target.value)}
+            onChange={setActualDate}
             className="rounded border border-border bg-transparent px-2 py-1 text-xs"
           />
           <button
@@ -510,10 +509,9 @@ export function DeptExpenseRequestForm({
           <MiniCalculator onApply={setAmount} />
         </div>
         {canSetDates && (
-          <input
-            type="date"
+          <DateInput
             value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
+            onChange={setDueDate}
             className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           />
         )}
@@ -577,10 +575,9 @@ export function ApprovePaymentRequestRow({
 
   return (
     <div className="flex flex-wrap items-center gap-1">
-      <input
-        type="date"
+      <DateInput
         value={dueDate}
-        onChange={(e) => setDueDate(e.target.value)}
+        onChange={setDueDate}
         title={isCheck ? "ניתן להשאיר ריק — יעבור לצ׳קים ממתינים להנפקה" : "נדרש כדי לדעת מתי לבצע את ההעברה"}
         className="rounded border border-border bg-transparent px-2 py-1 text-xs"
       />
@@ -825,11 +822,9 @@ export function IssueCheckRow({
         </p>
         {spreadRows.map((row, i) => (
           <div key={i} className="flex items-center gap-1">
-            <input
-              type="date"
+            <DateInput
               value={row.date}
-              onChange={(e) => {
-                const value = e.target.value;
+              onChange={(value) => {
                 setSpreadRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, date: value } : r)));
               }}
               onBlur={(e) => {
@@ -930,10 +925,9 @@ export function IssueCheckRow({
               className="w-24 rounded border border-border bg-transparent px-2 py-1 text-xs"
             />
           )}
-          <input
-            type="date"
+          <DateInput
             value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
+            onChange={setDueDate}
             className="rounded border border-border bg-transparent px-2 py-1 text-xs"
           />
           <label className="flex items-center gap-1 text-xs">
@@ -1072,10 +1066,9 @@ export function EditCheckButton({
               className="rounded border border-border bg-transparent px-2 py-1 text-xs"
             />
             <MiniCalculator onApply={setEditAmount} />
-            <input
-              type="date"
+            <DateInput
               value={editDueDate}
-              onChange={(e) => setEditDueDate(e.target.value)}
+              onChange={setEditDueDate}
               className="rounded border border-border bg-transparent px-2 py-1 text-xs"
             />
             {editPaymentMethod === "CHECK" && (

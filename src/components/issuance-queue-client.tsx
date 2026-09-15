@@ -14,6 +14,7 @@ import { EditDeleteCheckRow, IssueCheckRow } from "@/components/checks-client";
 import { CancelCheckNumberButton } from "@/components/cancel-check-number-client";
 import { Modal } from "@/components/modal";
 import { RowActionsMenu } from "@/components/row-actions-menu";
+import { DateInput } from "@/components/date-input";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { groupByBank, bankColorFor, BankGroupHeading } from "@/components/bank-grouping";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -73,10 +74,9 @@ function InlineDueDateCell({ checkId, dueDate }: { checkId: string; dueDate: str
   }
 
   return (
-    <input
-      type="date"
+    <DateInput
       value={value}
-      onChange={(e) => setValue(e.target.value)}
+      onChange={setValue}
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === "Enter") {

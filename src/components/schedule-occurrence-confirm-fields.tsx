@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SplitAllocationEditor } from "@/components/split-allocation-editor";
+import { DateInput } from "@/components/date-input";
 import type { ScheduleConfirmationAllocation } from "@/app/(app)/settings/actions";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -80,10 +81,9 @@ export function ScheduleOccurrenceConfirmFields({
       <div className="flex flex-wrap items-end gap-2">
         <div>
           <label className="block text-xs text-muted mb-1">תאריך בפועל</label>
-          <input
-            type="date"
+          <DateInput
             value={confirmedDate}
-            onChange={(e) => setConfirmedDate(e.target.value)}
+            onChange={setConfirmedDate}
             className="rounded border border-border bg-transparent px-2 py-1 text-sm"
           />
         </div>
