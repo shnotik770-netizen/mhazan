@@ -11,6 +11,7 @@ import {
 } from "@/app/(app)/manual-entries/actions";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
+import { SearchableSelect } from "@/components/searchable-select";
 import { PasteManualEntriesFormInner } from "@/components/paste-manual-entries-form";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -307,32 +308,22 @@ export function NewManualEntryFormMulti({
                 {transferRows.map((row) => (
                   <tr key={row.key}>
                     <td>
-                      <select
+                      <SearchableSelect
                         value={row.debtorDepartmentId}
-                        onChange={(e) => updateTransfer(row.key, { debtorDepartmentId: e.target.value })}
+                        onChange={(id) => updateTransfer(row.key, { debtorDepartmentId: id })}
+                        options={departments.map((d) => ({ id: d.id, label: d.name }))}
+                        placeholder="בחר מחלקה..."
                         className="rounded border border-border bg-transparent px-1 py-1 text-xs"
-                      >
-                        <option value="">בחר מחלקה...</option>
-                        {departments.map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.name}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </td>
                     <td>
-                      <select
+                      <SearchableSelect
                         value={row.creditorDepartmentId}
-                        onChange={(e) => updateTransfer(row.key, { creditorDepartmentId: e.target.value })}
+                        onChange={(id) => updateTransfer(row.key, { creditorDepartmentId: id })}
+                        options={departments.map((d) => ({ id: d.id, label: d.name }))}
+                        placeholder="בחר מחלקה..."
                         className="rounded border border-border bg-transparent px-1 py-1 text-xs"
-                      >
-                        <option value="">בחר מחלקה...</option>
-                        {departments.map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.name}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </td>
                     <td>
                       <input
@@ -413,18 +404,13 @@ export function NewManualEntryFormMulti({
               return (
                 <tr key={row.key}>
                   <td>
-                    <select
+                    <SearchableSelect
                       value={row.departmentId ?? ""}
-                      onChange={(e) => updateDepartment(row.key, e.target.value)}
+                      onChange={(id) => updateDepartment(row.key, id)}
+                      options={departments.map((d) => ({ id: d.id, label: d.name }))}
+                      placeholder="בחר מחלקה..."
                       className="rounded border border-border bg-transparent px-1 py-1 text-xs"
-                    >
-                      <option value="">בחר מחלקה...</option>
-                      {departments.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </td>
                   <td>
                     <select
@@ -452,18 +438,13 @@ export function NewManualEntryFormMulti({
                     />
                   </td>
                   <td>
-                    <select
+                    <SearchableSelect
                       value={row.categoryId ?? ""}
-                      onChange={(e) => update(row.key, { categoryId: e.target.value || null })}
+                      onChange={(id) => update(row.key, { categoryId: id || null })}
+                      options={categories.map((c) => ({ id: c.id, label: c.name }))}
+                      placeholder="ללא קטגוריה"
                       className="rounded border border-border bg-transparent px-1 py-1 text-xs"
-                    >
-                      <option value="">ללא קטגוריה</option>
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </td>
                   <td>
                     <input

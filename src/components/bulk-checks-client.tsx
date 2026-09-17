@@ -155,13 +155,18 @@ export function BulkExpenseRequestFormMulti({
                   </select>
                 </td>
                 <td>
-                  <SearchableSelect
+                  <select
                     value={row.bankAccountId}
-                    onChange={(id) => update(row.key, { bankAccountId: id })}
-                    options={bankAccounts.map((b) => ({ id: b.id, label: `${b.departments?.name ?? ""} — ${b.bank_name}` }))}
-                    placeholder="בחר..."
+                    onChange={(e) => update(row.key, { bankAccountId: e.target.value })}
                     className="rounded border border-border bg-transparent px-1 py-1 text-xs w-32"
-                  />
+                  >
+                    <option value="">בחר...</option>
+                    {bankAccounts.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.departments?.name ?? ""} — {b.bank_name}
+                      </option>
+                    ))}
+                  </select>
                 </td>
                 <td>
                   <input
@@ -190,20 +195,15 @@ export function BulkExpenseRequestFormMulti({
                 )}
                 {categories.length > 0 && (
                   <td>
-                    <select
+                    <SearchableSelect
                       value={row.categoryId ?? ""}
-                      onChange={(e) => update(row.key, { categoryId: e.target.value || null })}
-                      className="rounded border border-border bg-transparent px-1 py-1 text-xs"
-                    >
-                      <option value="">ללא</option>
-                      {categories
+                      onChange={(id) => update(row.key, { categoryId: id || null })}
+                      options={categories
                         .filter((c) => !c.departmentId || c.departmentId === row.departmentId)
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                    </select>
+                        .map((c) => ({ id: c.id, label: c.name }))}
+                      placeholder="ללא"
+                      className="rounded border border-border bg-transparent px-1 py-1 text-xs"
+                    />
                   </td>
                 )}
                 <td>

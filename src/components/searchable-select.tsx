@@ -22,6 +22,8 @@ export function SearchableSelect({
   placeholder,
   className,
   required,
+  disabled,
+  title,
 }: {
   value: string;
   onChange: (id: string) => void;
@@ -29,6 +31,8 @@ export function SearchableSelect({
   placeholder?: string;
   className?: string;
   required?: boolean;
+  disabled?: boolean;
+  title?: string;
 }) {
   const selected = options.find((o) => o.id === value) ?? null;
   const [open, setOpen] = useState(false);
@@ -41,6 +45,7 @@ export function SearchableSelect({
   // matching only itself, forcing the user to clear it before they can see
   // anything else to pick.
   function handleOpenChange(next: boolean) {
+    if (disabled) return;
     if (next) setQuery("");
     setOpen(next);
   }
@@ -69,7 +74,12 @@ export function SearchableSelect({
             onClick={() => handleOpenChange(true)}
             placeholder={placeholder}
             required={required && !value}
-            className={className ?? "rounded border border-border bg-transparent px-2 py-1 text-sm"}
+            disabled={disabled}
+            title={title}
+            className={
+              (className ?? "rounded border border-border bg-transparent px-2 py-1 text-sm") +
+              (disabled ? " disabled:opacity-50" : "")
+            }
           />
         </Popover.Anchor>
         <Popover.Portal container={container}>

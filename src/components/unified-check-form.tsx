@@ -264,13 +264,18 @@ export function UnifiedCheckForm({
               <option value="CHECK">צ׳ק</option>
               <option value="TRANSFER">העברה בנקאית</option>
             </select>
-            <SearchableSelect
+            <select
               value={bankAccountId}
-              onChange={setBankAccountId}
-              options={bankAccounts.map((b) => ({ id: b.id, label: `${b.departments?.name ?? ""} — ${b.bank_name}` }))}
-              placeholder="חשבון בנק..."
+              onChange={(e) => setBankAccountId(e.target.value)}
               className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-            />
+            >
+              <option value="">חשבון בנק...</option>
+              {bankAccounts.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.departments?.name ?? ""} — {b.bank_name}
+                </option>
+              ))}
+            </select>
             <input
               value={payee}
               onChange={(e) => setPayee(e.target.value)}
@@ -346,20 +351,15 @@ export function UnifiedCheckForm({
               </div>
             ))}
           </div>
-          <select
+          <SearchableSelect
             value={categoryId}
-            onChange={(e) => selectCategory(e.target.value)}
+            onChange={selectCategory}
+            options={categories.map((c) => ({ id: c.id, label: c.name }))}
+            placeholder="קטגוריה (אופציונלי)..."
             disabled={isSplitting}
             title={isSplitting ? "לא זמין בזמן פיצול בין מחלקות" : "בחירת קטגוריה תקבע גם את המחלקה, לפי איזו מחלקה שייכת הקטגוריה"}
-            className="w-full sm:w-auto rounded-lg border border-border bg-transparent px-3 py-2 text-sm disabled:opacity-50"
-          >
-            <option value="">קטגוריה (אופציונלי)...</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+            className="w-full sm:w-auto rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+          />
         </section>
 
         {/* הגדרות איך הסכום נספר — נפרד מהפריסה בפועל של הצ׳קים */}

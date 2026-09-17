@@ -19,7 +19,7 @@ import { SearchableSelect } from "@/components/searchable-select";
 import { DateInput } from "@/components/date-input";
 import { Modal } from "@/components/modal";
 import { rowActionButtonClass } from "@/components/row-actions-menu";
-import { formatCurrency, toLocalISODate } from "@/lib/format";
+import { formatCurrency, todayIso, toLocalISODate } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Department = Tables<"departments">;
@@ -147,8 +147,11 @@ export function VerifyTransferButton({
     });
   }
 
+  // Only worth asking "was this actually on a different date?" when the
+  // recorded date isn't today — if it's already today, "on time" is the
+  // only sane answer, so asking would just be an extra click for nothing.
   function clickConfirm() {
-    if (currentDueDate) setAskingDate(true);
+    if (currentDueDate && currentDueDate !== todayIso()) setAskingDate(true);
     else finish();
   }
 
@@ -502,13 +505,18 @@ export function DeptExpenseRequestForm({
           <option value="CHECK">צ׳ק</option>
           <option value="TRANSFER">העברה בנקאית</option>
         </select>
-        <SearchableSelect
+        <select
           value={bankAccountId}
-          onChange={setBankAccountId}
-          options={bankAccounts.map((b) => ({ id: b.id, label: `${b.departments?.name ?? ""} — ${b.bank_name}` }))}
-          placeholder="חשבון בנק..."
+          onChange={(e) => setBankAccountId(e.target.value)}
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        />
+        >
+          <option value="">חשבון בנק...</option>
+          {bankAccounts.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.departments?.name ?? ""} — {b.bank_name}
+            </option>
+          ))}
+        </select>
         <input
           value={payee}
           onChange={(e) => setPayee(e.target.value)}
@@ -534,18 +542,13 @@ export function DeptExpenseRequestForm({
           />
         )}
         {categoryOptions.length > 0 && (
-          <select
+          <SearchableSelect
             value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
+            onChange={setCategoryId}
+            options={categoryOptions.map((c) => ({ id: c.id, label: c.name }))}
+            placeholder="קטגוריה (אופציונלי)..."
             className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          >
-            <option value="">קטגוריה (אופציונלי)...</option>
-            {categoryOptions.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          />
         )}
         <input
           value={notes}
@@ -1137,18 +1140,13 @@ export function EditCheckButton({
               />
             )}
             {categories.length > 0 && (
-              <select
+              <SearchableSelect
                 value={editCategoryId}
-                onChange={(e) => setEditCategoryId(e.target.value)}
+                onChange={setEditCategoryId}
+                options={categories.map((c) => ({ id: c.id, label: c.name }))}
+                placeholder="קטגוריה (אופציונלי)..."
                 className="rounded border border-border bg-transparent px-2 py-1 text-xs"
-              >
-                <option value="">קטגוריה (אופציונלי)...</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              />
             )}
             <input
               value={editNotes}
