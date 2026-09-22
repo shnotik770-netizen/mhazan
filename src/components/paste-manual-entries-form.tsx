@@ -212,15 +212,19 @@ export function PasteManualEntriesFormInner({
   }
 
   return (
-    <div className="card p-4 space-y-3 w-[min(95vw,64rem)]">
+    <div className="card p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold">הדבקת רשימת הכנסות / הוצאות</h2>
+        <h2 className="font-semibold">הדבקת רשימת הכנסות / הוצאות ידניות</h2>
         {onClose && (
           <button type="button" onClick={onClose} className="text-sm text-muted">
             סגור
           </button>
         )}
       </div>
+      <p className="text-xs text-muted">
+        זה רק לרשימת הכנסות/הוצאות רגילות מול חשבון בנק אחד — לא להעברות בין מחלקות (לכך יש מתג נפרד בטופס
+        &quot;הכנסה / הוצאה ידנית&quot; הרגיל).
+      </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>

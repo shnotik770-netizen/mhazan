@@ -31,9 +31,15 @@ export function Modal({ onClose, children }: { onClose: () => void; children: Re
   }, []);
 
   return (
+    // overflow-x-hidden here (alongside overflow-y-auto) so a wide child
+    // — a data table wider than the modal on a narrow screen — never grows
+    // a SECOND, outer horizontal scrollbar on the dialog itself on top of
+    // whatever scroll wrapper the child already uses (e.g. overflow-x-auto
+    // around a <table>). Content should manage its own horizontal overflow
+    // internally; the dialog box itself should just clip.
     <dialog
       ref={ref}
-      className="m-auto max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-3xl overflow-y-auto rounded-2xl border-0 bg-transparent p-0 backdrop:bg-black/50"
+      className="m-auto max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-3xl overflow-y-auto overflow-x-hidden rounded-2xl border-0 bg-transparent p-0 backdrop:bg-black/50"
       onClick={(e) => {
         // A click lands directly on the <dialog> element itself (not a
         // child) only when it hits the dialog's own box outside any
