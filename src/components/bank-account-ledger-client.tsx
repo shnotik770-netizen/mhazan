@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { formatCurrency, addMonthsToDate, todayIso } from "@/lib/format";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
@@ -13,27 +14,28 @@ const KIND_LABEL: Record<BankAccountLedgerTransaction["kind"], string> = {
   commission: "עמלת אשראי",
 };
 
-function nameById(pair: BankAccountLedgerPair, id: string): string {
-  return id === pair.accountAId ? pair.accountAName : pair.accountBName;
+function deptNameById(pair: BankAccountLedgerPair, id: string): string {
+  return id === pair.departmentAId ? pair.departmentAName : pair.departmentBName;
 }
 
-// Summary list — one row per pair of bank accounts with an open balance
-// between them. Each row is a plain link into that pair's own report page
-// (BankAccountPairReport below), the same way LedgerNetPositionTable links
-// into a department's own report, instead of expanding inline in place.
+// Summary list — one row per pair of departments (each managing its own
+// bank account) with an open balance between them. Each row is a plain
+// link into that pair's own report page (BankAccountPairReport below), the
+// same way LedgerNetPositionTable links into a department's own report,
+// instead of expanding inline in place.
 export function BankAccountLedgerTable({ pairs }: { pairs: BankAccountLedgerPair[] }) {
   const columns: ColumnDef<BankAccountLedgerPair>[] = [
     {
       key: "debtor",
       label: "חייב",
-      sortValue: (p) => nameById(p, p.debtorAccountId),
-      filterValue: (p) => nameById(p, p.debtorAccountId),
+      sortValue: (p) => deptNameById(p, p.debtorDepartmentId),
+      filterValue: (p) => deptNameById(p, p.debtorDepartmentId),
     },
     {
       key: "creditor",
       label: "זכאי",
-      sortValue: (p) => nameById(p, p.creditorAccountId),
-      filterValue: (p) => nameById(p, p.creditorAccountId),
+      sortValue: (p) => deptNameById(p, p.creditorDepartmentId),
+      filterValue: (p) => deptNameById(p, p.creditorDepartmentId),
     },
     { key: "amount", label: "סכום נטו", sortValue: (p) => p.netAmount },
     { key: "count", label: "מס׳ תנועות", sortValue: (p) => p.transactions.length },
@@ -44,7 +46,7 @@ export function BankAccountLedgerTable({ pairs }: { pairs: BankAccountLedgerPair
   });
 
   if (pairs.length === 0) {
-    return <p className="text-sm text-muted py-4 text-center">אין חוב פתוח בין חשבונות בנק שונים כרגע.</p>;
+    return <p className="text-sm text-muted py-4 text-center">אין חוב פתוח בין מחלקות שמנהלות חשבונות בנק נפרדים כרגע.</p>;
   }
 
   return (
@@ -68,8 +70,8 @@ export function BankAccountLedgerTable({ pairs }: { pairs: BankAccountLedgerPair
       <tbody>
         {filtered.map((pair) => (
           <tr key={pair.pairId}>
-            <td className="font-semibold text-danger">{nameById(pair, pair.debtorAccountId)}</td>
-            <td className="font-semibold text-success">{nameById(pair, pair.creditorAccountId)}</td>
+            <td className="font-semibold text-danger">{deptNameById(pair, pair.debtorDepartmentId)}</td>
+            <td className="font-semibold text-success">{deptNameById(pair, pair.creditorDepartmentId)}</td>
             <td className="font-semibold">{formatCurrency(pair.netAmount)}</td>
             <td>{pair.transactions.length}</td>
             <td>
@@ -96,32 +98,40 @@ type SectionRow = {
   kind: "check" | "income" | "manual" | "commission" | "forecast";
 };
 
-// A full internal report for one pair of bank accounts — deliberately
-// reuses DepartmentTransactionsSection (the exact same "תנועות עד היום" /
-// "תנועות עתידיות ידועות" split, with the exact same search / income-
-// expense-toggle / month / date-range filters a department report has)
-// instead of a bespoke table, since a bank-account debt deserves the same
-// "how did we get to this number, and what's still coming" treatment a
-// department gets. Amounts are all signed relative to accountA — positive
-// increases what A owes B, negative reduces it — the same convention
-// getBankAccountLedgerData used to net the pair's totals in the first
-// place, so the "הכנסות/הוצאות" toggle reads consistently even though this
-// isn't literally one side's own income/expense ledger.
+// A full internal report for one pair of departments that each manage their
+// own bank account — deliberately reuses DepartmentTransactionsSection (the
+// exact same "תנועות עד היום" / "תנועות עתידיות ידועות" split, with the
+// exact same search / income-expense-toggle / month / date-range filters a
+// department report has) instead of a bespoke table, since this debt
+// deserves the same "how did we get to this number, and what's still
+// coming" treatment a department gets.
 export function BankAccountPairReport({ pair, isAdmin }: { pair: BankAccountLedgerPair; isAdmin: boolean }) {
-  const debtorName = nameById(pair, pair.debtorAccountId);
-  const creditorName = nameById(pair, pair.creditorAccountId);
+  // Which side is shown as debtor (red) vs creditor (green) is computed
+  // correctly and dynamically from the real balance — this toggle doesn't
+  // change that computation, it only lets the viewer flip which side is
+  // displayed where, for their own preferred frame of reference (e.g.
+  // always seeing "our department" on the same side regardless of who
+  // currently owes). Swapping shows the amount as negative, since it's now
+  // deliberately displaying the pair from the "wrong" (non-default) side.
+  const [swapped, setSwapped] = useState(false);
+  const displayDebtorId = swapped ? pair.creditorDepartmentId : pair.debtorDepartmentId;
+  const displayCreditorId = swapped ? pair.debtorDepartmentId : pair.creditorDepartmentId;
+  const displayNetAmount = swapped ? -pair.netAmount : pair.netAmount;
 
-  const allRows: SectionRow[] = pair.transactions.map((tx) => ({
-    id: tx.id,
-    date: tx.date,
-    typeDetail: KIND_LABEL[tx.kind],
-    typeCategory: KIND_LABEL[tx.kind],
-    description: `${tx.description}${tx.departmentName ? ` — מחלקת ${tx.departmentName}` : ""} (${nameById(pair, tx.fromAccountId)} ← ${nameById(pair, tx.toAccountId)})`,
-    status: tx.status,
-    amount: tx.fromAccountId === pair.accountAId ? tx.amount : -tx.amount,
-    isOld: false,
-    kind: tx.kind,
-  }));
+  const allRows: SectionRow[] = pair.transactions.map((tx) => {
+    const amount = tx.fromDepartmentId === pair.departmentAId ? tx.amount : -tx.amount;
+    return {
+      id: tx.id,
+      date: tx.date,
+      typeDetail: KIND_LABEL[tx.kind],
+      typeCategory: KIND_LABEL[tx.kind],
+      description: `${tx.description}${tx.departmentName ? ` — מחלקת ${tx.departmentName}` : ""} (${tx.fromAccountName} ← ${tx.toAccountName})`,
+      status: tx.status,
+      amount: swapped ? -amount : amount,
+      isOld: false,
+      kind: tx.kind,
+    };
+  });
 
   const today = todayIso();
   const pastRows = allRows.filter((r) => !r.date || r.date <= today);
@@ -133,25 +143,34 @@ export function BankAccountPairReport({ pair, isAdmin }: { pair: BankAccountLedg
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-bold mb-1">
-          {pair.accountAName} ⇄ {pair.accountBName}
-        </h2>
-        <p className="text-sm text-muted">כל התנועות שמרכיבות את החוב בין שני חשבונות הבנק האלה, כולל עמלת האשראי במקומות הרלוונטיים.</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-lg font-bold mb-1">
+            {pair.departmentAName} ⇄ {pair.departmentBName}
+          </h2>
+          <p className="text-sm text-muted">כל התנועות שמרכיבות את החוב בין שתי המחלקות האלה, כולל עמלת האשראי במקומות הרלוונטיים.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setSwapped((s) => !s)}
+          className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-background whitespace-nowrap"
+        >
+          החלף צדדים
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card p-4">
           <p className="text-sm text-muted mb-1">חייב</p>
-          <p className="text-xl font-bold text-danger">{debtorName}</p>
+          <p className="text-xl font-bold text-danger">{deptNameById(pair, displayDebtorId)}</p>
         </div>
         <div className="card p-4">
           <p className="text-sm text-muted mb-1">זכאי</p>
-          <p className="text-xl font-bold text-success">{creditorName}</p>
+          <p className="text-xl font-bold text-success">{deptNameById(pair, displayCreditorId)}</p>
         </div>
         <div className="card p-4">
           <p className="text-sm text-muted mb-1">סכום נטו</p>
-          <p className="text-2xl font-bold">{formatCurrency(pair.netAmount)}</p>
+          <p className="text-2xl font-bold">{formatCurrency(displayNetAmount)}</p>
         </div>
       </div>
 
