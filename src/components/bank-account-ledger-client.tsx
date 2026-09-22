@@ -117,6 +117,10 @@ export function BankAccountPairReport({ pair, isAdmin }: { pair: BankAccountLedg
   const displayDebtorId = swapped ? pair.creditorDepartmentId : pair.debtorDepartmentId;
   const displayCreditorId = swapped ? pair.debtorDepartmentId : pair.creditorDepartmentId;
   const displayNetAmount = swapped ? -pair.netAmount : pair.netAmount;
+  // Totals for whatever filter is currently applied on the "תנועות עד
+  // היום" section below — reported up via onFilteredTotals so this lives
+  // in a summary card instead of only inside that section's own table.
+  const [filteredTotals, setFilteredTotals] = useState({ income: 0, expense: 0, net: 0 });
 
   const allRows: SectionRow[] = pair.transactions.map((tx) => {
     const amount = tx.fromDepartmentId === pair.departmentAId ? tx.amount : -tx.amount;
@@ -141,6 +145,13 @@ export function BankAccountPairReport({ pair, isAdmin }: { pair: BankAccountLedg
   const pastMonths = [...new Set(pastRows.filter((r) => r.date).map((r) => r.date!.slice(0, 7)))].sort();
   const futureMonths = [...new Set(futureRows.filter((r) => r.date).map((r) => r.date!.slice(0, 7)))].sort();
 
+  // Unfiltered totals for everything up to today — pastRows already has
+  // the swap perspective baked into each row's amount sign, so summing it
+  // directly stays consistent with the "החלף צדדים" toggle without any
+  // extra sign-juggling here.
+  const pastIncome = pastRows.filter((r) => r.amount > 0).reduce((sum, r) => sum + r.amount, 0);
+  const pastExpense = pastRows.filter((r) => r.amount < 0).reduce((sum, r) => sum + r.amount, 0);
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -160,17 +171,23 @@ export function BankAccountPairReport({ pair, isAdmin }: { pair: BankAccountLedg
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card p-4">
-          <p className="text-sm text-muted mb-1">חייב</p>
+        <div className="card p-4 space-y-1">
+          <p className="text-sm text-muted">חייב</p>
           <p className="text-xl font-bold text-danger">{deptNameById(pair, displayDebtorId)}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-sm text-muted mb-1">זכאי</p>
+          <p className="text-sm text-muted pt-1">זכאי</p>
           <p className="text-xl font-bold text-success">{deptNameById(pair, displayCreditorId)}</p>
         </div>
-        <div className="card p-4">
-          <p className="text-sm text-muted mb-1">סכום נטו</p>
+        <div className="card p-4 space-y-1">
+          <p className="text-sm text-muted">נטו נוכחי</p>
           <p className="text-2xl font-bold">{formatCurrency(displayNetAmount)}</p>
+          <p className="text-sm text-muted pt-1">סה״כ הכנסות עד עתה: {formatCurrency(pastIncome)}</p>
+          <p className="text-sm text-muted">סה״כ הוצאות עד עתה: {formatCurrency(pastExpense)}</p>
+        </div>
+        <div className="card p-4 space-y-1">
+          <p className="text-sm text-muted">נטו סינון נוכחי</p>
+          <p className="text-2xl font-bold">{formatCurrency(filteredTotals.net)}</p>
+          <p className="text-sm text-muted pt-1">סה״כ הוצאות סינון: {formatCurrency(filteredTotals.expense)}</p>
+          <p className="text-sm text-muted">סה״כ הכנסות סינון: {formatCurrency(filteredTotals.income)}</p>
         </div>
       </div>
 
@@ -181,6 +198,7 @@ export function BankAccountPairReport({ pair, isAdmin }: { pair: BankAccountLedg
         monthOptions={pastMonths}
         defaultSortDir="desc"
         defaultFromDate={addMonthsToDate(today, -3)}
+        onFilteredTotals={setFilteredTotals}
       />
 
       <DepartmentTransactionsSection

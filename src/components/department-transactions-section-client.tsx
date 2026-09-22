@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DepartmentTransactionsTable } from "@/components/department-report-table-client";
 import { DateInput } from "@/components/date-input";
 
@@ -47,6 +47,7 @@ export function DepartmentTransactionsSection({
   defaultSortDir = "desc",
   defaultFromDate = "",
   defaultToDate = "",
+  onFilteredTotals,
 }: {
   title: string;
   rows: Row[];
@@ -64,6 +65,12 @@ export function DepartmentTransactionsSection({
   // unfiltered full list, same as clearing any other filter here.
   defaultFromDate?: string;
   defaultToDate?: string;
+  // Optional — reports the currently-filtered rows' income/expense/net
+  // totals back up to the parent on every filter change, so a summary
+  // card outside this section (e.g. the bank-account debt report's "נטו
+  // סינון נוכחי" card) can reflect whatever filter is applied here, without
+  // this component needing to know anything about how that card looks.
+  onFilteredTotals?: (totals: { income: number; expense: number; net: number }) => void;
 }) {
   const [search, setSearch] = useState("");
   const [month, setMonth] = useState("");
@@ -93,6 +100,21 @@ export function DepartmentTransactionsSection({
     }
     return result;
   }, [rows, month, fromDate, toDate, kindFilter, search]);
+
+  useEffect(() => {
+    if (!onFilteredTotals) return;
+    let income = 0;
+    let expense = 0;
+    for (const r of filtered) {
+      if (r.amount > 0) income += r.amount;
+      else expense += r.amount;
+    }
+    onFilteredTotals({ income, expense, net: income + expense });
+    // onFilteredTotals is expected to be a stable setter (e.g. useState's
+    // setter) — omitting it from deps avoids an infinite loop if the
+    // caller passes a fresh inline function on every render instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered]);
 
   return (
     <div className="card p-4 space-y-3">

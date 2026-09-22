@@ -83,13 +83,19 @@ export default async function LedgerPage({
       </div>
 
       <div className="card p-4 flex flex-wrap items-center gap-2 no-print">
-        <span className="text-sm font-medium ml-1">מחלקה:</span>
+        <span className="text-sm font-medium ml-1">מעבר לדוח מחלקה:</span>
         <DepartmentPickerSelect departments={myDepartments} selectedId={selectedDepartment?.id ?? ""} />
         {selectedDepartment && (
           <Link href="/ledger" className="text-sm text-muted underline mr-2">
             נקה בחירה
           </Link>
         )}
+        <Link
+          href="/ledger"
+          className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-background whitespace-nowrap ml-auto"
+        >
+          מעבר לדוח בין חשבונות גדולים
+        </Link>
       </div>
 
       {selectedDepartment && (
