@@ -116,7 +116,7 @@ export function BankAccountPairReport({ pair, isAdmin }: { pair: BankAccountLedg
     date: tx.date,
     typeDetail: KIND_LABEL[tx.kind],
     typeCategory: KIND_LABEL[tx.kind],
-    description: `${tx.description} (${nameById(pair, tx.fromAccountId)} ← ${nameById(pair, tx.toAccountId)})`,
+    description: `${tx.description}${tx.departmentName ? ` — מחלקת ${tx.departmentName}` : ""} (${nameById(pair, tx.fromAccountId)} ← ${nameById(pair, tx.toAccountId)})`,
     status: tx.status,
     amount: tx.fromAccountId === pair.accountAId ? tx.amount : -tx.amount,
     isOld: false,

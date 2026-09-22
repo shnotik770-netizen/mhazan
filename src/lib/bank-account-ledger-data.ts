@@ -14,6 +14,12 @@ export type BankAccountLedgerTransaction = {
   // Only ever set for a "check" leg (UNPAID/CLEARED) — lets the pair report
   // show the same "נפרע?" column a department report shows.
   status?: string | null;
+  // The department whose ledger this leg actually belongs to (as opposed
+  // to fromAccountId/toAccountId, which are physical bank accounts — up to
+  // 18 departments can share the same 3 accounts, so knowing "this pair of
+  // accounts" doesn't tell you which department a given row is about).
+  departmentId: string | null;
+  departmentName: string | null;
 };
 
 export type BankAccountLedgerPair = {
@@ -74,7 +80,7 @@ export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[
     { data: manualEntries, error: manualError },
   ] = await Promise.all([
     supabase.from("bank_accounts").select("id, bank_name, account_number"),
-    supabase.from("departments").select("id, home_bank_account_id"),
+    supabase.from("departments").select("id, name, home_bank_account_id"),
     supabase
       .from("incomes")
       .select("id, date, amount, donor_name, payment_method, bank_account_id, owner_department_id")
@@ -109,6 +115,7 @@ export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[
     (bankAccounts ?? []).map((a) => [a.id, accountLabel(a.bank_name, a.account_number)]),
   );
   const homeAccountByDept = new Map((departments ?? []).map((d) => [d.id, d.home_bank_account_id]));
+  const deptNameById = new Map((departments ?? []).map((d) => [d.id, d.name]));
 
   const legs: BankAccountLedgerTransaction[] = [];
 
@@ -124,6 +131,8 @@ export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[
       fromAccountId,
       toAccountId,
       kind: "income",
+      departmentId: r.owner_department_id,
+      departmentName: deptNameById.get(r.owner_department_id) ?? null,
     });
     if (r.payment_method && QUALIFYING_COMMISSION_METHODS.has(r.payment_method)) {
       const commission = Math.round(Number(r.amount) * 0.02 * 100) / 100;
@@ -135,6 +144,8 @@ export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[
         fromAccountId,
         toAccountId,
         kind: "commission",
+        departmentId: r.owner_department_id,
+        departmentName: deptNameById.get(r.owner_department_id) ?? null,
       });
     }
   }
@@ -153,6 +164,8 @@ export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[
       toAccountId,
       kind: "check",
       status: r.status,
+      departmentId: r.department_id,
+      departmentName: deptNameById.get(r.department_id) ?? null,
     });
   }
 
@@ -170,6 +183,8 @@ export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[
       fromAccountId,
       toAccountId,
       kind: "manual",
+      departmentId: e.department_id,
+      departmentName: deptNameById.get(e.department_id) ?? null,
     });
   }
 
