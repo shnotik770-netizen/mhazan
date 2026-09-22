@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createInterDepartmentTransferBatch, type InterDepartmentTransferBatchRow } from "@/app/(app)/manual-entries/actions";
 import { formatCurrency, addMonthsToDate, todayIso } from "@/lib/format";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { DepartmentTransactionsSection } from "@/components/department-transactions-section-client";
+import { DateInput } from "@/components/date-input";
 import type { BankAccountLedgerPair, BankAccountLedgerTransaction } from "@/lib/bank-account-ledger-data";
 
 const KIND_LABEL: Record<BankAccountLedgerTransaction["kind"], string> = {
@@ -16,6 +19,239 @@ const KIND_LABEL: Record<BankAccountLedgerTransaction["kind"], string> = {
 
 function deptNameById(pair: BankAccountLedgerPair, id: string): string {
   return id === pair.departmentAId ? pair.departmentAName : pair.departmentBName;
+}
+
+function deptNameFromAnyPair(pair: BankAccountLedgerPair, id: string): string | null {
+  if (id === pair.departmentAId) return pair.departmentAName;
+  if (id === pair.departmentBId) return pair.departmentBName;
+  return null;
+}
+
+type ResetSuggestion = {
+  thirdDeptId: string;
+  thirdDeptName: string;
+  // "chain-through-debtor": someone (the third department) already owes
+  // the CURRENT debtor — they can pay the current creditor directly
+  // instead, letting the current debtor's debt to them absorb this one.
+  // "chain-through-creditor": the current creditor already owes the third
+  // department — the current debtor can pay that department directly
+  // instead, so the creditor's own debt shrinks by the same amount.
+  via: "chain-through-debtor" | "chain-through-creditor";
+  maxAmount: number;
+};
+
+// Looks for an existing relationship (anywhere else in this report) that
+// touches either side of the current pair, so a debt can be rerouted
+// through it instead of the admin having to know the whole department
+// graph by heart — see buildResetLegs for what "rerouting" actually
+// writes. Only ever looks at OTHER department-manager pairs (never a small
+// department without its own account, since those never appear here at
+// all — accountManagerOf already resolved them away when this data was
+// built), matching how this reset is scoped to "big accounts" only.
+function findResetSuggestions(
+  debtorId: string,
+  creditorId: string,
+  allPairs: BankAccountLedgerPair[],
+  currentPairId: string,
+): ResetSuggestion[] {
+  const suggestions: ResetSuggestion[] = [];
+  for (const p of allPairs) {
+    if (p.pairId === currentPairId) continue;
+    if (p.creditorDepartmentId === debtorId) {
+      const thirdId = p.debtorDepartmentId;
+      const thirdName = deptNameFromAnyPair(p, thirdId);
+      if (thirdName) suggestions.push({ thirdDeptId: thirdId, thirdDeptName: thirdName, via: "chain-through-debtor", maxAmount: p.netAmount });
+    }
+    if (p.debtorDepartmentId === creditorId) {
+      const thirdId = p.creditorDepartmentId;
+      const thirdName = deptNameFromAnyPair(p, thirdId);
+      if (thirdName) suggestions.push({ thirdDeptId: thirdId, thirdDeptName: thirdName, via: "chain-through-creditor", maxAmount: p.netAmount });
+    }
+  }
+  return suggestions;
+}
+
+// Three real transfers, not one — the only way to make this show up
+// correctly given the report computes each pair's balance by summing real
+// transactions: (1) cancel/reduce the original debt with an
+// opposite-direction transfer, (2) reduce the third department's existing
+// relationship with whichever side it's actually linked to (also
+// opposite-direction), (3) create/add the new direct relationship this
+// reroute implies. Applying this same reset again to that new relationship
+// (once it exists, on a later visit to ITS pair report) is exactly how a
+// longer chain gets compressed one hop at a time.
+function buildResetLegs(
+  debtorId: string,
+  creditorId: string,
+  suggestion: Pick<ResetSuggestion, "thirdDeptId" | "via">,
+  amount: number,
+  entryDate: string,
+  notes: string | null,
+): InterDepartmentTransferBatchRow[] {
+  const cancelOriginal: InterDepartmentTransferBatchRow = {
+    debtorDepartmentId: creditorId,
+    creditorDepartmentId: debtorId,
+    amount,
+    entryDate,
+    notes,
+  };
+  if (suggestion.via === "chain-through-debtor") {
+    // third owed debtor; debtor owed creditor -> reduce third→debtor, add third→creditor
+    return [
+      cancelOriginal,
+      { debtorDepartmentId: debtorId, creditorDepartmentId: suggestion.thirdDeptId, amount, entryDate, notes },
+      { debtorDepartmentId: suggestion.thirdDeptId, creditorDepartmentId: creditorId, amount, entryDate, notes },
+    ];
+  }
+  // chain-through-creditor: creditor owed third -> reduce creditor→third, add debtor→third
+  return [
+    cancelOriginal,
+    { debtorDepartmentId: suggestion.thirdDeptId, creditorDepartmentId: creditorId, amount, entryDate, notes },
+    { debtorDepartmentId: debtorId, creditorDepartmentId: suggestion.thirdDeptId, amount, entryDate, notes },
+  ];
+}
+
+// Lets an admin reroute a debt between two departments that each manage
+// their own account through a third such department that already has a
+// relationship with one side — "שעבודא דרבי נתן" (the debtor now owes the
+// third department instead, since it can collect directly). Suggests
+// candidates by scanning the other open pairs instead of making the admin
+// hunt for one, but any department can be typed in manually too. A small
+// department never shows up here as a candidate or a target — it can't be,
+// since it never manages its own account (see findResetSuggestions).
+function ResetBetweenDepartmentsPanel({
+  debtorId,
+  debtorName,
+  creditorId,
+  creditorName,
+  maxAmount,
+  allPairs,
+  currentPairId,
+  onClose,
+}: {
+  debtorId: string;
+  debtorName: string;
+  creditorId: string;
+  creditorName: string;
+  maxAmount: number;
+  allPairs: BankAccountLedgerPair[];
+  currentPairId: string;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const suggestions = findResetSuggestions(debtorId, creditorId, allPairs, currentPairId);
+  const [selected, setSelected] = useState<ResetSuggestion | null>(suggestions[0] ?? null);
+  const [amount, setAmount] = useState(suggestions[0] ? Math.min(maxAmount, suggestions[0].maxAmount) : maxAmount);
+  const [entryDate, setEntryDate] = useState(todayIso());
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function selectSuggestion(s: ResetSuggestion) {
+    setSelected(s);
+    setAmount(Math.min(maxAmount, s.maxAmount));
+  }
+
+  function submit() {
+    if (!selected) {
+      setError("יש לבחור מחלקה שלישית");
+      return;
+    }
+    if (!amount || amount <= 0) {
+      setError("סכום לא תקין");
+      return;
+    }
+    setError(null);
+    const legs = buildResetLegs(debtorId, creditorId, selected, amount, entryDate, notes || `איפוס בין מחלקות דרך ${selected.thirdDeptName}`);
+    startTransition(async () => {
+      const { outcomes } = await createInterDepartmentTransferBatch(legs);
+      const failed = outcomes.find((o) => !o.success);
+      if (failed) {
+        setError(failed.reason ?? "שגיאה");
+        return;
+      }
+      router.refresh();
+      onClose();
+    });
+  }
+
+  return (
+    <div className="card p-4 space-y-3 border-primary/40">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">איפוס מחלקות</h3>
+        <button type="button" onClick={onClose} className="text-sm text-muted">
+          סגור
+        </button>
+      </div>
+      <p className="text-sm text-muted">
+        {debtorName} חייב ל{creditorName} — במקום להעביר ישירות, ניתן להעביר את החוב (כולו או חלקו) דרך מחלקה שלישית
+        שכבר יש לה יחס חוב עם אחד הצדדים.
+      </p>
+
+      {suggestions.length > 0 ? (
+        <div className="space-y-1.5">
+          {suggestions.map((s) => (
+            <label
+              key={`${s.thirdDeptId}-${s.via}`}
+              className="flex items-start gap-2 rounded-lg border border-border p-2 text-sm cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-background"
+            >
+              <input
+                type="radio"
+                name="reset-suggestion"
+                checked={selected?.thirdDeptId === s.thirdDeptId && selected?.via === s.via}
+                onChange={() => selectSuggestion(s)}
+                className="mt-1"
+              />
+              <span>
+                {s.via === "chain-through-debtor"
+                  ? `דרך ${s.thirdDeptName} — חייב כרגע ל${debtorName} ${formatCurrency(s.maxAmount)}`
+                  : `דרך ${s.thirdDeptName} — ${creditorName} חייב לה ${formatCurrency(s.maxAmount)}`}
+              </span>
+            </label>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-warning">לא נמצאה מחלקה שלישית עם יחס חוב קיים מול אחד הצדדים — לא ניתן להציע איפוס אוטומטי.</p>
+      )}
+
+      {suggestions.length > 0 && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-muted mb-1">סכום להעברה</label>
+              <input
+                type="number"
+                value={amount || ""}
+                onChange={(e) => setAmount(Number(e.target.value) || 0)}
+                className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-muted mb-1">תאריך</label>
+              <DateInput value={entryDate} onChange={setEntryDate} className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm text-muted mb-1">הערות (אופציונלי)</label>
+            <input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+            />
+          </div>
+          {error && <p className="text-sm text-danger">{error}</p>}
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={submit}
+            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          >
+            {isPending ? "מבצע…" : "בצע איפוס"}
+          </button>
+        </>
+      )}
+    </div>
+  );
 }
 
 // Summary list — one row per pair of departments (each managing its own
@@ -105,7 +341,19 @@ type SectionRow = {
 // department report has) instead of a bespoke table, since this debt
 // deserves the same "how did we get to this number, and what's still
 // coming" treatment a department gets.
-export function BankAccountPairReport({ pair, isAdmin }: { pair: BankAccountLedgerPair; isAdmin: boolean }) {
+export function BankAccountPairReport({
+  pair,
+  allPairs,
+  isAdmin,
+}: {
+  pair: BankAccountLedgerPair;
+  // The full list of open pairs, so "איפוס מחלקות" can suggest a third
+  // department with an existing relationship to either side — see
+  // findResetSuggestions.
+  allPairs: BankAccountLedgerPair[];
+  isAdmin: boolean;
+}) {
+  const [resetOpen, setResetOpen] = useState(false);
   // Which side is shown as debtor (red) vs creditor (green) is computed
   // correctly and dynamically from the real balance — this toggle doesn't
   // change that computation, it only lets the viewer flip which side is
@@ -161,14 +409,38 @@ export function BankAccountPairReport({ pair, isAdmin }: { pair: BankAccountLedg
           </h2>
           <p className="text-sm text-muted">כל התנועות שמרכיבות את החוב בין שתי המחלקות האלה, כולל עמלת האשראי במקומות הרלוונטיים.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setSwapped((s) => !s)}
-          className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-background whitespace-nowrap"
-        >
-          החלף צדדים
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSwapped((s) => !s)}
+            className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-background whitespace-nowrap"
+          >
+            החלף צדדים
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setResetOpen((o) => !o)}
+              className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-background whitespace-nowrap"
+            >
+              איפוס מחלקות
+            </button>
+          )}
+        </div>
       </div>
+
+      {resetOpen && (
+        <ResetBetweenDepartmentsPanel
+          debtorId={displayDebtorId}
+          debtorName={deptNameById(pair, displayDebtorId)}
+          creditorId={displayCreditorId}
+          creditorName={deptNameById(pair, displayCreditorId)}
+          maxAmount={pair.netAmount}
+          allPairs={allPairs}
+          currentPairId={pair.pairId}
+          onClose={() => setResetOpen(false)}
+        />
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card p-4 space-y-1">
