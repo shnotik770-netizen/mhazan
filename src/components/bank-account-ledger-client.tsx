@@ -474,10 +474,10 @@ export function BankAccountPairReport({
           <p className="text-xl font-bold text-success">{deptNameById(pair, displayCreditorId)}</p>
         </div>
         <div className="card p-4 space-y-1">
-          <p className="text-sm text-muted">נטו נוכחי</p>
+          <p className="text-sm text-muted">יתרת נטו</p>
           <p className="text-2xl font-bold">{formatCurrency(pastNet)}</p>
-          <p className="text-sm text-success pt-1">סה״כ הכנסות עד עתה: {formatCurrency(pastIncome)}</p>
-          <p className="text-sm text-danger">סה״כ הוצאות עד עתה: {formatCurrency(pastExpense)}</p>
+          <p className="text-sm text-danger pt-1">סה״כ הוצאות עד עתה: {formatCurrency(pastExpense)}</p>
+          <p className="text-sm text-success">סה״כ הכנסות עד עתה: {formatCurrency(pastIncome)}</p>
         </div>
         <div className="card p-4 space-y-1">
           <p className="text-sm text-muted">נטו סינון נוכחי</p>
