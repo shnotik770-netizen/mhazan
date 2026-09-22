@@ -10,6 +10,7 @@ type MonthlyFlow = {
   opening: number;
   closing: number;
   isFuture: boolean;
+  part?: "actual" | "forecast";
 };
 
 function monthLabel(monthStr: string): string {
@@ -40,9 +41,16 @@ export function DepartmentMonthlyCashFlow({ rows }: { rows: MonthlyFlow[] }) {
 
   if (rows.length === 0) return null;
 
-  const allMonths = rows.map((r) => r.month);
+  // Deduped: the current month can appear as two rows (its "actual" and
+  // "forecast" halves — see MonthlyFlowRow.part), which would otherwise
+  // produce a duplicate <option> with the same value in the pickers below.
+  const allMonths = [...new Set(rows.map((r) => r.month))];
   const visibleRows = showAll ? rows : rows.filter((r) => r.month >= fromMonth && r.month <= toMonth);
-  const startIndex = visibleRows.length > 0 ? rows.findIndex((r) => r.month === visibleRows[0].month) : -1;
+  // Found by object identity, not by re-matching month strings — the
+  // current month's two rows share a month value, so matching by string
+  // would always land on the first (the "actual" row) regardless of which
+  // one is actually first in the visible window.
+  const startIndex = visibleRows.length > 0 ? rows.indexOf(visibleRows[0]) : -1;
   const summaryRow = startIndex > 0 ? rows[startIndex - 1] : null;
 
   return (
@@ -107,10 +115,12 @@ export function DepartmentMonthlyCashFlow({ rows }: { rows: MonthlyFlow[] }) {
             </thead>
             <tbody>
               {visibleRows.map((r) => (
-                <tr key={r.month}>
+                <tr key={r.month + (r.part ?? "")}>
                   <td>
                     {monthLabel(r.month)}
-                    {r.isFuture && <span className="text-xs text-muted mr-1">(תחזית)</span>}
+                    {r.part === "actual" && <span className="text-xs text-muted mr-1">(עד היום)</span>}
+                    {r.part === "forecast" && <span className="text-xs text-muted mr-1">(מכאן ועד סוף החודש — תחזית)</span>}
+                    {!r.part && r.isFuture && <span className="text-xs text-muted mr-1">(תחזית)</span>}
                   </td>
                   <td>{formatCurrency(r.opening)}</td>
                   <td className="text-success">{formatCurrency(r.income)}</td>

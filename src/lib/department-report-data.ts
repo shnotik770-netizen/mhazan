@@ -76,6 +76,8 @@ export type MonthlyFlowRow = {
   opening: number;
   closing: number;
   isFuture: boolean;
+  // Set only on the current month's two split rows — see monthlyFlow below.
+  part?: "actual" | "forecast";
 };
 
 export type MissedStandingOrderNote = {
@@ -542,12 +544,44 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
           while (cursor <= last) {
             const hist = historicalByMonth.get(cursor);
             const fut = forecastByMonth.get(cursor);
-            const income = (hist?.income ?? 0) + (fut?.income ?? 0);
-            const expense = (hist?.expense ?? 0) + (fut?.expense ?? 0);
-            const opening = running;
-            const closing = opening + income - expense;
-            running = closing;
-            rows.push({ month: cursor, income, expense, opening, closing, isFuture: cursor > todayMonth });
+            // The current month is the only one that's ever a mix of real,
+            // already-happened numbers and still-forecast ones for its
+            // remaining days (every other past month is 100% real, every
+            // future month is 100% forecast) — shown as two rows instead of
+            // one blended number, mirroring how the transaction list itself
+            // splits into "תנועות עד היום" vs "תנועות עתידיות ידועות".
+            if (cursor === todayMonth) {
+              const actualOpening = running;
+              const actualClosing = actualOpening + (hist?.income ?? 0) - (hist?.expense ?? 0);
+              rows.push({
+                month: cursor,
+                income: hist?.income ?? 0,
+                expense: hist?.expense ?? 0,
+                opening: actualOpening,
+                closing: actualClosing,
+                isFuture: false,
+                part: "actual",
+              });
+              const forecastOpening = actualClosing;
+              const forecastClosing = forecastOpening + (fut?.income ?? 0) - (fut?.expense ?? 0);
+              rows.push({
+                month: cursor,
+                income: fut?.income ?? 0,
+                expense: fut?.expense ?? 0,
+                opening: forecastOpening,
+                closing: forecastClosing,
+                isFuture: false,
+                part: "forecast",
+              });
+              running = forecastClosing;
+            } else {
+              const income = (hist?.income ?? 0) + (fut?.income ?? 0);
+              const expense = (hist?.expense ?? 0) + (fut?.expense ?? 0);
+              const opening = running;
+              const closing = opening + income - expense;
+              running = closing;
+              rows.push({ month: cursor, income, expense, opening, closing, isFuture: cursor > todayMonth });
+            }
             cursor = addMonths(cursor, 1);
           }
           return rows;

@@ -78,13 +78,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ dep
   ];
   flowSheet.getRow(1).font = { bold: true };
   for (const r of monthlyFlow) {
+    const partSuffix = r.part === "actual" ? " (עד היום)" : r.part === "forecast" ? " (מכאן ועד סוף החודש — תחזית)" : "";
     flowSheet.addRow({
-      month: monthLabel(r.month),
+      month: `${monthLabel(r.month)}${partSuffix}`,
       income: r.income,
       expense: r.expense,
       opening: r.opening,
       closing: r.closing,
-      isFuture: r.isFuture ? "כן" : "",
+      isFuture: r.isFuture || r.part === "forecast" ? "כן" : "",
     });
   }
   for (const key of ["income", "expense", "opening", "closing"]) flowSheet.getColumn(key).numFmt = "#,##0.00";
