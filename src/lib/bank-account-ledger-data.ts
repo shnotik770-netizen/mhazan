@@ -73,19 +73,28 @@ function pairKey(a: string, b: string): string {
 // just share one of a handful of accounts as their home account), so this
 // only ever involves the departments named on bank_accounts.department_id.
 //
-// Earlier this grouped by the two PHYSICAL bank accounts involved instead
-// of by department — but since up to 18 departments can share the same 3
-// accounts, that silently merged unrelated departments' debts into one
-// number whenever they happened to route money through the same pair of
-// accounts (confirmed against live data: one account pair mixed 6 distinct
-// departments' debts into a single net figure). Grouping by the ACCOUNT
-// OWNER'S department on each side (bank_accounts.department_id, a direct,
-// unambiguous FK — not departments.home_bank_account_id, which many
-// departments can share) keeps each department pair's debt separate, and
-// also means a department that later manages more than one account still
-// nets against the same counterpart correctly (or, if it moves money
-// between its own two accounts, correctly produces no leg at all, since
-// both sides resolve to the same department).
+// A small department (no account of its own) can never be a debt
+// participant here directly — its side of any leg is resolved through
+// accountManagerOf() to whichever department really manages the account it
+// shares. This matters for two reasons, both confirmed against live data:
+// (1) several small departments sharing one central account must net
+// together into ONE relationship with the other side, not one relationship
+// each — treating the small department itself as a participant produced a
+// separate (and, per how debt actually works here, nonexistent) pair per
+// small department; (2) a bare account-pair grouping (this report's
+// original design) had the opposite failure — up to 18 departments can
+// share the same 3 accounts, so grouping by the two physical accounts
+// alone once mixed 6 unrelated departments' debts into a single net figure
+// whenever they happened to route money through the same account pair.
+// Resolving through accountManagerOf() on both sides gets the right
+// granularity either way: same account, real participant.
+//
+// A department that already manages its own account maps to itself here
+// (its home account IS its own account), so this is a no-op for it. It
+// also means a department that later manages more than one account nets
+// against the same counterpart correctly across both, or — if it moves
+// money between its own two accounts — correctly produces no leg at all,
+// since both sides resolve to the same department.
 export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[]> {
   const supabase = await createClient();
 
@@ -135,21 +144,36 @@ export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[
   const homeAccountByDept = new Map((departments ?? []).map((d) => [d.id, d.home_bank_account_id]));
   const deptNameById = new Map((departments ?? []).map((d) => [d.id, d.name]));
 
+  // A small department (no bank account of its own) can never be a debt
+  // participant directly — per how this org actually works, its debt is
+  // really against whichever department manages the account it operates
+  // through (its home account's real owner). For a department that DOES
+  // manage its own account, this resolves to itself, so the mapping is a
+  // no-op there. This is what correctly nets several small departments
+  // that share one central account into a single relationship with the
+  // other side, instead of a separate (and non-existent, per how debt
+  // actually works here) pair per small department.
+  function accountManagerOf(deptId: string): string | undefined {
+    const homeAccountId = homeAccountByDept.get(deptId);
+    return homeAccountId ? accountOwnerDeptId.get(homeAccountId) : undefined;
+  }
+
   const legs: BankAccountLedgerTransaction[] = [];
 
   for (const r of incomes ?? []) {
     const homeAccountId = homeAccountByDept.get(r.owner_department_id);
     const actualAccountId = r.bank_account_id;
     if (!homeAccountId || !actualAccountId || homeAccountId === actualAccountId) continue;
-    const counterpartDeptId = accountOwnerDeptId.get(actualAccountId);
-    if (!counterpartDeptId || counterpartDeptId === r.owner_department_id) continue;
+    const holderDeptId = accountOwnerDeptId.get(actualAccountId);
+    const ownerManagerDeptId = accountManagerOf(r.owner_department_id);
+    if (!holderDeptId || !ownerManagerDeptId || holderDeptId === ownerManagerDeptId) continue;
     legs.push({
       id: r.id,
       date: r.date,
       description: r.donor_name || "הכנסה",
       amount: Number(r.amount),
-      fromDepartmentId: counterpartDeptId,
-      toDepartmentId: r.owner_department_id,
+      fromDepartmentId: holderDeptId,
+      toDepartmentId: ownerManagerDeptId,
       fromAccountName: accountNameById.get(actualAccountId) ?? "—",
       toAccountName: accountNameById.get(homeAccountId) ?? "—",
       kind: "income",
@@ -163,8 +187,8 @@ export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[
         date: r.date,
         description: `עמלת אשראי 2% על הכנסה מ${r.donor_name ? ` — ${r.donor_name}` : ""}`,
         amount: -commission,
-        fromDepartmentId: counterpartDeptId,
-        toDepartmentId: r.owner_department_id,
+        fromDepartmentId: holderDeptId,
+        toDepartmentId: ownerManagerDeptId,
         fromAccountName: accountNameById.get(actualAccountId) ?? "—",
         toAccountName: accountNameById.get(homeAccountId) ?? "—",
         kind: "commission",
@@ -179,15 +203,16 @@ export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[
     const homeAccountId = homeAccountByDept.get(r.department_id);
     const actualAccountId = r.bank_account_id;
     if (!homeAccountId || homeAccountId === actualAccountId) continue;
-    const counterpartDeptId = accountOwnerDeptId.get(actualAccountId);
-    if (!counterpartDeptId || counterpartDeptId === r.department_id) continue;
+    const payerDeptId = accountOwnerDeptId.get(actualAccountId);
+    const owerManagerDeptId = accountManagerOf(r.department_id);
+    if (!payerDeptId || !owerManagerDeptId || payerDeptId === owerManagerDeptId) continue;
     legs.push({
       id: r.check_id,
       date: r.due_date,
       description: r.payee ?? "הוצאה",
       amount: Number(r.amount),
-      fromDepartmentId: r.department_id,
-      toDepartmentId: counterpartDeptId,
+      fromDepartmentId: owerManagerDeptId,
+      toDepartmentId: payerDeptId,
       fromAccountName: accountNameById.get(homeAccountId) ?? "—",
       toAccountName: accountNameById.get(actualAccountId) ?? "—",
       kind: "check",
@@ -201,11 +226,12 @@ export async function getBankAccountLedgerData(): Promise<BankAccountLedgerPair[
     if (!e.department_id || !e.bank_account_id) continue;
     const homeAccountId = homeAccountByDept.get(e.department_id);
     if (!homeAccountId || homeAccountId === e.bank_account_id) continue;
-    const counterpartDeptId = accountOwnerDeptId.get(e.bank_account_id);
-    if (!counterpartDeptId || counterpartDeptId === e.department_id) continue;
+    const otherAccountDeptId = accountOwnerDeptId.get(e.bank_account_id);
+    const ownManagerDeptId = accountManagerOf(e.department_id);
+    if (!otherAccountDeptId || !ownManagerDeptId || otherAccountDeptId === ownManagerDeptId) continue;
     const isIncome = e.direction === "INCOME";
-    const fromDepartmentId = isIncome ? counterpartDeptId : e.department_id;
-    const toDepartmentId = isIncome ? e.department_id : counterpartDeptId;
+    const fromDepartmentId = isIncome ? otherAccountDeptId : ownManagerDeptId;
+    const toDepartmentId = isIncome ? ownManagerDeptId : otherAccountDeptId;
     const fromAccountId = isIncome ? e.bank_account_id : homeAccountId;
     const toAccountId = isIncome ? homeAccountId : e.bank_account_id;
     legs.push({
