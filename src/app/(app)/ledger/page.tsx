@@ -94,7 +94,7 @@ export default async function LedgerPage({
           href="/ledger"
           className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-background whitespace-nowrap ml-auto"
         >
-          מעבר לדוח בין חשבונות גדולים
+          דוח בין חשבונות
         </Link>
       </div>
 

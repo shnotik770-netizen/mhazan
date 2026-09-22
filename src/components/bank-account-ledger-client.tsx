@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createInterDepartmentTransferBatch, type InterDepartmentTransferBatchRow } from "@/app/(app)/manual-entries/actions";
@@ -364,41 +364,65 @@ export function BankAccountPairReport({
   const [swapped, setSwapped] = useState(false);
   const displayDebtorId = swapped ? pair.creditorDepartmentId : pair.debtorDepartmentId;
   const displayCreditorId = swapped ? pair.debtorDepartmentId : pair.creditorDepartmentId;
-  const displayNetAmount = swapped ? -pair.netAmount : pair.netAmount;
   // Totals for whatever filter is currently applied on the "תנועות עד
   // היום" section below — reported up via onFilteredTotals so this lives
   // in a summary card instead of only inside that section's own table.
   const [filteredTotals, setFilteredTotals] = useState({ income: 0, expense: 0, net: 0 });
 
-  const allRows: SectionRow[] = pair.transactions.map((tx) => {
-    const amount = tx.fromDepartmentId === pair.departmentAId ? tx.amount : -tx.amount;
-    return {
-      id: tx.id,
-      date: tx.date,
-      typeDetail: KIND_LABEL[tx.kind],
-      typeCategory: KIND_LABEL[tx.kind],
-      description: `${tx.description}${tx.departmentName ? ` — מחלקת ${tx.departmentName}` : ""} (${tx.fromAccountName} ← ${tx.toAccountName})`,
-      status: tx.status,
-      amount: swapped ? -amount : amount,
-      isOld: false,
-      kind: tx.kind,
-    };
-  });
-
+  // Memoized so these arrays only get a new reference when the underlying
+  // data actually changes (pair or swapped) — DepartmentTransactionsSection
+  // reports its filtered totals back up via onFilteredTotals -> setState,
+  // which re-renders this component; without memoizing, that re-render used
+  // to produce a brand-new pastRows array every time, which the child's own
+  // useMemo (keyed on rows) treated as "the data changed", re-firing the
+  // totals effect and looping forever — pegging the render cycle and making
+  // the whole page feel stuck to any other click or navigation attempt.
   const today = todayIso();
-  const pastRows = allRows.filter((r) => !r.date || r.date <= today);
-  const futureRows = [...allRows.filter((r) => r.date && r.date > today)].sort((a, b) =>
-    (a.date ?? "").localeCompare(b.date ?? ""),
+  const allRows: SectionRow[] = useMemo(
+    () =>
+      pair.transactions.map((tx) => {
+        const amount = tx.fromDepartmentId === pair.departmentAId ? tx.amount : -tx.amount;
+        return {
+          id: tx.id,
+          date: tx.date,
+          typeDetail: KIND_LABEL[tx.kind],
+          typeCategory: KIND_LABEL[tx.kind],
+          description: `${tx.description}${tx.departmentName ? ` — מחלקת ${tx.departmentName}` : ""} (${tx.fromAccountName} ← ${tx.toAccountName})`,
+          status: tx.status,
+          amount: swapped ? -amount : amount,
+          isOld: false,
+          kind: tx.kind,
+        };
+      }),
+    [pair, swapped],
   );
-  const pastMonths = [...new Set(pastRows.filter((r) => r.date).map((r) => r.date!.slice(0, 7)))].sort();
-  const futureMonths = [...new Set(futureRows.filter((r) => r.date).map((r) => r.date!.slice(0, 7)))].sort();
+
+  const pastRows = useMemo(() => allRows.filter((r) => !r.date || r.date <= today), [allRows, today]);
+  const futureRows = useMemo(
+    () =>
+      [...allRows.filter((r) => r.date && r.date > today)].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "")),
+    [allRows, today],
+  );
+  const pastMonths = useMemo(
+    () => [...new Set(pastRows.filter((r) => r.date).map((r) => r.date!.slice(0, 7)))].sort(),
+    [pastRows],
+  );
+  const futureMonths = useMemo(
+    () => [...new Set(futureRows.filter((r) => r.date).map((r) => r.date!.slice(0, 7)))].sort(),
+    [futureRows],
+  );
 
   // Unfiltered totals for everything up to today — pastRows already has
   // the swap perspective baked into each row's amount sign, so summing it
   // directly stays consistent with the "החלף צדדים" toggle without any
-  // extra sign-juggling here.
+  // extra sign-juggling here. "נטו נוכחי" deliberately uses this (past-only)
+  // sum rather than pair.netAmount (which also includes future-dated known
+  // legs), so it matches "נטו סינון נוכחי" exactly whenever no filter is
+  // applied below — the two are meant to read as the same number until the
+  // admin actually narrows the filter.
   const pastIncome = pastRows.filter((r) => r.amount > 0).reduce((sum, r) => sum + r.amount, 0);
   const pastExpense = pastRows.filter((r) => r.amount < 0).reduce((sum, r) => sum + r.amount, 0);
+  const pastNet = pastIncome + pastExpense;
 
   return (
     <div className="space-y-4">
@@ -451,15 +475,15 @@ export function BankAccountPairReport({
         </div>
         <div className="card p-4 space-y-1">
           <p className="text-sm text-muted">נטו נוכחי</p>
-          <p className="text-2xl font-bold">{formatCurrency(displayNetAmount)}</p>
-          <p className="text-sm text-muted pt-1">סה״כ הכנסות עד עתה: {formatCurrency(pastIncome)}</p>
-          <p className="text-sm text-muted">סה״כ הוצאות עד עתה: {formatCurrency(pastExpense)}</p>
+          <p className="text-2xl font-bold">{formatCurrency(pastNet)}</p>
+          <p className="text-sm text-success pt-1">סה״כ הכנסות עד עתה: {formatCurrency(pastIncome)}</p>
+          <p className="text-sm text-danger">סה״כ הוצאות עד עתה: {formatCurrency(pastExpense)}</p>
         </div>
         <div className="card p-4 space-y-1">
           <p className="text-sm text-muted">נטו סינון נוכחי</p>
           <p className="text-2xl font-bold">{formatCurrency(filteredTotals.net)}</p>
-          <p className="text-sm text-muted pt-1">סה״כ הוצאות סינון: {formatCurrency(filteredTotals.expense)}</p>
-          <p className="text-sm text-muted">סה״כ הכנסות סינון: {formatCurrency(filteredTotals.income)}</p>
+          <p className="text-sm text-danger pt-1">סה״כ הוצאות סינון: {formatCurrency(filteredTotals.expense)}</p>
+          <p className="text-sm text-success">סה״כ הכנסות סינון: {formatCurrency(filteredTotals.income)}</p>
         </div>
       </div>
 
