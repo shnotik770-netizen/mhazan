@@ -5,10 +5,15 @@ import { expandTwoDigitYear, todayIso } from "@/lib/format";
 
 // Ctrl+; (a common "insert today" shortcut in spreadsheets) fills today's
 // date, since native <input type="date"> pickers are otherwise several
-// clicks away from "today." On a Hebrew keyboard layout the same physical
-// key needs Shift to produce ":" (unlike a US layout, where ";" is
-// unshifted), and the browser reports that as e.key === ":" — so both keys
-// are accepted rather than only the US-layout one.
+// clicks away from "today." Detected via e.code ("Semicolon"), the
+// physical key location, not e.key (the character it types) — e.key
+// depends on the active keyboard layout, and on a Hebrew layout that same
+// physical key produces "ף" unshifted (not ";"), so Ctrl+; on a Hebrew
+// layout never matched e.key === ";" at all. e.code stays "Semicolon"
+// regardless of layout or Shift state, so the shortcut now fires the same
+// way whether the keyboard is set to English or Hebrew. The e.key checks
+// are kept as a fallback for the rare input device that doesn't populate
+// e.code.
 //
 // The 2-digit-year correction (see expandTwoDigitYear) is applied on BLUR,
 // not on every keystroke: the browser fills a date input's year segment
@@ -61,7 +66,7 @@ export function DateInput({
         onBlur?.(corrected, e);
       }}
       onKeyDown={(e) => {
-        if (e.ctrlKey && (e.key === ";" || e.key === ":")) {
+        if (e.ctrlKey && (e.code === "Semicolon" || e.key === ";" || e.key === ":")) {
           e.preventDefault();
           onChange(todayIso());
           return;
