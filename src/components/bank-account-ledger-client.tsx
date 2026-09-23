@@ -426,14 +426,11 @@ export function BankAccountPairReport({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-lg font-bold mb-1">
-            {pair.departmentAName} ⇄ {pair.departmentBName}
-          </h2>
-          <p className="text-sm text-muted">כל התנועות שמרכיבות את החוב בין שתי המחלקות האלה, כולל עמלת האשראי במקומות הרלוונטיים.</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h2 className="text-lg font-bold print-title">
+          {pair.departmentAName} ⇄ {pair.departmentBName}
+        </h2>
+        <div className="flex items-center gap-2 no-print">
           <button
             type="button"
             onClick={() => setSwapped((s) => !s)}
@@ -454,19 +451,21 @@ export function BankAccountPairReport({
       </div>
 
       {resetOpen && (
-        <ResetBetweenDepartmentsPanel
-          debtorId={displayDebtorId}
-          debtorName={deptNameById(pair, displayDebtorId)}
-          creditorId={displayCreditorId}
-          creditorName={deptNameById(pair, displayCreditorId)}
-          maxAmount={pair.netAmount}
-          allPairs={allPairs}
-          currentPairId={pair.pairId}
-          onClose={() => setResetOpen(false)}
-        />
+        <div className="no-print">
+          <ResetBetweenDepartmentsPanel
+            debtorId={displayDebtorId}
+            debtorName={deptNameById(pair, displayDebtorId)}
+            creditorId={displayCreditorId}
+            creditorName={deptNameById(pair, displayCreditorId)}
+            maxAmount={pair.netAmount}
+            allPairs={allPairs}
+            currentPairId={pair.pairId}
+            onClose={() => setResetOpen(false)}
+          />
+        </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="summary-cards-grid grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card p-4 space-y-1">
           <p className="text-sm text-muted">חייב</p>
           <p className="text-xl font-bold text-danger">{deptNameById(pair, displayDebtorId)}</p>

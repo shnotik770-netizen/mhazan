@@ -106,7 +106,7 @@ export default async function LedgerPage({
 
       {!selectedDepartment && selectedPair && (
         <div className="space-y-4">
-          <Link href="/ledger" className="text-sm text-muted underline">
+          <Link href="/ledger" className="text-sm text-muted underline no-print">
             ⇦ חזרה לרשימת החשבונות
           </Link>
           <BankAccountPairReport pair={selectedPair} allPairs={bankAccountLedgerPairs} isAdmin={isAdmin} />
