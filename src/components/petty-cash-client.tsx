@@ -485,7 +485,7 @@ export function PettyCashSection({
   }
 
   return (
-    <div className="card p-4 space-y-4">
+    <div id="petty-cash-queue" className="card p-4 space-y-4 scroll-mt-4">
       <h2 className="font-semibold">קופה קטנה — חשבוניות ממתינות</h2>
       {entries.length === 0 && (
         <p className="text-sm text-muted">
