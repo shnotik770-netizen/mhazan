@@ -2,18 +2,24 @@
 
 import { formatCurrency } from "@/lib/format";
 
-export type Allocation = { departmentId: string; amount: number };
+export type Allocation = { departmentId: string; amount: number; categoryId?: string | null };
 
 export function SplitAllocationEditor({
   departments,
   totalAmount,
   allocations,
   onChange,
+  categories,
 }: {
   departments: { id: string; name: string }[];
   totalAmount: number;
   allocations: Allocation[];
   onChange: (allocations: Allocation[]) => void;
+  // Optional — only invoice-style splits (checks, petty cash) let each
+  // department's portion carry its own category; other allocation editors
+  // (recurring schedules, income splits) simply omit this and get the
+  // department+amount editor exactly as before.
+  categories?: { id: string; name: string }[];
 }) {
   const allocatedSum = allocations.reduce((sum, a) => sum + (a.amount || 0), 0);
   const remaining = Math.round((totalAmount - allocatedSum) * 100) / 100;
@@ -53,6 +59,20 @@ export function SplitAllocationEditor({
             value={alloc.amount || ""}
             onChange={(e) => update(i, { amount: Number(e.target.value) || 0 })}
           />
+          {categories && (
+            <select
+              className="bg-transparent border-b border-border text-xs"
+              value={alloc.categoryId ?? ""}
+              onChange={(e) => update(i, { categoryId: e.target.value || null })}
+            >
+              <option value="">ללא קטגוריה</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
           <button type="button" onClick={() => remove(i)} className="text-xs text-danger">
             ✕
           </button>

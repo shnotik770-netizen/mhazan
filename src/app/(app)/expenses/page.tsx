@@ -60,14 +60,14 @@ export default async function ExpensesPage() {
     unclassifiedCheckIds.length > 0
       ? await supabase
           .from("check_allocations")
-          .select("check_id, department_id, amount")
+          .select("check_id, department_id, amount, category_id")
           .in("check_id", unclassifiedCheckIds)
-      : { data: [] as { check_id: string; department_id: string; amount: number }[] };
+      : { data: [] as { check_id: string; department_id: string; amount: number; category_id: string | null }[] };
   const splitCheckIds = new Set((allocationRows ?? []).map((a) => a.check_id));
-  const allocationsByCheckId = new Map<string, { departmentId: string; amount: number }[]>();
+  const allocationsByCheckId = new Map<string, { departmentId: string; amount: number; categoryId: string | null }[]>();
   for (const a of allocationRows ?? []) {
     const arr = allocationsByCheckId.get(a.check_id) ?? [];
-    arr.push({ departmentId: a.department_id, amount: Number(a.amount) });
+    arr.push({ departmentId: a.department_id, amount: Number(a.amount), categoryId: a.category_id });
     allocationsByCheckId.set(a.check_id, arr);
   }
 

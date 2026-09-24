@@ -679,6 +679,7 @@ export function IssueCheckRow({
   currentDepartmentId,
   amount,
   departments,
+  categories = [],
   hasExistingDepartmentSplit,
 }: {
   checkId: string;
@@ -688,6 +689,7 @@ export function IssueCheckRow({
   currentDepartmentId?: string | null;
   amount: number;
   departments: Department[];
+  categories?: CategoryOption[];
   hasExistingDepartmentSplit?: boolean;
 }) {
   const router = useRouter();
@@ -985,6 +987,7 @@ export function IssueCheckRow({
             totalAmount={amount}
             allocations={allocations}
             onChange={setAllocations}
+            categories={categories}
           />
         )}
         {error && <p className="text-xs text-danger">{error}</p>}
@@ -1137,6 +1140,7 @@ export function EditCheckButton({
                 totalAmount={editAmount}
                 allocations={allocations}
                 onChange={setAllocations}
+                categories={categories}
               />
             )}
             {categories.length > 0 && (

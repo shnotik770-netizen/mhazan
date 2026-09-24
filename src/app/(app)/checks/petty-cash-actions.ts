@@ -8,6 +8,7 @@ import {
   ensureSupplier,
   friendlyCheckError,
   insertAllocations,
+  insertPettyCashAllocations,
   revalidateCheckPaths,
   type CheckAllocationInput,
 } from "./checks-shared";
@@ -95,7 +96,7 @@ export async function createPettyCashEntryBatch(rows: PettyCashEntryBatchRow[]):
     }
 
     if (isSplit) {
-      const allocError = await insertAllocations(supabase, created.id, row.allocations);
+      const allocError = await insertPettyCashAllocations(supabase, created.id, row.allocations);
       if (allocError) {
         outcomes.push({ success: false, reason: allocError });
         continue;

@@ -7,7 +7,11 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { safeErrorMessage } from "@/lib/safe-error";
 
-export type CheckAllocationInput = { departmentId: string; amount: number };
+// categoryId is optional and per-allocation: a split invoice can give each
+// department's portion its own category instead of sharing the check's one
+// overall category. Omitted/null falls back to the check's own category_id
+// (see v_check_department_amounts' COALESCE).
+export type CheckAllocationInput = { departmentId: string; amount: number; categoryId?: string | null };
 
 // `departmentId` additionally revalidates that department's own report
 // page (/reports/[id]) — otherwise an edited/moved/deleted check kept
@@ -57,7 +61,29 @@ export async function insertAllocations(
   const rows = allocations.filter((a) => a.departmentId && a.amount > 0);
   if (rows.length === 0) return null;
   const { error } = await supabase.from("check_allocations").insert(
-    rows.map((a) => ({ check_id: checkId, department_id: a.departmentId, amount: a.amount })),
+    rows.map((a) => ({ check_id: checkId, department_id: a.departmentId, amount: a.amount, category_id: a.categoryId || null })),
+  );
+  return safeErrorMessage(error) ?? null;
+}
+
+// Same shape as insertAllocations, but for petty_cash_entry_allocations —
+// a different table (petty_cash_entry_id, not check_id) linked to a
+// petty_cash_entries row rather than a checks row, so it can't reuse the
+// same insert.
+export async function insertPettyCashAllocations(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  pettyCashEntryId: string,
+  allocations: CheckAllocationInput[],
+) {
+  const rows = allocations.filter((a) => a.departmentId && a.amount > 0);
+  if (rows.length === 0) return null;
+  const { error } = await supabase.from("petty_cash_entry_allocations").insert(
+    rows.map((a) => ({
+      petty_cash_entry_id: pettyCashEntryId,
+      department_id: a.departmentId,
+      amount: a.amount,
+      category_id: a.categoryId || null,
+    })),
   );
   return safeErrorMessage(error) ?? null;
 }

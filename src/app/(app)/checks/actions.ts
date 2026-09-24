@@ -181,7 +181,7 @@ export async function convertPendingCheckToSpread(
   const [{ data: original, error: fetchError }, { data: originalAllocations, error: allocFetchError }] =
     await Promise.all([
       supabase.from("checks").select("*").eq("id", checkId).single(),
-      supabase.from("check_allocations").select("department_id, amount").eq("check_id", checkId),
+      supabase.from("check_allocations").select("department_id, amount, category_id").eq("check_id", checkId),
     ]);
   if (fetchError || !original) return { error: safeErrorMessage(fetchError) ?? "הצ׳ק/הבקשה לא נמצא/ה" };
   if (allocFetchError) return { error: safeErrorMessage(allocFetchError) };
@@ -200,6 +200,7 @@ export async function convertPendingCheckToSpread(
           allocations: originalAllocations.map((a) => ({
             departmentId: a.department_id,
             amount: Math.round(((Number(a.amount) / originalTotal) * r.amount + Number.EPSILON) * 100) / 100,
+            categoryId: a.category_id,
           })),
         }))
       : // The common case: the original just had one plain department, not a
@@ -606,7 +607,7 @@ export async function cancelAndReplaceCheck(
   const [{ data: original, error: fetchError }, { data: originalAllocations, error: allocFetchError }] =
     await Promise.all([
       supabase.from("checks").select("*").eq("id", checkId).single(),
-      supabase.from("check_allocations").select("department_id, amount").eq("check_id", checkId),
+      supabase.from("check_allocations").select("department_id, amount, category_id").eq("check_id", checkId),
     ]);
   if (fetchError || !original) return { error: safeErrorMessage(fetchError) ?? "הצ׳ק/הבקשה לא נמצא/ה" };
   if (allocFetchError) return { error: safeErrorMessage(allocFetchError) };
@@ -658,6 +659,7 @@ export async function cancelAndReplaceCheck(
       originalAllocations!.map((a) => ({
         departmentId: a.department_id,
         amount: Math.round(Number(a.amount) * ratio * 100) / 100,
+        categoryId: a.category_id,
       })),
     );
     if (allocError) return { error: `הביטול והדרישה החדשה בוצעו, אך העתקת החלוקה בין המחלקות נכשלה: ${allocError}` };
@@ -877,11 +879,11 @@ export async function getExpensesByPayee(payee: string, departmentId?: string): 
   const checkIds = rows.map((r) => r.id);
   const { data: allocations } =
     checkIds.length > 0
-      ? await supabase.from("check_allocations").select("check_id, department_id, amount").in("check_id", checkIds)
-      : { data: [] as { check_id: string; department_id: string; amount: number }[] };
+      ? await supabase.from("check_allocations").select("check_id, department_id, amount, category_id").in("check_id", checkIds)
+      : { data: [] as { check_id: string; department_id: string; amount: number; category_id: string | null }[] };
   const allocationsByCheck: Record<string, CheckAllocationInput[]> = {};
   for (const a of allocations ?? []) {
-    (allocationsByCheck[a.check_id] ??= []).push({ departmentId: a.department_id, amount: Number(a.amount) });
+    (allocationsByCheck[a.check_id] ??= []).push({ departmentId: a.department_id, amount: Number(a.amount), categoryId: a.category_id });
   }
 
   return {
@@ -1085,10 +1087,10 @@ export async function mergeChecks(
   // checks that were themselves already split across departments — by
   // summing per-department amounts across the whole selection, rather than
   // collapsing to a single department_id whenever more than one is involved.
-  const allocationsByCheck = new Map<string, { department_id: string; amount: number }[]>();
+  const allocationsByCheck = new Map<string, { department_id: string; amount: number; category_id: string | null }[]>();
   for (const a of existingAllocations ?? []) {
     const list = allocationsByCheck.get(a.check_id) ?? [];
-    list.push({ department_id: a.department_id, amount: Number(a.amount) });
+    list.push({ department_id: a.department_id, amount: Number(a.amount), category_id: a.category_id });
     allocationsByCheck.set(a.check_id, list);
   }
 
@@ -1098,18 +1100,33 @@ export async function mergeChecks(
   }
 
   const totalAmount = checks.reduce((sum, c) => sum + Number(c.amount), 0);
+
+  // Each department also keeps its own category through the merge, but only
+  // when every contributing row agrees on it — a department fed by rows
+  // with different categories comes out uncategorized rather than picking
+  // one arbitrarily, since silently guessing wrong on a live financial
+  // system is worse than asking the admin to re-set it once after merging.
   const departmentTotals = new Map<string, number>();
+  const departmentCategories = new Map<string, Set<string | null>>();
+  function addToDepartment(departmentId: string, amount: number, categoryId: string | null) {
+    departmentTotals.set(departmentId, (departmentTotals.get(departmentId) ?? 0) + amount);
+    const cats = departmentCategories.get(departmentId) ?? new Set<string | null>();
+    cats.add(categoryId);
+    departmentCategories.set(departmentId, cats);
+  }
   for (const c of checks) {
     const existing = allocationsByCheck.get(c.id);
     if (existing) {
-      for (const a of existing) {
-        departmentTotals.set(a.department_id, (departmentTotals.get(a.department_id) ?? 0) + a.amount);
-      }
+      for (const a of existing) addToDepartment(a.department_id, a.amount, a.category_id);
     } else if (c.department_id) {
-      departmentTotals.set(c.department_id, (departmentTotals.get(c.department_id) ?? 0) + Number(c.amount));
+      addToDepartment(c.department_id, Number(c.amount), c.category_id);
     }
   }
   const singleDepartment = departmentTotals.size === 1 ? [...departmentTotals.keys()][0] : null;
+  function agreedCategory(departmentId: string): string | null {
+    const cats = [...(departmentCategories.get(departmentId) ?? [])];
+    return cats.length === 1 ? cats[0] : null;
+  }
 
   // Carry the earliest due date forward — dropping it would silently bump
   // an already-scheduled check back into the no-date "ממתינות לאישור"
@@ -1127,6 +1144,7 @@ export async function mergeChecks(
       amount: totalAmount,
       due_date: earliestDueDate,
       department_id: singleDepartment,
+      category_id: singleDepartment ? agreedCategory(singleDepartment) : null,
       notes: `מיזוג ${checks.length} צ׳קים/העברות`,
       created_by: user?.id ?? null,
       // Merging only ever operates on already-approved items (the
@@ -1140,7 +1158,11 @@ export async function mergeChecks(
   if (insertError) return { error: safeErrorMessage(insertError) };
 
   if (!singleDepartment) {
-    const allocRows = [...departmentTotals.entries()].map(([departmentId, amount]) => ({ departmentId, amount }));
+    const allocRows = [...departmentTotals.entries()].map(([departmentId, amount]) => ({
+      departmentId,
+      amount,
+      categoryId: agreedCategory(departmentId),
+    }));
     const allocError = await insertAllocations(supabase, merged.id, allocRows);
     if (allocError) return { error: allocError };
   }

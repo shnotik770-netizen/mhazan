@@ -185,6 +185,7 @@ function NewPettyCashEntryFormMulti({
                         totalAmount={row.amount}
                         allocations={row.allocations as CheckAllocationInput[]}
                         onChange={(allocations) => update(row.key, { allocations })}
+                        categories={categories}
                       />
                     ) : (
                       <SearchableSelect

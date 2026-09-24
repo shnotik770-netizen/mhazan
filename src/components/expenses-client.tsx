@@ -818,6 +818,7 @@ export function EditExpenseForm({
           totalAmount={Number(amount) || 0}
           allocations={allocations}
           onChange={setAllocations}
+          categories={categories}
         />
       )}
 

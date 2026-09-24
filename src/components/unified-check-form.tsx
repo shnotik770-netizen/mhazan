@@ -346,6 +346,7 @@ export function UnifiedCheckForm({
                     totalAmount={row.amount}
                     allocations={row.allocations}
                     onChange={(allocations) => updateRow(i, { allocations })}
+                    categories={categories}
                   />
                 )}
               </div>

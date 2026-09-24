@@ -202,6 +202,7 @@ export type Database = {
       check_allocations: {
         Row: {
           amount: number
+          category_id: string | null
           check_id: string
           created_at: string
           department_id: string
@@ -209,6 +210,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          category_id?: string | null
           check_id: string
           created_at?: string
           department_id: string
@@ -216,12 +218,27 @@ export type Database = {
         }
         Update: {
           amount?: number
+          category_id?: string | null
           check_id?: string
           created_at?: string
           department_id?: string
           id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "check_allocations_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_allocations_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "check_allocations_check_id_fkey"
             columns: ["check_id"]
@@ -1110,6 +1127,7 @@ export type Database = {
       petty_cash_entry_allocations: {
         Row: {
           amount: number
+          category_id: string | null
           created_at: string
           department_id: string
           id: string
@@ -1117,6 +1135,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          category_id?: string | null
           created_at?: string
           department_id: string
           id?: string
@@ -1124,12 +1143,27 @@ export type Database = {
         }
         Update: {
           amount?: number
+          category_id?: string | null
           created_at?: string
           department_id?: string
           id?: string
           petty_cash_entry_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "petty_cash_entry_allocations_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petty_cash_entry_allocations_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "petty_cash_entry_allocations_department_id_fkey"
             columns: ["department_id"]

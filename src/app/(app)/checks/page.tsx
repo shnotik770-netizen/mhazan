@@ -69,7 +69,7 @@ export default async function ChecksPage({
     supabase.from("bank_accounts").select("*, departments!bank_accounts_department_id_fkey(name)").order("bank_name"),
     supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
     supabase.from("suppliers").select("name").order("name"),
-    supabase.from("check_allocations").select("check_id, department_id, amount, departments(name)"),
+    supabase.from("check_allocations").select("check_id, department_id, amount, category_id, departments(name)"),
     isAdmin ? supabase.rpc("get_pending_schedule_confirmations") : Promise.resolve({ data: [] as never[] }),
     isAdmin
       ? supabase
@@ -167,16 +167,17 @@ export default async function ChecksPage({
 
   const allocationsByCheck = new Map<
     string,
-    { departmentId: string; departmentName: string | null; amount: number }[]
+    { departmentId: string; departmentName: string | null; amount: number; categoryId: string | null }[]
   >();
   for (const a of (checkAllocations ?? []) as unknown as {
     check_id: string;
     department_id: string;
     amount: number;
+    category_id: string | null;
     departments: { name: string } | null;
   }[]) {
     const list = allocationsByCheck.get(a.check_id) ?? [];
-    list.push({ departmentId: a.department_id, departmentName: a.departments?.name ?? null, amount: Number(a.amount) });
+    list.push({ departmentId: a.department_id, departmentName: a.departments?.name ?? null, amount: Number(a.amount), categoryId: a.category_id });
     allocationsByCheck.set(a.check_id, list);
   }
 
