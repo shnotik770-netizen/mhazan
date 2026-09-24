@@ -14,7 +14,7 @@ import {
 } from "@/components/checks-sections-client";
 import { ScheduleConfirmationsList, type PendingConfirmation } from "@/components/schedule-confirmations-client";
 import { RecurringSchedulesSection, type ScheduleRow } from "@/components/recurring-schedules-manager-client";
-import { NewPettyCashEntryButton, PettyCashSection, type PettyCashEntryRow } from "@/components/petty-cash-client";
+import { PettyCashEntryButton, PettyCashSection, type PettyCashEntryRow } from "@/components/petty-cash-client";
 
 export default async function ChecksPage({
   searchParams,
@@ -264,13 +264,6 @@ export default async function ChecksPage({
               <BankReconciliationPanel bankAccounts={bankAccounts ?? []} />
             </>
           )}
-          <NewPettyCashEntryButton
-            departments={myDepartments}
-            categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name }))}
-            supplierNames={supplierNames}
-            paidByNames={paidByNames}
-            isAdmin={isAdmin}
-          />
         </div>
       </div>
 
@@ -280,6 +273,14 @@ export default async function ChecksPage({
         asOf={asOf}
         departments={departments ?? []}
         bankAccounts={bankAccounts ?? []}
+      />
+
+      <PettyCashEntryButton
+        departments={myDepartments}
+        categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name }))}
+        supplierNames={supplierNames}
+        paidByNames={paidByNames}
+        isAdmin={isAdmin}
       />
 
       <PettyCashSection entries={pettyCashRows} bankAccounts={bankAccounts ?? []} isAdmin={isAdmin} />

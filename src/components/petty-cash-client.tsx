@@ -50,14 +50,14 @@ function NewPettyCashEntryFormMulti({
   supplierNames,
   paidByNames,
   isAdmin,
-  onSaved,
+  onClose,
 }: {
   departments: Department[];
   categories: CategoryOption[];
   supplierNames: string[];
   paidByNames: string[];
   isAdmin: boolean;
-  onSaved?: () => void;
+  onClose: () => void;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<DraftRow[]>(() => [blankRow(departments)]);
@@ -102,13 +102,17 @@ function NewPettyCashEntryFormMulti({
       const allSaved = nextRows.length === 0;
       setRows(allSaved ? [blankRow(departments)] : nextRows);
       router.refresh();
-      if (allSaved) onSaved?.();
     });
   }
 
   return (
-    <div className="space-y-3">
-      <h3 className="font-semibold">חשבוניות קופה קטנה חדשות</h3>
+    <div className="card p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">חשבוניות קופה קטנה חדשות</h3>
+        <button type="button" onClick={onClose} className="text-sm text-muted">
+          סגור
+        </button>
+      </div>
       <p className="text-xs text-muted">
         כל חשבונית נרשמת בנפרד עם שם הספק והמספר שלה.
         {!isAdmin && " כל חשבונית ממתינה לאישור מנהל כספים לפני שהיא נכנסת לדוח המחלקה."}
@@ -250,7 +254,16 @@ function NewPettyCashEntryFormMulti({
   );
 }
 
-export function NewPettyCashEntryButton({
+// Toggles between the "+ קופה קטנה" trigger and the full inline grid, in
+// the very same spot on the page — same pattern as BulkExpenseRequestFormMulti
+// ("+ רשימת דרישות תשלום ברצף"). Deliberately NOT a Modal: a modal's
+// max-width constrains the grid's many columns to a much narrower box than
+// the page itself, which is exactly the "letters don't fit" scrolling
+// people usually associate with a payment-request grid working properly —
+// here on the full page width, the grid's own overflow-x-auto only ever
+// needs to kick in on a genuinely narrow (mobile) screen, same as every
+// other bulk-entry grid in this app.
+export function PettyCashEntryButton({
   departments,
   categories,
   supplierNames,
@@ -265,8 +278,8 @@ export function NewPettyCashEntryButton({
 }) {
   const [open, setOpen] = useState(false);
   if (departments.length === 0) return null;
-  return (
-    <>
+  if (!open) {
+    return (
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -274,21 +287,17 @@ export function NewPettyCashEntryButton({
       >
         + קופה קטנה
       </button>
-      {open && (
-        <Modal onClose={() => setOpen(false)}>
-          <div className="p-4">
-            <NewPettyCashEntryFormMulti
-              departments={departments}
-              categories={categories}
-              supplierNames={supplierNames}
-              paidByNames={paidByNames}
-              isAdmin={isAdmin}
-              onSaved={() => setOpen(false)}
-            />
-          </div>
-        </Modal>
-      )}
-    </>
+    );
+  }
+  return (
+    <NewPettyCashEntryFormMulti
+      departments={departments}
+      categories={categories}
+      supplierNames={supplierNames}
+      paidByNames={paidByNames}
+      isAdmin={isAdmin}
+      onClose={() => setOpen(false)}
+    />
   );
 }
 
@@ -447,8 +456,6 @@ export function PettyCashSection({
   const [settling, setSettling] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  if (entries.length === 0) return null;
-
   const pending = entries.filter((e) => e.status === "PENDING");
   const approved = entries.filter((e) => e.status === "APPROVED");
   const selectedEntries = approved.filter((e) => selected.has(e.id));
@@ -480,6 +487,11 @@ export function PettyCashSection({
   return (
     <div className="card p-4 space-y-4">
       <h2 className="font-semibold">קופה קטנה — חשבוניות ממתינות</h2>
+      {entries.length === 0 && (
+        <p className="text-sm text-muted">
+          אין כרגע חשבוניות קופה קטנה ממתינות. אחרי שמוסיפים חשבונית (למעלה) ומאשרים אותה, היא תופיע כאן — כאן גם מסמנים חשבוניות מאושרות ומשלמים אותן כצ׳ק/העברה אחת.
+        </p>
+      )}
 
       {pending.length > 0 && (
         <div className="space-y-2">
