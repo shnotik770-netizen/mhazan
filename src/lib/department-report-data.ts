@@ -40,6 +40,11 @@ export type CombinedRow = {
   // typeDetail unique), so filtering needs a coarser, separate value.
   typeCategory: string;
   description: string;
+  // Optional, off by default in the UI ("ניהול עמודות") — not every kind of
+  // row has one that means anything on its own (a forecast row aggregates
+  // several commitments that may each have a different category; see its
+  // own forecastDetails for that breakdown instead).
+  categoryName: string | null;
   amount: number;
   spreadTotal?: number | null;
   status?: string | null;
@@ -116,6 +121,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     { data: standingOrderForecast, error: standingOrderError },
     { data: creditedTransfers, error: creditedTransfersError },
     { data: pettyCashEntries, error: pettyCashError },
+    { data: allCategories },
   ] = await Promise.all([
     supabase
       .from("incomes")
@@ -126,7 +132,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       .order("date", { ascending: false }),
     supabase
       .from("v_check_department_amounts")
-      .select("check_id, due_date, amount, payee, payment_method, skip_department_ledger, spread_id, status, is_petty_cash")
+      .select("check_id, due_date, amount, payee, payment_method, skip_department_ledger, spread_id, status, is_petty_cash, category_id")
       .eq("department_id", departmentId)
       .neq("status", "CANCELLED")
       // A settled petty-cash batch's own combined check is excluded here —
@@ -137,7 +143,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       .order("due_date", { ascending: false }),
     supabase
       .from("manual_department_entries")
-      .select("id, entry_date, amount, direction, notes, recurring_schedule_id, is_inter_department_transfer, skip_department_ledger")
+      .select("id, entry_date, amount, direction, notes, recurring_schedule_id, is_inter_department_transfer, skip_department_ledger, category_id")
       .eq("department_id", departmentId)
       .eq("status", "APPROVED")
       .order("entry_date", { ascending: false }),
@@ -174,7 +180,14 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       .eq("department_id", departmentId)
       .eq("status", "APPROVED")
       .order("entry_date", { ascending: false }),
+    // Fetched once and resolved by id everywhere a row only carries a
+    // category_id (checks, manual entries, petty cash) — cheaper than
+    // joining categories(name) into each of those queries separately, and
+    // this table is small (a couple dozen rows org-wide).
+    supabase.from("categories").select("id, name"),
   ]);
+
+  const categoryNameById = new Map((allCategories ?? []).map((c) => [c.id, c.name]));
 
   // A failed query here would otherwise silently render as "no rows" via
   // the `?? []` fallbacks below — exactly the kind of gap that makes a
@@ -210,6 +223,10 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       typeDetail: parenParts.length > 0 ? parenParts.join(" · ") : "—",
       typeCategory: incomeTypeCategory(r.payment_method, r.installment_current, r.installment_total, r.type_text),
       description: r.donor_name || "—",
+      // Not populated here: in this org, an income's category is named per
+      // department, so on a single department's own report it would almost
+      // always just repeat the department's own name back.
+      categoryName: null,
       amount: Number(r.amount),
       isOld: r.skip_department_ledger,
       kind: "income",
@@ -241,6 +258,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       typeDetail: expenseType,
       typeCategory: expenseType,
       description: r.payee ?? "הוצאה",
+      categoryName: r.category_id ? (categoryNameById.get(r.category_id) ?? null) : null,
       amount: -Number(r.amount),
       spreadTotal: group && group.count > 1 ? group.total : null,
       status: r.status,
@@ -269,6 +287,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       typeDetail: kindLabel,
       typeCategory: kindLabel,
       description: e.notes || fallbackLabel,
+      categoryName: e.category_id ? (categoryNameById.get(e.category_id) ?? null) : null,
       amount: e.direction === "INCOME" ? Number(e.amount) : -Number(e.amount),
       isOld: e.skip_department_ledger,
       kind: "manual",
@@ -298,6 +317,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       typeDetail: "העברה בין מחלקות",
       typeCategory: "העברה בין מחלקות",
       description: source?.notes ? `התקבל ממחלקת ${payerName} — ${source.notes}` : `התקבל ממחלקת ${payerName}`,
+      categoryName: null,
       amount: Number(t.amount),
       isOld: false,
       kind: "manual",
@@ -317,6 +337,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     typeDetail: "קופה קטנה",
     typeCategory: "קופה קטנה",
     description: `${p.supplier_name} — חשבונית ${p.invoice_number}${p.paid_by ? ` (שילם/ה: ${p.paid_by})` : ""}${p.notes ? ` — ${p.notes}` : ""}`,
+    categoryName: p.category_id ? (categoryNameById.get(p.category_id) ?? null) : null,
     amount: -Number(p.amount),
     status: p.check_id ? "CLEARED" : null,
     isOld: Boolean(p.skip_department_ledger),
@@ -336,6 +357,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     typeDetail: "עמלת אשראי",
     typeCategory: "עמלת אשראי",
     description: `עמלת אשראי (2% על ${formatCurrency(Number(c.qualifying_total))} מהכנסות אשראי/ביט/העברה בקליק ב${monthLabel(c.month.slice(0, 7))})`,
+    categoryName: null,
     amount: -Number(c.amount),
     isOld: false,
     kind: "commission",
@@ -415,6 +437,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       typeDetail: "צפי המשך תשלומים",
       typeCategory: "צפי המשך תשלומים",
       description: `צפי המשך תשלומי אשראי (${g.details.length} תורמים)`,
+      categoryName: null,
       amount: g.total,
       isOld: false,
       kind: "forecast",
@@ -465,6 +488,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       typeDetail: "צפי הוראות קבע",
       typeCategory: "צפי הוראות קבע",
       description: `צפי הוראות קבע (${details.length} הוראות)`,
+      categoryName: null,
       amount: total,
       isOld: false,
       kind: "forecast",

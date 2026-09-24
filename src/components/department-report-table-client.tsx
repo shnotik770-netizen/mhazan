@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import * as Popover from "@radix-ui/react-popover";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { usePortalContainer } from "@/lib/use-portal-container";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { LedgerFlagToggle } from "@/components/ledger-flag-toggle-client";
 import { RowActionsMenu, rowActionButtonClass } from "@/components/row-actions-menu";
@@ -30,6 +32,7 @@ type Row = {
   description: string;
   amount: number;
   spreadTotal?: number | null;
+  categoryName?: string | null;
   status?: string | null;
   isOld: boolean;
   kind: "check" | "income" | "manual" | "commission" | "forecast" | "petty_cash";
@@ -150,6 +153,75 @@ function EditDescriptionButton({ id, kind, currentValue }: { id: string; kind: "
   );
 }
 
+// A per-browser preference (not something worth round-tripping to the
+// server) for which optional columns show — off by default so the table
+// stays compact, remembered across visits once someone turns one on. Shared
+// across every place this table appears (a department's own report, the
+// bank-account debt report) rather than per-instance, since it's really one
+// "how much detail do I generally want" preference, not something tied to a
+// specific screen.
+const COLUMN_PREFS_KEY = "dept-transactions-columns-v1";
+
+function useColumnPrefs() {
+  const [showCategory, setShowCategoryState] = useState(false);
+
+  useEffect(() => {
+    // Can't read this during the initial render (a useState lazy initializer
+    // would run during SSR too, where localStorage doesn't exist) — this
+    // one-time, harmless extra render after mount is the standard tradeoff
+    // for hydrating a value that only lives in the browser.
+    try {
+      const saved = localStorage.getItem(COLUMN_PREFS_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (saved) setShowCategoryState(Boolean(JSON.parse(saved).showCategory));
+    } catch {
+      // Private browsing / blocked storage — just keep the default (hidden).
+    }
+  }, []);
+
+  function setShowCategory(next: boolean) {
+    setShowCategoryState(next);
+    try {
+      localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify({ showCategory: next }));
+    } catch {
+      // Nothing to fall back to — the preference just won't persist.
+    }
+  }
+
+  return { showCategory, setShowCategory };
+}
+
+// A single checkbox today, but built as a popover (not an always-visible
+// checkbox) specifically so more optional columns can be added later
+// without the toolbar growing — "ניהול עמודות" is the one control, its
+// panel is where any future column toggle would live.
+function ColumnManagerButton({ showCategory, onToggleCategory }: { showCategory: boolean; onToggleCategory: (next: boolean) => void }) {
+  const { ref: triggerRef, container } = usePortalContainer();
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <button ref={triggerRef} type="button" className="text-xs text-muted underline">
+          ניהול עמודות
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal container={container}>
+        <Popover.Content
+          dir="rtl"
+          align="end"
+          sideOffset={6}
+          collisionPadding={8}
+          className="popover-panel z-50 min-w-[10rem] rounded-xl border border-border bg-surface p-3 text-right shadow-lg"
+        >
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={showCategory} onChange={(e) => onToggleCategory(e.target.checked)} />
+            הצג קטגוריה
+          </label>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
 export function DepartmentTransactionsTable({
   rows,
   isAdmin,
@@ -164,6 +236,7 @@ export function DepartmentTransactionsTable({
   departmentId?: string;
   defaultSortDir?: "asc" | "desc";
 }) {
+  const { showCategory, setShowCategory } = useColumnPrefs();
   const columns: ColumnDef<Row>[] = [
     { key: "date", label: "תאריך", sortValue: (r) => r.date ?? "" },
     {
@@ -180,6 +253,9 @@ export function DepartmentTransactionsTable({
     // the filter dropdown into one checkbox per distinct installment.
     { key: "typeDetail", label: "סוג", sortValue: (r) => r.typeDetail, filterValue: (r) => r.typeCategory },
     { key: "description", label: "תיאור", sortValue: (r) => r.description, filterValue: (r) => r.description },
+    ...(showCategory
+      ? [{ key: "category", label: "קטגוריה", sortValue: (r) => r.categoryName ?? "", filterValue: (r) => r.categoryName ?? "—" } as ColumnDef<Row>]
+      : []),
     { key: "amount", label: "סכום", sortValue: (r) => r.amount },
     {
       key: "status",
@@ -194,7 +270,11 @@ export function DepartmentTransactionsTable({
   });
 
   return (
-    <table className="data-table">
+    <div>
+      <div className="flex justify-end mb-1 no-print">
+        <ColumnManagerButton showCategory={showCategory} onToggleCategory={setShowCategory} />
+      </div>
+      <table className="data-table">
       <thead>
         <tr>
           {columns.map((col) => (
@@ -217,7 +297,7 @@ export function DepartmentTransactionsTable({
             <td>{r.date ? formatDate(r.date) : "—"}</td>
             <td className={`print-narrow-col ${r.amount >= 0 ? "text-success" : "text-danger"}`}>{r.amount >= 0 ? "הכנסה" : "הוצאה"}</td>
             <td>{r.typeDetail}</td>
-            <td>
+            <td className={showCategory ? "max-w-[14rem] truncate" : undefined}>
               {r.kind === "check" ? (
                 <PayeeLink payee={r.description} departmentId={departmentId} />
               ) : r.kind === "income" ? (
@@ -231,6 +311,7 @@ export function DepartmentTransactionsTable({
               {r.kind === "petty_cash" && <span className="badge bg-background text-muted mr-1">קופה קטנה</span>}
               {r.isOld && <span className="badge bg-warning-bg text-warning mr-1">ישן — לא נכלל במאזן</span>}
             </td>
+            {showCategory && <td>{r.categoryName ?? "—"}</td>}
             <td className={r.amount >= 0 ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>
             <td>
               {r.status ? (
@@ -275,12 +356,13 @@ export function DepartmentTransactionsTable({
         ))}
         {filtered.length === 0 && (
           <tr>
-            <td colSpan={7} className="text-center text-muted py-6">
+            <td colSpan={showCategory ? 8 : 7} className="text-center text-muted py-6">
               אין תנועות
             </td>
           </tr>
         )}
       </tbody>
-    </table>
+      </table>
+    </div>
   );
 }

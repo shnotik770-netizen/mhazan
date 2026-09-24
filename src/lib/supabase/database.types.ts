@@ -1515,6 +1515,7 @@ export type Database = {
           amount: number | null
           approved_at: string | null
           bank_account_id: string | null
+          category_id: string | null
           check_id: string | null
           check_number: string | null
           department_id: string | null

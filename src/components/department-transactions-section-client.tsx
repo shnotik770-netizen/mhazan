@@ -21,6 +21,7 @@ type Row = {
   description: string;
   amount: number;
   spreadTotal?: number | null;
+  categoryName?: string | null;
   status?: string | null;
   isOld: boolean;
   kind: "check" | "income" | "manual" | "commission" | "forecast" | "petty_cash";
