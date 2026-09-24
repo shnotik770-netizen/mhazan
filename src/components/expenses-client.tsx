@@ -10,6 +10,7 @@ import { Modal } from "@/components/modal";
 import { CheckDetailLink, PayeeLink } from "@/components/check-detail-client";
 import { CancelCheckButton, CancelAndReplaceCheckButton } from "@/components/checks-client";
 import { InvoiceFlagToggle } from "@/components/invoice-flag-toggle-client";
+import { ExportExcelButton, type ExportColumn } from "@/components/export-excel-button";
 import { RowActionsMenu, rowActionButtonClass } from "@/components/row-actions-menu";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import {
@@ -124,6 +125,19 @@ export function ExpensesTable({
     },
   ];
   const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(filtered, columns);
+
+  const exportColumns: ExportColumn[] = [
+    { header: "סוג", key: "source", width: 14 },
+    { header: "תיאור", key: "description", width: 26 },
+    { header: "מספר צ׳ק", key: "checkNumber", width: 14 },
+    { header: "סכום", key: "amount", width: 14, numeric: true },
+    { header: "תאריך", key: "date", width: 14 },
+    { header: "מחלקה", key: "department", width: 18 },
+    { header: "קטגוריה", key: "category", width: 18 },
+    { header: "חשבון בנק", key: "bankAccount", width: 20 },
+    { header: "סטטוס", key: "status", width: 12 },
+    { header: "חשבונית", key: "invoice", width: 14 },
+  ];
 
   // Totalled across every row for that spread_id (not just the currently
   // filtered/sorted view), so the badge always reflects the real total.
@@ -280,6 +294,23 @@ export function ExpensesTable({
             נקה תאריכים
           </button>
         )}
+        <ExportExcelButton
+          filename="הוצאות"
+          columns={exportColumns}
+          rows={sorted}
+          toRow={(r) => ({
+            source: r.source,
+            description: r.isCheck ? r.payeeName : r.description,
+            checkNumber: r.checkNumber ?? "—",
+            amount: r.amount,
+            date: r.date ? formatDate(r.date) : "",
+            department: r.departmentName ?? "בהמתנה",
+            category: r.categoryName ?? "—",
+            bankAccount: r.bankAccountName ?? "—",
+            status: statusLabel(r.status),
+            invoice: r.isCheck ? (r.hasInvoice ? "יש חשבונית" : "אין חשבונית") : "—",
+          })}
+        />
       </div>
 
       {isAdmin && selected.size > 0 && (

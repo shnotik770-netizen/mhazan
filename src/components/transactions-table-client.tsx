@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Modal } from "@/components/modal";
+import { ExportExcelButton, type ExportColumn } from "@/components/export-excel-button";
 import { RowActionsMenu, rowActionButtonClass } from "@/components/row-actions-menu";
 import { type Option } from "@/components/expenses-client";
 import { EditIncomeForm, type IncomeEditRow } from "@/components/income-edit-form-client";
@@ -74,8 +75,38 @@ export function TransactionsTable({
   ];
   const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(rows, columns);
 
+  const exportColumns: ExportColumn[] = [
+    { header: "תאריך", key: "date", width: 14 },
+    { header: "סוג", key: "direction", width: 10 },
+    { header: "מקור", key: "source", width: 14 },
+    { header: "תיאור", key: "description", width: 30 },
+    { header: "קטגוריה", key: "category", width: 18 },
+    { header: "מחלקה", key: "department", width: 18 },
+    { header: "סטטוס", key: "status", width: 16 },
+    { header: "חשבונית", key: "invoice", width: 14 },
+    { header: "סכום", key: "amount", width: 14, numeric: true },
+  ];
+
   return (
     <>
+      <div className="flex items-center justify-end mb-2">
+        <ExportExcelButton
+          filename="כל התנועות"
+          columns={exportColumns}
+          rows={sorted}
+          toRow={(r) => ({
+            date: r.date ? formatDate(r.date) : "",
+            direction: r.direction === "INCOME" ? "הכנסה" : "הוצאה",
+            source: r.source,
+            description: r.description,
+            category: r.categoryName ?? "—",
+            department: r.departmentName ?? "—",
+            status: r.convertedFromUsd ? "הומר מדולר" : (r.status ?? "—"),
+            invoice: invoiceLabel(r),
+            amount: r.amount,
+          })}
+        />
+      </div>
       <table className="data-table">
         <thead>
           <tr>
