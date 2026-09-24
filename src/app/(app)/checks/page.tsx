@@ -14,6 +14,7 @@ import {
 } from "@/components/checks-sections-client";
 import { ScheduleConfirmationsList, type PendingConfirmation } from "@/components/schedule-confirmations-client";
 import { RecurringSchedulesSection, type ScheduleRow } from "@/components/recurring-schedules-manager-client";
+import { NewPettyCashEntryButton, PettyCashSection, type PettyCashEntryRow } from "@/components/petty-cash-client";
 
 export default async function ChecksPage({
   searchParams,
@@ -57,6 +58,8 @@ export default async function ChecksPage({
     { data: checkAllocations },
     { data: pendingConfirmations },
     { data: schedules },
+    { data: pettyCashEntries },
+    { data: pettyCashPaidByRows },
   ] = await Promise.all([
     pendingApprovalQuery,
     needingIssuanceQuery,
@@ -74,8 +77,50 @@ export default async function ChecksPage({
           .select("*, departments(name), recurring_schedule_allocations(department_id, amount, departments(name))")
           .order("name")
       : Promise.resolve({ data: [] as never[] }),
+    // Only still-actionable entries (not yet settled) — once paid, an
+    // entry's history lives in its own department report instead (tagged
+    // "קופה קטנה"), same as any other paid check.
+    supabase
+      .from("petty_cash_entries")
+      .select(
+        "id, supplier_name, invoice_number, amount, entry_date, status, paid_by, notes, department_id, departments(name), categories(name), petty_cash_entry_allocations(department_id, amount, departments(name))",
+      )
+      .is("check_id", null)
+      .neq("status", "REJECTED")
+      .order("entry_date", { ascending: false }),
+    supabase.from("petty_cash_entries").select("paid_by").not("paid_by", "is", null),
   ]);
   const supplierNames = (suppliers ?? []).map((s) => s.name);
+  const paidByNames = [...new Set((pettyCashPaidByRows ?? []).map((r) => r.paid_by).filter((n): n is string => !!n))].sort();
+
+  const pettyCashRows: PettyCashEntryRow[] = (pettyCashEntries ?? []).map((e) => {
+    const row = e as unknown as {
+      id: string;
+      supplier_name: string;
+      invoice_number: string;
+      amount: number;
+      entry_date: string;
+      status: "PENDING" | "APPROVED" | "REJECTED";
+      paid_by: string | null;
+      notes: string | null;
+      departments: { name: string } | null;
+      categories: { name: string } | null;
+      petty_cash_entry_allocations: { department_id: string; amount: number; departments: { name: string } | null }[];
+    };
+    return {
+      id: row.id,
+      supplierName: row.supplier_name,
+      invoiceNumber: row.invoice_number,
+      amount: Number(row.amount),
+      entryDate: row.entry_date,
+      status: row.status,
+      departmentName: row.departments?.name ?? null,
+      allocations: row.petty_cash_entry_allocations.map((a) => ({ departmentName: a.departments?.name ?? null, amount: Number(a.amount) })),
+      categoryName: row.categories?.name ?? null,
+      paidBy: row.paid_by,
+      notes: row.notes,
+    };
+  });
 
   const scheduleRows: ScheduleRow[] = (schedules ?? []).map((s) => {
     const row = s as unknown as {
@@ -207,17 +252,26 @@ export default async function ChecksPage({
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-xl font-bold">ניהול צ׳קים והעברות</h1>
-        {isAdmin && (
-          <div className="flex items-center gap-2">
-            <UnifiedCheckForm
-              bankAccounts={bankAccounts ?? []}
-              departments={departments ?? []}
-              categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name, departmentId: c.department_id }))}
-              supplierNames={supplierNames}
-            />
-            <BankReconciliationPanel bankAccounts={bankAccounts ?? []} />
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <>
+              <UnifiedCheckForm
+                bankAccounts={bankAccounts ?? []}
+                departments={departments ?? []}
+                categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name, departmentId: c.department_id }))}
+                supplierNames={supplierNames}
+              />
+              <BankReconciliationPanel bankAccounts={bankAccounts ?? []} />
+            </>
+          )}
+          <NewPettyCashEntryButton
+            departments={myDepartments}
+            categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name }))}
+            supplierNames={supplierNames}
+            paidByNames={paidByNames}
+            isAdmin={isAdmin}
+          />
+        </div>
       </div>
 
       <ChecksFilterBar
@@ -227,6 +281,8 @@ export default async function ChecksPage({
         departments={departments ?? []}
         bankAccounts={bankAccounts ?? []}
       />
+
+      <PettyCashSection entries={pettyCashRows} bankAccounts={bankAccounts ?? []} isAdmin={isAdmin} />
 
       {/* Admins use "+ דרישת תשלום חדשה" above (UnifiedCheckForm) — its
           direct entry auto-approves and covers the full feature set

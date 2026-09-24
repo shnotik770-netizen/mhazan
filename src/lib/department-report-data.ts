@@ -44,7 +44,7 @@ export type CombinedRow = {
   spreadTotal?: number | null;
   status?: string | null;
   isOld: boolean;
-  kind: "check" | "income" | "manual" | "commission" | "forecast";
+  kind: "check" | "income" | "manual" | "commission" | "forecast" | "petty_cash";
   forecastDetails?: InstallmentForecastDetail[];
   // True for an income whose amount was auto-converted from USD to ILS
   // (at paste time, or later via the edit form's conversion helper) — shown
@@ -115,6 +115,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     { data: commissionEntries, error: commissionError },
     { data: standingOrderForecast, error: standingOrderError },
     { data: creditedTransfers, error: creditedTransfersError },
+    { data: pettyCashEntries, error: pettyCashError },
   ] = await Promise.all([
     supabase
       .from("incomes")
@@ -125,9 +126,14 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       .order("date", { ascending: false }),
     supabase
       .from("v_check_department_amounts")
-      .select("check_id, due_date, amount, payee, payment_method, skip_department_ledger, spread_id, status")
+      .select("check_id, due_date, amount, payee, payment_method, skip_department_ledger, spread_id, status, is_petty_cash")
       .eq("department_id", departmentId)
       .neq("status", "CANCELLED")
+      // A settled petty-cash batch's own combined check is excluded here —
+      // its amount is already fully represented by the individual entries
+      // pulled below (each with its own supplier/invoice), so including
+      // both would double it.
+      .eq("is_petty_cash", false)
       .order("due_date", { ascending: false }),
     supabase
       .from("manual_department_entries")
@@ -159,6 +165,15 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       .eq("status", "OPEN")
       .eq("to_department_id", departmentId)
       .not("manual_entry_id", "is", null),
+    // Only APPROVED entries — same convention as manual_department_entries
+    // above (a still-pending request doesn't count toward the balance yet),
+    // unlike a check/expense request which shows regardless of approval.
+    supabase
+      .from("v_petty_cash_entry_department_amounts")
+      .select("entry_id, department_id, amount, entry_date, supplier_name, invoice_number, category_id, paid_by, notes, skip_department_ledger, check_id")
+      .eq("department_id", departmentId)
+      .eq("status", "APPROVED")
+      .order("entry_date", { ascending: false }),
   ]);
 
   // A failed query here would otherwise silently render as "no rows" via
@@ -172,6 +187,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     ["commissionEntries", commissionError],
     ["standingOrderForecast", standingOrderError],
     ["creditedTransfers", creditedTransfersError],
+    ["pettyCashEntries", pettyCashError],
   ] as const) {
     if (error) console.error(`getDepartmentReportData(${departmentId}): ${label} query failed`, error);
   }
@@ -287,6 +303,25 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       kind: "manual",
     };
   });
+
+  // A petty-cash invoice: shown individually with its own supplier/invoice
+  // number even after it's been paid out (see settlePettyCashEntries) —
+  // the combined check that payment produced is excluded from the
+  // `expenses` query above precisely so this row is what represents it here
+  // instead. "נפרע?" reuses the CLEARED label once check_id is set (paid),
+  // otherwise blank — same as a manual entry, which also has no due-date
+  // lifecycle of its own.
+  const pettyCashRows: CombinedRow[] = (pettyCashEntries ?? []).map((p) => ({
+    id: p.entry_id as string,
+    date: p.entry_date,
+    typeDetail: "קופה קטנה",
+    typeCategory: "קופה קטנה",
+    description: `${p.supplier_name} — חשבונית ${p.invoice_number}${p.paid_by ? ` (שילם/ה: ${p.paid_by})` : ""}${p.notes ? ` — ${p.notes}` : ""}`,
+    amount: -Number(p.amount),
+    status: p.check_id ? "CLEARED" : null,
+    isOld: Boolean(p.skip_department_ledger),
+    kind: "petty_cash",
+  }));
 
   // One auto-computed row per month this department had qualifying
   // card/Bit/"העברה בקליק" income — 2% of that month's total, kept in sync
@@ -442,6 +477,7 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     ...expenseRows,
     ...manualRows,
     ...creditedTransferRows,
+    ...pettyCashRows,
     ...commissionRows,
     ...installmentForecastRows,
     ...standingOrderRows,

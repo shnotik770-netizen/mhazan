@@ -1,65 +1,18 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceAdmin, requireUser } from "@/lib/auth";
 import { safeErrorMessage } from "@/lib/safe-error";
 import type { Tables } from "@/lib/supabase/database.types";
+import {
+  ensureSupplier,
+  friendlyCheckError,
+  insertAllocations,
+  revalidateCheckPaths,
+  type CheckAllocationInput,
+} from "./checks-shared";
 
-export type CheckAllocationInput = { departmentId: string; amount: number };
-
-// `departmentId` additionally revalidates that department's own report
-// page (/reports/[id]) — otherwise an edited/moved/deleted check kept
-// showing everywhere except the department report it actually belongs to,
-// the same class of stale-cache bug fixed for incomes and manual entries.
-function revalidateCheckPaths(departmentId?: string | null) {
-  revalidatePath("/checks");
-  revalidatePath("/");
-  revalidatePath("/forecast");
-  revalidatePath("/expenses");
-  revalidatePath("/ledger");
-  revalidatePath("/transactions");
-  if (departmentId) revalidatePath(`/reports/${departmentId}`);
-}
-
-// idx_checks_unique_number_per_bank enforces one check number per bank
-// account at the DB level (a physical check number can only ever be used
-// once, cancelled ones included) — this turns that raw unique-violation
-// into a message an admin can actually act on.
-function friendlyCheckError(error: { message: string; code?: string } | null, checkNumber?: string | null): string | undefined {
-  if (!error) return undefined;
-  if (error.code === "23505" && error.message.includes("idx_checks_unique_number_per_bank")) {
-    return checkNumber ? `מספר צ׳ק ${checkNumber} כבר קיים בחשבון הבנק הזה` : "מספר צ׳ק זה כבר קיים בחשבון הבנק הזה";
-  }
-  return safeErrorMessage(error);
-}
-
-// Grows the suppliers list automatically as new payees are used, so admins
-// don't have to separately remember to register them.
-async function ensureSupplier(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  payee: string,
-  userId: string | null,
-) {
-  const trimmed = payee.trim();
-  if (!trimmed) return;
-  await supabase
-    .from("suppliers")
-    .upsert({ name: trimmed, created_by: userId }, { onConflict: "name", ignoreDuplicates: true });
-}
-
-async function insertAllocations(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  checkId: string,
-  allocations: CheckAllocationInput[],
-) {
-  const rows = allocations.filter((a) => a.departmentId && a.amount > 0);
-  if (rows.length === 0) return null;
-  const { error } = await supabase.from("check_allocations").insert(
-    rows.map((a) => ({ check_id: checkId, department_id: a.departmentId, amount: a.amount })),
-  );
-  return safeErrorMessage(error) ?? null;
-}
+export type { CheckAllocationInput };
 
 // Full-featured creation used by finance admins: any payment method,
 // optional department split, optional "already accounted for in the old

@@ -380,6 +380,7 @@ export type Database = {
           has_invoice: boolean
           id: string
           internal_beneficiary: string | null
+          is_petty_cash: boolean
           issued_at: string | null
           notes: string | null
           payee: string
@@ -403,6 +404,7 @@ export type Database = {
           has_invoice?: boolean
           id?: string
           internal_beneficiary?: string | null
+          is_petty_cash?: boolean
           issued_at?: string | null
           notes?: string | null
           payee: string
@@ -426,6 +428,7 @@ export type Database = {
           has_invoice?: boolean
           id?: string
           internal_beneficiary?: string | null
+          is_petty_cash?: boolean
           issued_at?: string | null
           notes?: string | null
           payee?: string
@@ -962,6 +965,187 @@ export type Database = {
         }
         Relationships: []
       }
+      petty_cash_entries: {
+        Row: {
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          category_id: string | null
+          check_id: string | null
+          created_at: string
+          created_by: string | null
+          department_id: string | null
+          entry_date: string
+          id: string
+          invoice_number: string
+          notes: string | null
+          paid_by: string | null
+          skip_department_ledger: boolean
+          status: string
+          supplier_name: string
+        }
+        Insert: {
+          amount: number
+          approved_at?: string | null
+          approved_by?: string | null
+          category_id?: string | null
+          check_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          department_id?: string | null
+          entry_date: string
+          id?: string
+          invoice_number: string
+          notes?: string | null
+          paid_by?: string | null
+          skip_department_ledger?: boolean
+          status?: string
+          supplier_name: string
+        }
+        Update: {
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          category_id?: string | null
+          check_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          department_id?: string | null
+          entry_date?: string
+          id?: string
+          invoice_number?: string
+          notes?: string | null
+          paid_by?: string | null
+          skip_department_ledger?: boolean
+          status?: string
+          supplier_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "petty_cash_entries_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petty_cash_entries_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petty_cash_entries_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petty_cash_entries_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "checks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petty_cash_entries_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_checks_issued"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petty_cash_entries_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_checks_needing_issuance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petty_cash_entries_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_checks_pending_approval"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petty_cash_entries_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_pending_checks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petty_cash_entries_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_transfers_needing_verification"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petty_cash_entries_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "v_transfers_pending_execution"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petty_cash_entries_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petty_cash_entries_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      petty_cash_entry_allocations: {
+        Row: {
+          amount: number
+          created_at: string
+          department_id: string
+          id: string
+          petty_cash_entry_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          department_id: string
+          id?: string
+          petty_cash_entry_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          department_id?: string
+          id?: string
+          petty_cash_entry_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "petty_cash_entry_allocations_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "petty_cash_entry_allocations_petty_cash_entry_id_fkey"
+            columns: ["petty_cash_entry_id"]
+            isOneToOne: false
+            referencedRelation: "petty_cash_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       print_queue: {
         Row: {
           created_at: string | null
@@ -1335,6 +1519,7 @@ export type Database = {
           check_number: string | null
           department_id: string | null
           due_date: string | null
+          is_petty_cash: boolean | null
           payee: string | null
           payment_method: string | null
           skip_department_ledger: boolean | null
@@ -1623,6 +1808,23 @@ export type Database = {
           pending_amount: number | null
           pending_count: number | null
           source: string | null
+        }
+        Relationships: []
+      }
+      v_petty_cash_entry_department_amounts: {
+        Row: {
+          amount: number | null
+          category_id: string | null
+          check_id: string | null
+          department_id: string | null
+          entry_date: string | null
+          entry_id: string | null
+          invoice_number: string | null
+          notes: string | null
+          paid_by: string | null
+          skip_department_ledger: boolean | null
+          status: string | null
+          supplier_name: string | null
         }
         Relationships: []
       }

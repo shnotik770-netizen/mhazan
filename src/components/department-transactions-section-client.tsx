@@ -23,7 +23,7 @@ type Row = {
   spreadTotal?: number | null;
   status?: string | null;
   isOld: boolean;
-  kind: "check" | "income" | "manual" | "commission" | "forecast";
+  kind: "check" | "income" | "manual" | "commission" | "forecast" | "petty_cash";
   forecastDetails?: ForecastDetail[];
 };
 

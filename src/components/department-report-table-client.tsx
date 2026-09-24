@@ -32,7 +32,7 @@ type Row = {
   spreadTotal?: number | null;
   status?: string | null;
   isOld: boolean;
-  kind: "check" | "income" | "manual" | "commission" | "forecast";
+  kind: "check" | "income" | "manual" | "commission" | "forecast" | "petty_cash";
   forecastDetails?: ForecastDetail[];
   convertedFromUsd?: boolean;
 };
@@ -228,6 +228,7 @@ export function DepartmentTransactionsTable({
               {r.spreadTotal != null && (
                 <span className="badge bg-background text-muted mr-1">פריסה · סה״כ {formatCurrency(r.spreadTotal)}</span>
               )}
+              {r.kind === "petty_cash" && <span className="badge bg-background text-muted mr-1">קופה קטנה</span>}
               {r.isOld && <span className="badge bg-warning-bg text-warning mr-1">ישן — לא נכלל במאזן</span>}
             </td>
             <td className={r.amount >= 0 ? "text-success" : "text-danger"}>{formatCurrency(r.amount)}</td>
