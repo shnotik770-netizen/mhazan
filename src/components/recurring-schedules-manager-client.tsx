@@ -16,11 +16,15 @@ type CategoryOption = { id: string; name: string };
 
 const WEEKDAY_LABELS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
 
-function frequencyLabel(frequency: string) {
-  if (frequency === "MONTHLY") return "חודשי";
-  if (frequency === "WEEKLY") return "שבועי";
-  if (frequency === "YEARLY") return "שנתי";
-  return "חד פעמי";
+// Folds the old separate "משך" (duration) column into this one: a one-time
+// schedule has no duration concept at all, and a recurring one either repeats
+// with no end or stops at some point — "חודשי מוגבל" (עד <date>) says that in
+// one place instead of needing a second column just to repeat frequency with
+// an end date tacked on.
+function frequencyLabel(frequency: string, endDate: string | null) {
+  if (frequency === "ONCE") return "חד פעמי";
+  const base = frequency === "MONTHLY" ? "חודשי" : frequency === "WEEKLY" ? "שבועי" : frequency === "YEARLY" ? "שנתי" : frequency;
+  return endDate ? `${base} מוגבל (עד ${formatDate(endDate)})` : base;
 }
 
 function scheduleDateLabel(s: { frequency: string; day_of_month: number | null; day_of_week: number | null; one_time_date: string | null }) {
@@ -157,7 +161,12 @@ export function RecurringSchedulesManager({
   const columns: ColumnDef<ScheduleRow>[] = [
     { key: "name", label: "שם", sortValue: (s) => s.name, filterValue: (s) => s.name },
     { key: "department", label: "מחלקה", sortValue: (s) => departmentLabel(s), filterValue: (s) => departmentLabel(s) },
-    { key: "frequency", label: "תדירות", sortValue: (s) => s.frequency, filterValue: (s) => frequencyLabel(s.frequency) },
+    {
+      key: "frequency",
+      label: "תדירות",
+      sortValue: (s) => s.frequency,
+      filterValue: (s) => frequencyLabel(s.frequency, s.end_date),
+    },
     {
       key: "date",
       label: "תאריך",
@@ -170,7 +179,6 @@ export function RecurringSchedulesManager({
       sortValue: (s) => s.expected_amount,
       filterValue: (s) => (s.type === "FIXED_DATE_FIXED_AMOUNT" || s.type === "VARIABLE_DATE_FIXED_AMOUNT" ? "קבוע" : "משוער"),
     },
-    { key: "end_date", label: "משך", sortValue: (s) => s.end_date ?? "" },
     { key: "active", label: "פעיל", sortValue: (s) => (s.is_active ? 1 : 0), filterValue: (s) => (s.is_active ? "פעיל" : "לא פעיל") },
   ];
   const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(visibleSchedules, columns);
@@ -217,7 +225,7 @@ export function RecurringSchedulesManager({
             ))}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center text-muted py-4">
+                <td colSpan={7} className="text-center text-muted py-4">
                   {schedules.length === 0 ? "אין הרשאות וחיובים קבועים מוגדרים" : "אין תוצאות"}
                 </td>
               </tr>
@@ -291,7 +299,7 @@ function ScheduleRowItem({ schedule: s, onEdit }: { schedule: ScheduleRow; onEdi
           </span>
         )}
       </td>
-      <td>{frequencyLabel(s.frequency)}</td>
+      <td>{frequencyLabel(s.frequency, s.end_date)}</td>
       <td>
         {isVariableDateType(s.type) ? (
           <span className="badge bg-background text-muted">
@@ -306,9 +314,6 @@ function ScheduleRowItem({ schedule: s, onEdit }: { schedule: ScheduleRow; onEdi
         {s.type !== "FIXED_DATE_FIXED_AMOUNT" && s.type !== "VARIABLE_DATE_FIXED_AMOUNT" && (
           <span className="badge bg-background text-muted mr-1">משוער</span>
         )}
-      </td>
-      <td className="text-xs text-muted">
-        {s.frequency === "ONCE" ? "חד פעמי" : s.end_date ? `עד ${formatDate(s.end_date)}` : "ללא הגבלה"}
       </td>
       <td>
         <button disabled={isPending} onClick={toggleActive} className="text-xs text-primary underline">
