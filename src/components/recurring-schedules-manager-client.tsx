@@ -62,12 +62,19 @@ function departmentLabel(s: ScheduleRow) {
   return s.departmentName ?? `מפוצל (${s.allocations.length} מחלקות)`;
 }
 
-// A schedule that's inactive, or whose end date has already passed, has
+// A schedule that's inactive, whose end date has already passed, or — for a
+// one-time (ONCE) schedule — whose single date has already passed, has
 // nothing left to do — it stays in the DB (past occurrences still point to
 // it) but has no business cluttering the list of things an admin might
-// actually need to act on, so it's archived out of the default view.
+// actually need to act on, so it's archived out of the default view. A
+// recurring schedule's own end_date doesn't apply here: ONCE never sets one
+// (there's nothing to end), so without this it would otherwise count as
+// "no limit" and linger in the active list forever once its date passed.
 function isArchived(s: ScheduleRow, today: string): boolean {
-  return !s.is_active || Boolean(s.end_date && s.end_date < today);
+  if (!s.is_active) return true;
+  if (s.end_date && s.end_date < today) return true;
+  if (s.frequency === "ONCE" && s.one_time_date && s.one_time_date < today) return true;
+  return false;
 }
 
 // כרטיס סיכום קטן שחי בדף הצ'קים — לא נושא את טבלת הניהול המלאה בעצמו (זו עברה לדף
@@ -300,7 +307,9 @@ function ScheduleRowItem({ schedule: s, onEdit }: { schedule: ScheduleRow; onEdi
           <span className="badge bg-background text-muted mr-1">משוער</span>
         )}
       </td>
-      <td className="text-xs text-muted">{s.end_date ? `עד ${formatDate(s.end_date)}` : "ללא הגבלה"}</td>
+      <td className="text-xs text-muted">
+        {s.frequency === "ONCE" ? "חד פעמי" : s.end_date ? `עד ${formatDate(s.end_date)}` : "ללא הגבלה"}
+      </td>
       <td>
         <button disabled={isPending} onClick={toggleActive} className="text-xs text-primary underline">
           {s.is_active ? "פעיל" : "לא פעיל"}
