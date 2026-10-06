@@ -221,7 +221,8 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
         {quickCheckPreview !== undefined &&
           (quickCheckPreview ? (
             <p className="text-xs text-muted">
-              {quickCheckPreview.payee} — סכום: <span className="font-semibold text-foreground">{formatCurrency(quickCheckPreview.amount)}</span>,
+              <span className="font-semibold text-foreground">{quickCheckPreview.payee}</span> — סכום:{" "}
+              <span className="font-semibold text-foreground">{formatCurrency(quickCheckPreview.amount)}</span>,
               תאריך פירעון:{" "}
               <span className="font-semibold text-foreground">
                 {quickCheckPreview.due_date ? formatDate(quickCheckPreview.due_date) : "—"}
