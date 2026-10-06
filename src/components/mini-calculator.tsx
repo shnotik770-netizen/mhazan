@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/components/modal";
 
 const KEYS = [
@@ -26,6 +26,18 @@ export function MiniCalculator({ onApply }: { onApply: (value: number) => void }
   const [open, setOpen] = useState(false);
   const [expr, setExpr] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // The dialog is still closed (not yet in the top layer) at the moment
+  // React would normally apply a plain `autoFocus` prop, so that call is a
+  // no-op — by the time Modal's own effect calls showModal(), the browser
+  // has already auto-focused the first focusable element in the dialog
+  // (the "✕" button) instead. Focusing here, after `open` flips true, runs
+  // after Modal's effect (child effects fire before the parent's), once
+  // the dialog is actually visible and focusable.
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
 
   function press(key: string) {
     setError(null);
@@ -80,7 +92,7 @@ export function MiniCalculator({ onApply }: { onApply: (value: number) => void }
               type="text"
               inputMode="decimal"
               dir="ltr"
-              autoFocus
+              ref={inputRef}
               value={expr}
               placeholder="0"
               onChange={(e) => handleTyped(e.target.value)}
