@@ -66,6 +66,13 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
   const today = todayIso();
   const overdueCandidates = allCandidates.filter((c) => c.due_date && c.due_date <= today);
   const selectedCandidates = allCandidates.filter((c) => selectedSuggestions.has(c.id));
+  const trimmedQuickCheckNumber = quickCheckNumber.trim();
+  // Shows what "הוסף" would add before the user commits to clicking it — so
+  // a typo in the check number (or an amount that doesn't look right) is
+  // caught up front instead of only after the row lands in the table below.
+  const quickCheckPreview = trimmedQuickCheckNumber
+    ? (allCandidates.find((c) => c.check_number.trim() === trimmedQuickCheckNumber) ?? null)
+    : undefined;
 
   function toggleSuggestion(id: string) {
     setSelectedSuggestions((prev) => {
@@ -211,6 +218,18 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
           </button>
         </div>
         {quickAddError && <p className="text-xs text-danger">{quickAddError}</p>}
+        {quickCheckPreview !== undefined &&
+          (quickCheckPreview ? (
+            <p className="text-xs text-muted">
+              {quickCheckPreview.payee} — סכום: <span className="font-semibold text-foreground">{formatCurrency(quickCheckPreview.amount)}</span>,
+              תאריך פירעון:{" "}
+              <span className="font-semibold text-foreground">
+                {quickCheckPreview.due_date ? formatDate(quickCheckPreview.due_date) : "—"}
+              </span>
+            </p>
+          ) : (
+            <p className="text-xs text-muted">לא נמצא צ׳ק פתוח עם מספר זה בחשבון שנבחר</p>
+          ))}
       </div>
 
       {selectedCandidates.length > 0 && (
