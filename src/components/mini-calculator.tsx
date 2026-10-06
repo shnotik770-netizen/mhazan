@@ -36,6 +36,11 @@ export function MiniCalculator({ onApply }: { onApply: (value: number) => void }
     setExpr((prev) => prev + (KEY_VALUE[key] ?? key));
   }
 
+  function handleTyped(value: string) {
+    setError(null);
+    setExpr(value.replace(/[^0-9+\-*/().\s]/g, ""));
+  }
+
   function clear() {
     setExpr("");
     setError(null);
@@ -71,12 +76,22 @@ export function MiniCalculator({ onApply }: { onApply: (value: number) => void }
                 ✕
               </button>
             </div>
-            <div
+            <input
+              type="text"
+              inputMode="decimal"
               dir="ltr"
-              className="min-h-[2.5rem] break-all rounded-lg border border-border bg-background px-3 py-2 text-left font-mono text-lg"
-            >
-              {expr || "0"}
-            </div>
+              autoFocus
+              value={expr}
+              placeholder="0"
+              onChange={(e) => handleTyped(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  compute();
+                }
+              }}
+              className="min-h-[2.5rem] w-full rounded-lg border border-border bg-background px-3 py-2 text-left font-mono text-lg outline-none focus:border-primary"
+            />
             {error && <p className="text-xs text-danger">{error}</p>}
             {/* dir="ltr" so the operator column (last item in each KEYS row)
                 lands on the right, like a normal calculator — left to the
