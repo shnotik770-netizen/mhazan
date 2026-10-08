@@ -344,6 +344,21 @@ export async function confirmScheduleOccurrence(
   return {};
 }
 
+// Updates only the schedule's own estimated amount — used from the "אישור
+// סכומים בפועל" list when the real amount is already known but the charge
+// itself hasn't gone through yet, so the occurrence should stay pending
+// (unlike confirmScheduleOccurrence, this never inserts a manual entry).
+export async function updateScheduleExpectedAmount(scheduleId: string, amount: number): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  if (!amount || amount <= 0) return { error: "יש להזין סכום" };
+  const supabase = await createClient();
+  const { error } = await supabase.from("recurring_schedules").update({ expected_amount: amount }).eq("id", scheduleId);
+  if (error) return { error: safeErrorMessage(error) };
+  revalidatePath("/settings");
+  revalidatePath("/forecast");
+  return {};
+}
+
 // Marks one pending occurrence as "didn't happen this time" instead of
 // confirming an amount for it. Deliberately its own table rather than a
 // manual_department_entries row: that table's RLS insert policy only ever

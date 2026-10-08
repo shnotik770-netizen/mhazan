@@ -28,6 +28,7 @@ export function ScheduleOccurrenceConfirmFields({
   error,
   onSubmit,
   submitLabel = "אשר",
+  onSaveAmount,
 }: {
   departments: Department[];
   isSplit: boolean;
@@ -39,6 +40,11 @@ export function ScheduleOccurrenceConfirmFields({
   error?: string | null;
   onSubmit: (confirmedDate: string, payload: ScheduleConfirmationAllocation[]) => void;
   submitLabel?: string;
+  // Lets a non-split occurrence's estimated amount be corrected on its own,
+  // without also confirming the occurrence as having actually happened —
+  // useful when the real amount is already known but the charge itself
+  // hasn't cleared yet, so it should stay in the pending list.
+  onSaveAmount?: (amount: number) => void;
 }) {
   const [split, setSplit] = useState(initialIsSplit);
   const [amount, setAmount] = useState(String(expectedAmount));
@@ -72,6 +78,16 @@ export function ScheduleOccurrenceConfirmFields({
       payload = [{ departmentId, amount: value }];
     }
     onSubmit(confirmedDate, payload);
+  }
+
+  function saveAmount() {
+    setClientError(null);
+    const value = Number(amount);
+    if (!value || value <= 0) {
+      setClientError("יש להזין סכום");
+      return;
+    }
+    onSaveAmount?.(value);
   }
 
   const totalForSplit = split ? allocations.reduce((sum, a) => sum + (a.amount || 0), 0) : Number(amount) || 0;
@@ -129,6 +145,18 @@ export function ScheduleOccurrenceConfirmFields({
             />
             פיצול בין כמה מחלקות
           </label>
+        )}
+
+        {onSaveAmount && !split && (
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={saveAmount}
+            title="מעדכן את הסכום המשוער של ההוראה, בלי לאשר שהתקופה הזו באמת יצאה — השורה נשארת ברשימת הממתינים"
+            className="rounded border border-border text-sm px-3 py-1 disabled:opacity-50 hover:bg-background"
+          >
+            שמור סכום
+          </button>
         )}
 
         <button

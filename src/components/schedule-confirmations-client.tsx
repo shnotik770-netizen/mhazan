@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   confirmScheduleOccurrence,
   ignoreScheduleOccurrence,
+  updateScheduleExpectedAmount,
   type ScheduleConfirmationAllocation,
 } from "@/app/(app)/settings/actions";
 import { ScheduleOccurrenceConfirmFields } from "@/components/schedule-occurrence-confirm-fields";
@@ -41,8 +42,9 @@ export function ScheduleConfirmationsList({
         <p className="text-sm text-muted">
           חיובים קבועים עם סכום או תאריך משוער שהתאריך שלהם כבר עבר, וגם חיובים עם סכום ותאריך קבועים שעברו כבר 5 ימים
           מהתאריך המיועד בלי שאושרו — יש לאשר את הסכום שהיה בפועל, ואפשר לשייך אותו למחלקה אחרת מזו שהוגדרה בהוראה או
-          לפצל אותו בין כמה מחלקות. אם לא יאושר או יסומן כ&quot;לא יצא&quot; תוך 5 ימים, המערכת תניח אוטומטית שהחיוב הקבוע
-          ירד כמתוכנן ותרשום אותו בעצמה.
+          לפצל אותו בין כמה מחלקות. אם ידוע כבר הסכום הנכון אבל החיוב עצמו עדיין לא ירד בפועל, אפשר ללחוץ &quot;שמור
+          סכום&quot; כדי רק לעדכן את הסכום המשוער להמשך, בלי לאשר שזה כבר קרה — השורה תישאר ברשימה. אם לא יאושר או יסומן
+          כ&quot;לא יצא&quot; תוך 5 ימים, המערכת תניח אוטומטית שהחיוב הקבוע ירד כמתוכנן ותרשום אותו בעצמה.
         </p>
       </div>
       <div className="space-y-3">
@@ -63,6 +65,18 @@ function ConfirmationRow({ item, departments }: { item: PendingConfirmation; dep
     setError(null);
     startTransition(async () => {
       const result = await confirmScheduleOccurrence(item.scheduleId, item.periodDate, confirmedDate, payload);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function saveAmount(amount: number) {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateScheduleExpectedAmount(item.scheduleId, amount);
       if (result.error) {
         setError(result.error);
         return;
@@ -107,6 +121,7 @@ function ConfirmationRow({ item, departments }: { item: PendingConfirmation; dep
         isPending={isPending}
         error={error}
         onSubmit={submit}
+        onSaveAmount={saveAmount}
       />
 
       <button
