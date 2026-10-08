@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { DeptExpenseRequestForm } from "@/components/checks-client";
@@ -6,6 +7,7 @@ import { BulkExpenseRequestFormMulti } from "@/components/bulk-checks-client";
 import { IssuanceQueueTable } from "@/components/issuance-queue-client";
 import { BankReconciliationPanel } from "@/components/bank-reconciliation-client";
 import { ChecksFilterBar } from "@/components/checks-filter-bar";
+import { CancelCheckNumberButton } from "@/components/cancel-check-number-client";
 import {
   CollapsibleSection,
   OverdueChecksTable,
@@ -13,7 +15,11 @@ import {
   PendingApprovalTable,
 } from "@/components/checks-sections-client";
 import { ScheduleConfirmationsList, type PendingConfirmation } from "@/components/schedule-confirmations-client";
-import { RecurringSchedulesSection, type ScheduleRow } from "@/components/recurring-schedules-manager-client";
+import {
+  RecurringSchedulesSection,
+  NewRecurringScheduleButton,
+  type ScheduleRow,
+} from "@/components/recurring-schedules-manager-client";
 import { PettyCashEntryButton, PettyCashSection, type PettyCashEntryRow } from "@/components/petty-cash-client";
 
 export default async function ChecksPage({
@@ -251,30 +257,39 @@ export default async function ChecksPage({
         ))}
       </datalist>
 
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-xl font-bold">ניהול צ׳קים והעברות</h1>
-        <div className="flex items-center gap-2">
-          {isAdmin && (
-            <>
-              <UnifiedCheckForm
-                bankAccounts={bankAccounts ?? []}
-                departments={departments ?? []}
-                categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name, departmentId: c.department_id }))}
-                supplierNames={supplierNames}
-              />
-              <BankReconciliationPanel bankAccounts={bankAccounts ?? []} />
-            </>
-          )}
-        </div>
-      </div>
+      <h1 className="text-xl font-bold">ניהול צ׳קים והעברות</h1>
 
-      <ChecksFilterBar
-        deptFilter={deptFilter}
-        bankFilter={bankFilter}
-        asOf={asOf}
-        departments={departments ?? []}
-        bankAccounts={bankAccounts ?? []}
-      />
+      {isAdmin && (
+        <div className="card p-4 flex flex-wrap items-center gap-2">
+          <UnifiedCheckForm
+            bankAccounts={bankAccounts ?? []}
+            departments={departments ?? []}
+            categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name, departmentId: c.department_id }))}
+            supplierNames={supplierNames}
+          />
+          <PettyCashEntryButton
+            departments={myDepartments}
+            categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name }))}
+            supplierNames={supplierNames}
+            paidByNames={paidByNames}
+            isAdmin={isAdmin}
+          />
+          <BankReconciliationPanel bankAccounts={bankAccounts ?? []} />
+          <NewRecurringScheduleButton
+            departments={departments ?? []}
+            bankAccounts={bankAccounts ?? []}
+            categories={categories ?? []}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold hover:bg-background"
+          />
+          <Link
+            href="/checks#issuance-queue"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold hover:bg-background"
+          >
+            הנפקה מהירה
+          </Link>
+          <CancelCheckNumberButton bankAccounts={bankAccounts ?? []} />
+        </div>
+      )}
 
       <PettyCashEntryButton
         departments={myDepartments}
@@ -309,6 +324,17 @@ export default async function ChecksPage({
       )}
 
       {isAdmin && <ScheduleConfirmationsList pending={pendingConfirmationRows} departments={departments ?? []} />}
+
+      <div className="space-y-1">
+        <p className="text-xs text-muted">סינון לפי מחלקה/חשבון בנק — משפיע על הרשימות שלהלן (שהגיע תאריכם, להנפקה, וממתינות לאישור)</p>
+        <ChecksFilterBar
+          deptFilter={deptFilter}
+          bankFilter={bankFilter}
+          asOf={asOf}
+          departments={departments ?? []}
+          bankAccounts={bankAccounts ?? []}
+        />
+      </div>
 
       {isAdmin && (
         <div id="due-checks" className="card p-4 scroll-mt-4">

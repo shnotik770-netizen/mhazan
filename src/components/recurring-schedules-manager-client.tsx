@@ -81,6 +81,45 @@ function isArchived(s: ScheduleRow, today: string): boolean {
   return false;
 }
 
+// Self-contained "+ חיוב קבוע חדש" button + modal, shared between
+// RecurringSchedulesSection (its usual home, on the checks page) and the
+// checks page's own top action toolbar — a second, independent instance
+// with its own open state, not a shared one, so opening one never affects
+// the other.
+export function NewRecurringScheduleButton({
+  departments,
+  bankAccounts,
+  categories,
+  className = "rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold",
+}: {
+  departments: Department[];
+  bankAccounts: BankAccountOption[];
+  categories: CategoryOption[];
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className={className}>
+        + חיוב קבוע חדש
+      </button>
+      {open && (
+        <Modal onClose={() => setOpen(false)}>
+          <div className="card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">חיוב קבוע חדש</h2>
+              <button type="button" onClick={() => setOpen(false)} className="text-sm text-muted">
+                סגור
+              </button>
+            </div>
+            <NewRecurringScheduleForm departments={departments} bankAccounts={bankAccounts} categories={categories} />
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 // כרטיס סיכום קטן שחי בדף הצ'קים — לא נושא את טבלת הניהול המלאה בעצמו (זו עברה לדף
 // ייעודי, /recurring-schedules, ולא נפתחת יותר כחלון צף מעל דף הצ'קים) אלא רק מקשר
 // אליה, לצד הוספה מהירה של חיוב קבוע חדש שנשארת נוחה כחלון קופץ קטן.
@@ -95,8 +134,6 @@ export function RecurringSchedulesSection({
   bankAccounts: BankAccountOption[];
   categories: CategoryOption[];
 }) {
-  const [addOpen, setAddOpen] = useState(false);
-
   return (
     <div className="card p-4 space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -108,28 +145,9 @@ export function RecurringSchedulesSection({
           >
             ניהול הרשאות וחיובים קבועים
           </Link>
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
-          >
-            + חיוב קבוע חדש
-          </button>
+          <NewRecurringScheduleButton departments={departments} bankAccounts={bankAccounts} categories={categories} />
         </div>
       </div>
-      {addOpen && (
-        <Modal onClose={() => setAddOpen(false)}>
-          <div className="card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold">חיוב קבוע חדש</h2>
-              <button type="button" onClick={() => setAddOpen(false)} className="text-sm text-muted">
-                סגור
-              </button>
-            </div>
-            <NewRecurringScheduleForm departments={departments} bankAccounts={bankAccounts} categories={categories} />
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }
