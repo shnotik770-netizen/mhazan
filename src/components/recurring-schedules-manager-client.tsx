@@ -158,30 +158,26 @@ export function RecurringSchedulesManager({
   const archivedSchedules = schedules.filter((s) => isArchived(s, today));
   const visibleSchedules = showArchive ? schedules : activeSchedules;
 
-  const columns: ColumnDef<ScheduleRow>[] = [
-    { key: "name", label: "שם", sortValue: (s) => s.name, filterValue: (s) => s.name },
-    { key: "department", label: "מחלקה", sortValue: (s) => departmentLabel(s), filterValue: (s) => departmentLabel(s) },
-    {
-      key: "frequency",
-      label: "תדירות",
-      sortValue: (s) => s.frequency,
-      filterValue: (s) => frequencyLabel(s.frequency, s.end_date),
-    },
-    {
-      key: "date",
-      label: "תאריך",
-      sortValue: (s) => (isVariableDateType(s.type) ? "" : scheduleDateLabel(s)),
-      filterValue: (s) => (isVariableDateType(s.type) ? "משוער" : "קבוע"),
-    },
-    {
-      key: "amount",
-      label: "סכום צפוי",
-      sortValue: (s) => s.expected_amount,
-      filterValue: (s) => (s.type === "FIXED_DATE_FIXED_AMOUNT" || s.type === "VARIABLE_DATE_FIXED_AMOUNT" ? "קבוע" : "משוער"),
-    },
-    { key: "active", label: "פעיל", sortValue: (s) => (s.is_active ? 1 : 0), filterValue: (s) => (s.is_active ? "פעיל" : "לא פעיל") },
+  // One table per bank account instead of a single mixed list — a schedule
+  // without a bank account (allowed by the schema) falls into its own group
+  // rather than being silently dropped. Bank accounts are listed in the same
+  // order as the `bankAccounts` prop, and a group is only shown at all once
+  // it actually has a schedule in the current (active/archive) view.
+  const groupedByAccount = new Map<string, ScheduleRow[]>();
+  for (const s of visibleSchedules) {
+    const key = s.bankAccountId ?? "none";
+    const list = groupedByAccount.get(key);
+    if (list) list.push(s);
+    else groupedByAccount.set(key, [s]);
+  }
+  const accountGroups: { key: string; label: string; schedules: ScheduleRow[] }[] = [
+    ...bankAccounts
+      .filter((b) => groupedByAccount.has(b.id))
+      .map((b) => ({ key: b.id, label: `${b.bank_name} (${b.account_number})`, schedules: groupedByAccount.get(b.id)! })),
+    ...(groupedByAccount.has("none")
+      ? [{ key: "none", label: "ללא חשבון בנק משויך", schedules: groupedByAccount.get("none")! }]
+      : []),
   ];
-  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(visibleSchedules, columns);
 
   return (
     <div className="space-y-4">
@@ -201,38 +197,22 @@ export function RecurringSchedulesManager({
         הצג גם ארכיון ({archivedSchedules.length} לא בתוקף)
       </label>
 
-      <div className="card p-4 overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              {columns.map((col) => (
-                <SortFilterTh
-                  key={col.key}
-                  col={col}
-                  allRows={visibleSchedules}
-                  sort={sort}
-                  toggleSort={toggleSort}
-                  activeFilter={filters[col.key]}
-                  setColumnFilter={setColumnFilter}
-                />
-              ))}
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((s) => (
-              <ScheduleRowItem key={s.id} schedule={s} onEdit={() => setEditSchedule(s)} />
-            ))}
-            {sorted.length === 0 && (
-              <tr>
-                <td colSpan={7} className="text-center text-muted py-4">
-                  {schedules.length === 0 ? "אין הרשאות וחיובים קבועים מוגדרים" : "אין תוצאות"}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {accountGroups.length > 0 ? (
+        <div className="space-y-6">
+          {accountGroups.map((g) => (
+            <div key={g.key} className="space-y-2">
+              <h3 className="text-sm font-semibold">
+                {g.label} <span className="text-muted font-normal">({g.schedules.length})</span>
+              </h3>
+              <ScheduleTable schedules={g.schedules} onEdit={setEditSchedule} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card p-4 text-center text-muted py-4">
+          {schedules.length === 0 ? "אין הרשאות וחיובים קבועים מוגדרים" : "אין תוצאות"}
+        </div>
+      )}
 
       {addOpen && (
         <Modal onClose={() => setAddOpen(false)}>
@@ -266,6 +246,71 @@ export function RecurringSchedulesManager({
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+// One bank account's own table — its own sort/filter state, independent of
+// every other account's table, since the columns no longer need to tell
+// accounts apart (that's now the surrounding heading's job).
+function ScheduleTable({ schedules, onEdit }: { schedules: ScheduleRow[]; onEdit: (s: ScheduleRow) => void }) {
+  const columns: ColumnDef<ScheduleRow>[] = [
+    { key: "name", label: "שם", sortValue: (s) => s.name, filterValue: (s) => s.name },
+    { key: "department", label: "מחלקה", sortValue: (s) => departmentLabel(s), filterValue: (s) => departmentLabel(s) },
+    {
+      key: "frequency",
+      label: "תדירות",
+      sortValue: (s) => s.frequency,
+      filterValue: (s) => frequencyLabel(s.frequency, s.end_date),
+    },
+    {
+      key: "date",
+      label: "תאריך",
+      sortValue: (s) => (isVariableDateType(s.type) ? "" : scheduleDateLabel(s)),
+      filterValue: (s) => (isVariableDateType(s.type) ? "משוער" : "קבוע"),
+    },
+    {
+      key: "amount",
+      label: "סכום צפוי",
+      sortValue: (s) => s.expected_amount,
+      filterValue: (s) => (s.type === "FIXED_DATE_FIXED_AMOUNT" || s.type === "VARIABLE_DATE_FIXED_AMOUNT" ? "קבוע" : "משוער"),
+    },
+    { key: "active", label: "פעיל", sortValue: (s) => (s.is_active ? 1 : 0), filterValue: (s) => (s.is_active ? "פעיל" : "לא פעיל") },
+  ];
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(schedules, columns);
+
+  return (
+    <div className="card p-4 overflow-x-auto">
+      <table className="data-table">
+        <thead>
+          <tr>
+            {columns.map((col) => (
+              <SortFilterTh
+                key={col.key}
+                col={col}
+                allRows={schedules}
+                sort={sort}
+                toggleSort={toggleSort}
+                activeFilter={filters[col.key]}
+                setColumnFilter={setColumnFilter}
+              />
+            ))}
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((s) => (
+            <ScheduleRowItem key={s.id} schedule={s} onEdit={() => onEdit(s)} />
+          ))}
+          {sorted.length === 0 && (
+            <tr>
+              <td colSpan={7} className="text-center text-muted py-4">
+                אין תוצאות
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
