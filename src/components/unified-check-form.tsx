@@ -27,6 +27,17 @@ function blankRow(): Row {
   return { date: "", amount: 0, checkNumber: "", departmentId: "", allocations: [] };
 }
 
+// Advances a check number the same way dates already advance per spread row
+// (180, 181, 182, ...) — leading zeros are preserved so a check book
+// numbered e.g. "00180" keeps the same width. A check number that isn't
+// purely numeric (or wasn't entered at all) can't be incremented
+// meaningfully, so it's left exactly as typed on every row instead.
+function spreadCheckNumber(base: string, offset: number): string {
+  const trimmed = base.trim();
+  if (!/^\d+$/.test(trimmed)) return base;
+  return String(Number(trimmed) + offset).padStart(trimmed.length, "0");
+}
+
 // A single button/flow for issuing a check or transfer that covers three
 // cases the app used to split across separate buttons: one plain
 // check/transfer, one check/transfer split across departments, and several
@@ -133,11 +144,13 @@ export function UnifiedCheckForm({
   // evenly across N payment rows — the remainder from rounding goes on the
   // last row, and each row's date advances one month from the first, so a
   // spread is a single click instead of retyping the total (already known
-  // from row 1) and then every date by hand. Check number and department
-  // still default blank/carried-over per row, same as before.
+  // from row 1) and then every date by hand. If a check number was entered
+  // on the first row, it advances the same way (180, 181, 182, ...); department
+  // still carries over per row, same as before.
   function generateSpreadRows() {
     const total = rows[0].amount;
     const startDate = rows[0].date || todayIso();
+    const startCheckNumber = rows[0].checkNumber;
     const count = Math.max(2, Math.floor(spreadCount) || 2);
     const base = Math.floor((total / count) * 100) / 100;
     const remainder = Math.round((total - base * count) * 100) / 100;
@@ -146,6 +159,7 @@ export function UnifiedCheckForm({
         ...blankRow(),
         amount: i === count - 1 ? base + remainder : base,
         date: addMonthsToDate(startDate, i),
+        checkNumber: spreadCheckNumber(startCheckNumber, i),
         departmentId: rows[0].departmentId,
       })),
     );
