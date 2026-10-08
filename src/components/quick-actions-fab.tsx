@@ -203,6 +203,11 @@ const GROUP_ORDER: ActionGroup[] = ["create", "checks", "reports", "admin"];
 export function QuickActionsPanel() {
   const { openAction, pendingKey, modals } = useQuickActionsState();
   const [query, setQuery] = useState("");
+  // Collapsed by default — with 18+ actions across four groups, this panel
+  // used to push everything else on the dashboard down below the fold. The
+  // search box and buttons only matter once someone actually wants them, so
+  // they stay hidden behind one click instead of always taking up the space.
+  const [expanded, setExpanded] = useState(false);
 
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = normalizedQuery
@@ -211,52 +216,65 @@ export function QuickActionsPanel() {
 
   return (
     <div className="card p-4">
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center justify-between gap-3 w-full text-right"
+        aria-expanded={expanded}
+      >
         <h2 className="font-semibold">פעולות מהירות</h2>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="חיפוש פעולה..."
-          className="rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm w-full sm:w-56"
-        />
-      </div>
+        <span className={`text-muted transition-transform ${expanded ? "rotate-180" : ""}`}>▾</span>
+      </button>
 
-      <div className="space-y-4">
-        {GROUP_ORDER.map((group) => {
-          const groupActions = filtered.filter((a) => a.group === group);
-          if (groupActions.length === 0) return null;
-          const { title, borderClass } = GROUP_INFO[group];
-          return (
-            <div key={group}>
-              <h3 className="text-xs font-semibold text-muted mb-2">{title}</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {groupActions.map((a) =>
-                  a.type === "link" ? (
-                    <Link
-                      key={a.key}
-                      href={a.href}
-                      className={`rounded-xl border-t-2 border border-border ${borderClass} bg-background hover:bg-surface transition-colors px-4 py-4 text-sm font-semibold text-center`}
-                    >
-                      {a.label}
-                    </Link>
-                  ) : (
-                    <button
-                      key={a.key}
-                      type="button"
-                      disabled={pendingKey === a.key}
-                      onClick={() => openAction(a.key)}
-                      className={`rounded-xl border-t-2 border border-border ${borderClass} bg-background hover:bg-surface transition-colors px-4 py-4 text-sm font-semibold text-center disabled:opacity-60`}
-                    >
-                      {pendingKey === a.key ? "…" : a.label}
-                    </button>
-                  ),
-                )}
-              </div>
-            </div>
-          );
-        })}
-        {filtered.length === 0 && <p className="text-sm text-muted text-center py-4">אין פעולה שתואמת את החיפוש</p>}
-      </div>
+      {expanded && (
+        <>
+          <div className="flex items-center justify-between gap-3 mb-3 mt-3 flex-wrap">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="חיפוש פעולה..."
+              className="rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm w-full sm:w-56"
+            />
+          </div>
+
+          <div className="space-y-4">
+            {GROUP_ORDER.map((group) => {
+              const groupActions = filtered.filter((a) => a.group === group);
+              if (groupActions.length === 0) return null;
+              const { title, borderClass } = GROUP_INFO[group];
+              return (
+                <div key={group}>
+                  <h3 className="text-xs font-semibold text-muted mb-2">{title}</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {groupActions.map((a) =>
+                      a.type === "link" ? (
+                        <Link
+                          key={a.key}
+                          href={a.href}
+                          className={`rounded-xl border-t-2 border border-border ${borderClass} bg-background hover:bg-surface transition-colors px-4 py-4 text-sm font-semibold text-center`}
+                        >
+                          {a.label}
+                        </Link>
+                      ) : (
+                        <button
+                          key={a.key}
+                          type="button"
+                          disabled={pendingKey === a.key}
+                          onClick={() => openAction(a.key)}
+                          className={`rounded-xl border-t-2 border border-border ${borderClass} bg-background hover:bg-surface transition-colors px-4 py-4 text-sm font-semibold text-center disabled:opacity-60`}
+                        >
+                          {pendingKey === a.key ? "…" : a.label}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {filtered.length === 0 && <p className="text-sm text-muted text-center py-4">אין פעולה שתואמת את החיפוש</p>}
+          </div>
+        </>
+      )}
       {modals}
     </div>
   );
