@@ -53,7 +53,7 @@ const ACTIONS: ActionDef[] = [
   { key: "expected_income", label: "הכנסה צפויה חדשה", type: "modal", group: "create" },
   { key: "manual_entry", label: "הכנסה / הוצאה ידנית", type: "modal", group: "create" },
   { key: "manual_entry_paste", label: "הדבקת רשימת הכנסות / הוצאות", type: "modal", group: "create" },
-  { key: "paste_income", label: "הדבק הכנסות", type: "link", href: "/incomes/new", group: "create" },
+  { key: "paste_income", label: "הכנסות מנדרים", type: "link", href: "/incomes/new", group: "create" },
   { key: "quick_issuance", label: "הנפקה מהירה", type: "link", href: "/checks#issuance-queue", group: "checks" },
   { key: "due_checks", label: "צ׳קים והעברות שהגיע תאריכם", type: "link", href: "/checks#due-checks", group: "checks" },
   { key: "checks", label: "צ׳קים והעברות", type: "link", href: "/checks", group: "checks" },

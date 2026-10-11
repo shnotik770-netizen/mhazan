@@ -168,7 +168,16 @@ export function PasteIncomeForm({
     const category = row.categoryId ? categoryById(row.categoryId) : undefined;
     if (!category) return false;
     if (category.is_split) {
-      return row.splitAllocations.some((a) => a.departmentId && a.amount > 0);
+      // Filling in just the first department used to be enough to count
+      // the whole row as done and move it out of the "needs review" group
+      // — the full split has to actually add up to the row's amount
+      // (same "נותר לשייך: 0" state SplitAllocationEditor already shows)
+      // before it's really finished, otherwise part of the income would
+      // silently go unassigned to any department.
+      const allocated = row.splitAllocations
+        .filter((a) => a.departmentId && a.amount > 0)
+        .reduce((sum, a) => sum + a.amount, 0);
+      return allocated > 0 && Math.abs(allocated - row.amount) < 0.01;
     }
     return category.department_id != null && row.amount > 0;
   }

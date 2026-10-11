@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   createInterDepartmentTransferBatch,
   createManualEntryBatch,
@@ -83,16 +84,12 @@ export function NewManualEntryButton({
           >
             + הכנסה / הוצאה
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("paste");
-              setOpen(true);
-            }}
+          <Link
+            href="/incomes/new"
             className="rounded-lg border border-border px-4 py-2 text-sm font-semibold hover:bg-background"
           >
-            הדבקת רשימה
-          </button>
+            הכנסות מנדרים
+          </Link>
         </div>
       )}
       {open && (
@@ -113,6 +110,7 @@ export function NewManualEntryButton({
                 isAdmin={isAdmin}
                 initialFormMode={mode === "transfer" ? "transfer" : "entries"}
                 onSaved={() => setOpen(false)}
+                onSwitchToPaste={() => setMode("paste")}
               />
             )}
           </div>
@@ -165,6 +163,7 @@ export function NewManualEntryFormMulti({
   isAdmin = false,
   initialFormMode = "entries",
   onSaved,
+  onSwitchToPaste,
 }: {
   departments: Department[];
   bankAccounts: BankAccount[];
@@ -172,6 +171,12 @@ export function NewManualEntryFormMulti({
   isAdmin?: boolean;
   initialFormMode?: "entries" | "transfer";
   onSaved?: () => void;
+  // Switches the surrounding modal into paste-a-list mode — folded in here
+  // (instead of its own separate top-level button) so entering a single
+  // row is the obvious default and bulk-paste is one click away for
+  // whoever actually needs it, rather than two equally-weighted buttons
+  // competing for attention before anyone has typed anything.
+  onSwitchToPaste?: () => void;
 }) {
   const router = useRouter();
   const [formMode, setFormMode] = useState<"entries" | "transfer">(initialFormMode);
@@ -266,24 +271,31 @@ export function NewManualEntryFormMulti({
     <div className="card p-4 space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="font-semibold">{formMode === "transfer" ? "העברה בין מחלקות" : "רישום ידני של הכנסה / הוצאה"}</h2>
-        {canTransfer && (
-          <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 text-xs">
-            <button
-              type="button"
-              onClick={() => setFormMode("entries")}
-              className={`rounded px-2 py-1 ${formMode === "entries" ? "bg-primary text-primary-foreground" : "text-muted"}`}
-            >
-              רישום רגיל
+        <div className="flex items-center gap-2">
+          {canTransfer && (
+            <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setFormMode("entries")}
+                className={`rounded px-2 py-1 ${formMode === "entries" ? "bg-primary text-primary-foreground" : "text-muted"}`}
+              >
+                רישום רגיל
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormMode("transfer")}
+                className={`rounded px-2 py-1 ${formMode === "transfer" ? "bg-primary text-primary-foreground" : "text-muted"}`}
+              >
+                העברה בין מחלקות
+              </button>
+            </div>
+          )}
+          {onSwitchToPaste && formMode === "entries" && (
+            <button type="button" onClick={onSwitchToPaste} className="text-xs text-primary underline">
+              הדבק רשימה
             </button>
-            <button
-              type="button"
-              onClick={() => setFormMode("transfer")}
-              className={`rounded px-2 py-1 ${formMode === "transfer" ? "bg-primary text-primary-foreground" : "text-muted"}`}
-            >
-              העברה בין מחלקות
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       {formMode === "transfer" ? (
         <>

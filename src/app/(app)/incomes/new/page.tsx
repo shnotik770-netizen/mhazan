@@ -15,7 +15,7 @@ export default async function NewIncomePage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">קליטת הכנסות בהדבקה</h1>
+        <h1 className="text-xl font-bold">הכנסות מנדרים</h1>
         <Link href="/incomes" className="text-sm text-primary">
           ← חזרה לרשימת הכנסות
         </Link>
