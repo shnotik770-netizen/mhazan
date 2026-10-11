@@ -233,7 +233,7 @@ export default async function DashboardPage() {
             <p className="text-sm text-muted mb-3">
               חוב אמיתי בין מחלקות שמנהלות חשבונות בנק נפרדים — לא כולל מחלקות שחולקות אותו חשבון בנק.
             </p>
-            <BankAccountLedgerTable pairs={bankAccountLedgerPairs} />
+            <BankAccountLedgerTable pairs={bankAccountLedgerPairs} compact />
           </div>
         </div>
       </div>

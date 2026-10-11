@@ -259,7 +259,11 @@ function ResetBetweenDepartmentsPanel({
 // link into that pair's own report page (BankAccountPairReport below), the
 // same way LedgerNetPositionTable links into a department's own report,
 // instead of expanding inline in place.
-export function BankAccountLedgerTable({ pairs }: { pairs: BankAccountLedgerPair[] }) {
+// compact: hides the per-pair transaction count and the "פתח דוח מלא" link
+// column — used on the dashboard, where the section header already links to
+// the full /ledger page, so a per-row link and a raw transaction count just
+// add noise. The full /ledger page itself still gets both.
+export function BankAccountLedgerTable({ pairs, compact = false }: { pairs: BankAccountLedgerPair[]; compact?: boolean }) {
   const columns: ColumnDef<BankAccountLedgerPair>[] = [
     {
       key: "debtor",
@@ -274,7 +278,7 @@ export function BankAccountLedgerTable({ pairs }: { pairs: BankAccountLedgerPair
       filterValue: (p) => deptNameById(p, p.creditorDepartmentId),
     },
     { key: "amount", label: "סכום נטו", sortValue: (p) => p.netAmount },
-    { key: "count", label: "מס׳ תנועות", sortValue: (p) => p.transactions.length },
+    ...(compact ? [] : [{ key: "count", label: "מס׳ תנועות", sortValue: (p: BankAccountLedgerPair) => p.transactions.length }]),
   ];
   const { rows: filtered, sort, toggleSort, filters, setColumnFilter } = useSortFilter(pairs, columns, {
     key: "amount",
@@ -300,7 +304,7 @@ export function BankAccountLedgerTable({ pairs }: { pairs: BankAccountLedgerPair
               setColumnFilter={setColumnFilter}
             />
           ))}
-          <th></th>
+          {!compact && <th></th>}
         </tr>
       </thead>
       <tbody>
@@ -309,12 +313,14 @@ export function BankAccountLedgerTable({ pairs }: { pairs: BankAccountLedgerPair
             <td className="font-semibold text-danger">{deptNameById(pair, pair.debtorDepartmentId)}</td>
             <td className="font-semibold text-success">{deptNameById(pair, pair.creditorDepartmentId)}</td>
             <td className="font-semibold">{formatCurrency(pair.netAmount)}</td>
-            <td>{pair.transactions.length}</td>
-            <td>
-              <Link href={`/ledger?accounts=${pair.pairId}`} className="text-sm text-primary underline">
-                פתח דוח מלא ⇦
-              </Link>
-            </td>
+            {!compact && <td>{pair.transactions.length}</td>}
+            {!compact && (
+              <td>
+                <Link href={`/ledger?accounts=${pair.pairId}`} className="text-sm text-primary underline">
+                  פתח דוח מלא ⇦
+                </Link>
+              </td>
+            )}
           </tr>
         ))}
       </tbody>
