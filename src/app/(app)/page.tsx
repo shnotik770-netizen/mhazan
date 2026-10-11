@@ -29,7 +29,6 @@ export default async function DashboardPage() {
     { data: bankAccounts },
     { data: pendingSummary },
     { data: interDeptBalances },
-    { data: ownBalances },
     { data: departments },
     { data: categories },
     { data: grants },
@@ -40,7 +39,6 @@ export default async function DashboardPage() {
     supabase.from("bank_accounts").select("*, departments!bank_accounts_department_id_fkey(name)").order("bank_name"),
     supabase.from("v_pending_queue_summary").select("*"),
     supabase.rpc("get_inter_department_balance_now_eom"),
-    supabase.rpc("get_department_own_balance_now_eom"),
     supabase.from("departments").select("*"),
     supabase.from("categories").select("id, name, department_id").order("name"),
     supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
@@ -64,9 +62,9 @@ export default async function DashboardPage() {
   // A department that owns its own bank account already gets any cross-
   // account debt tracked precisely (with full transaction detail) by the
   // "חוב בין חשבונות בנק" table below — including it again in "התחשבנות
-  // פנימית" would show the same debt twice. Departments WITH their own
-  // account get their own separate balance table instead (their real
-  // income/expense net, not a cross-department one).
+  // פנימית" would show the same debt twice. Its own real income/expense
+  // balance has its own separate table on the full department reports
+  // (/ledger) instead, not duplicated here on the dashboard.
   const departmentsWithOwnAccount = new Set((bankAccounts ?? []).map((b) => b.department_id).filter((id): id is string => Boolean(id)));
 
   // A balance this small/empty after rounding isn't worth a row — mostly
@@ -76,15 +74,6 @@ export default async function DashboardPage() {
 
   const internalBalanceRows: DepartmentBalanceRow[] = (interDeptBalances ?? [])
     .filter((r) => !departmentsWithOwnAccount.has(r.department_id) && isMeaningful(r))
-    .map((r) => ({
-      departmentId: r.department_id,
-      departmentName: deptName(r.department_id),
-      netNow: Number(r.net_now ?? 0),
-      netEndOfMonth: Number(r.net_end_of_month ?? 0),
-    }));
-
-  const ownBalanceRows: DepartmentBalanceRow[] = (ownBalances ?? [])
-    .filter((r) => departmentsWithOwnAccount.has(r.department_id) && isMeaningful(r))
     .map((r) => ({
       departmentId: r.department_id,
       departmentName: deptName(r.department_id),
@@ -236,27 +225,17 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="card p-4 overflow-x-auto">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="font-semibold">התחשבנות פנימית בין מחלקות</h2>
-              <Link href="/ledger" className="text-sm text-primary">
-                לדוח המלא ←
-              </Link>
-            </div>
-            <p className="text-sm text-muted mb-3">
-              מחלקות ללא חשבון בנק משלהן (החולקות חשבון בנק של מחלקה אחרת) — מצב החוב/זכות שלהן מול החשבון שמנהל אותן, ממש עכשיו, ובסוגריים הצפי לסוף החודש. חוב בין מחלקות עם חשבונות נפרדים מופיע למעלה, ב&quot;חוב בין חשבונות בנק&quot;.
-            </p>
-            <DepartmentBalanceTable rows={internalBalanceRows} emptyMessage="אין חובות פנימיים פתוחים" />
+        <div className="card p-4 overflow-x-auto">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-semibold">התחשבנות פנימית בין מחלקות</h2>
+            <Link href="/ledger" className="text-sm text-primary">
+              לדוח המלא ←
+            </Link>
           </div>
-
-          <div className="card p-4 overflow-x-auto">
-            <h2 className="font-semibold mb-1">מאזן מחלקות עם חשבון בנק משלהן</h2>
-            <p className="text-sm text-muted mb-3">
-              ההכנסות פחות ההוצאות בפועל של כל מחלקה שמנהלת חשבון בנק משלה, ממש עכשיו, ובסוגריים הצפי לסוף החודש.
-            </p>
-            <DepartmentBalanceTable rows={ownBalanceRows} emptyMessage="אין נתונים" />
-          </div>
+          <p className="text-sm text-muted mb-3">
+            מחלקות ללא חשבון בנק משלהן (החולקות חשבון בנק של מחלקה אחרת) — מצב החוב/זכות שלהן מול החשבון שמנהל אותן, ממש עכשיו, ובסוגריים הצפי לסוף החודש. חוב בין מחלקות עם חשבונות נפרדים מופיע למעלה, ב&quot;חוב בין חשבונות בנק&quot;; מאזן מחלקות עם חשבון עצמאי נמצא בדוחות המחלקות המלאים.
+          </p>
+          <DepartmentBalanceTable rows={internalBalanceRows} emptyMessage="אין חובות פנימיים פתוחים" />
         </div>
       </div>
     </div>

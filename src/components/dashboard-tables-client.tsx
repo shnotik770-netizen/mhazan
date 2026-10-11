@@ -119,7 +119,10 @@ export function DepartmentBalanceTable({ rows, emptyMessage }: { rows: Departmen
     { key: "department", label: "מחלקה", sortValue: (r) => r.departmentName, filterValue: (r) => r.departmentName },
     { key: "now", label: "מצב עכשיו", sortValue: (r) => r.netNow },
   ];
-  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(rows, columns);
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(rows, columns, {
+    key: "department",
+    dir: "asc",
+  });
 
   return (
     <table className="data-table">

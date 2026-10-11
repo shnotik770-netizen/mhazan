@@ -64,9 +64,9 @@ function pairKey(a: string, b: string): string {
 }
 
 // Debt BETWEEN DEPARTMENTS THAT EACH MANAGE THEIR OWN BANK ACCOUNT, as
-// opposed to the older "מי חייב למי" view (ledger-tables-client.tsx) which
-// nets debt between every department regardless of who actually owns an
-// account. A regular department report is that department against the one
+// opposed to "התחשבנות פנימית בין מחלקות" (DepartmentBalanceTable) which
+// nets a department without its own account against whichever account
+// manages it. A regular department report is that department against the one
 // bank account its own money flows through; this report is specifically
 // about the debt BETWEEN two departments that each manage a separate
 // account — most departments don't manage their own account at all (they
