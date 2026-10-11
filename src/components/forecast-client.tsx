@@ -56,7 +56,7 @@ export function BankBalancePanel({
   }
 
   return (
-    <div className="card p-4">
+    <div>
       <p className="text-sm text-muted mb-1">יתרת פתיחה נוכחית בבנק</p>
       {!editing ? (
         <div className="flex items-center gap-3">
@@ -109,7 +109,7 @@ export function ExpectedIncomeManager({
   const needsConfirmationCount = pending.filter((e) => dueDateIso(e.expected_date) <= todayIso()).length;
 
   return (
-    <div className="card p-4 space-y-3">
+    <div className="space-y-3">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 className="font-semibold">הכנסות עתידיות צפויות (הערכה, לא מדוייקת)</h2>

@@ -2,12 +2,12 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { getAccessibleBankAccountIds } from "@/lib/bank-access";
-import { formatCurrency, formatDate, daysAgoLabel } from "@/lib/format";
+import { formatCurrency, formatDate, daysAgoLabel, todayIso } from "@/lib/format";
 import { safeErrorMessage } from "@/lib/safe-error";
+import { ForecastAccountSelect } from "@/components/forecast-account-select-client";
 import { BankBalancePanel, ExpectedIncomeManager } from "@/components/forecast-client";
 import { ForecastDailyTable } from "@/components/forecast-daily-table-client";
-import { ForecastDayLookup } from "@/components/forecast-day-lookup-client";
-import { ForecastFilterBar } from "@/components/forecast-filter-bar-client";
+import { ForecastHorizonPicker } from "@/components/forecast-horizon-picker-client";
 import {
   ForecastSimulationBanner,
   ForecastSimulationPanel,
@@ -28,6 +28,17 @@ function daysUntilEndOfMonth(monthStr: string): number {
   return Math.max(1, diffDays);
 }
 
+// Same idea as daysUntilEndOfMonth, but for an exact date chosen in the
+// "תאריך מדויק" mode of the horizon picker instead of a month cutoff.
+function daysUntilDate(dateStr: string): number {
+  const target = new Date(`${dateStr}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+  return Math.max(1, diffDays);
+}
+
 function monthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -43,9 +54,9 @@ function monthLabel(monthStr: string): string {
 export default async function ForecastPage({
   searchParams,
 }: {
-  searchParams: Promise<{ account?: string; upto?: string }>;
+  searchParams: Promise<{ account?: string; upto?: string; date?: string }>;
 }) {
-  const { account, upto } = await searchParams;
+  const { account, upto, date } = await searchParams;
   const currentMonth = monthKey(new Date());
   const uptoMonthOptions = Array.from({ length: 12 }, (_, i) => {
     const d = new Date();
@@ -54,7 +65,14 @@ export default async function ForecastPage({
     return monthKey(d);
   });
   const uptoMonth = upto && uptoMonthOptions.includes(upto) ? upto : currentMonth;
-  const horizonDays = daysUntilEndOfMonth(uptoMonth);
+  // "תאריך מדויק" (an exact date) takes priority over "עד סוף חודש" — the
+  // horizon picker only ever sets one of the two at a time, but if both
+  // somehow ended up in the URL, an explicit date is the more specific
+  // choice.
+  const today = todayIso();
+  const horizonMode: "date" | "month" = date && date >= today ? "date" : "month";
+  const horizonDate = horizonMode === "date" ? date! : today;
+  const horizonDays = horizonMode === "date" ? daysUntilDate(horizonDate) : daysUntilEndOfMonth(uptoMonth);
 
   const user = await requireUser();
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
@@ -179,44 +197,12 @@ export default async function ForecastPage({
       })()
     : [];
 
-  // Actual recorded income per month, for the bank account's department —
-  // a look back at real history alongside the forward-looking forecast.
-  const monthlyIncomeRows = selectedAccount
-    ? await (async () => {
-        const twelveMonthsAgo = new Date();
-        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
-        twelveMonthsAgo.setDate(1);
-        const { data: incomeRows } = await supabase
-          .from("incomes")
-          .select("date, amount")
-          .eq("bank_account_id", selectedAccount.id)
-          .gte("date", twelveMonthsAgo.toISOString().slice(0, 10))
-          .order("date");
-        const byMonth = new Map<string, number>();
-        for (const r of incomeRows ?? []) {
-          const key = r.date.slice(0, 7);
-          byMonth.set(key, (byMonth.get(key) ?? 0) + Number(r.amount));
-        }
-        return [...byMonth.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
-      })()
-    : [];
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold">תחזית תזרים מזומנים</h1>
         <p className="text-sm text-muted">יתרה צפויה = יתרת בנק נוכחית − צ׳קים בחוץ − חיובים קבועים עתידיים + צפי הכנסות</p>
       </div>
-
-      <ForecastFilterBar
-        bankAccountOptions={bankAccounts.map((b) => ({
-          id: b.id,
-          label: `${(b as { departments: { name: string } | null }).departments?.name ?? ""} — ${b.bank_name} (${b.account_number})`,
-        }))}
-        selectedAccountId={selectedAccountId}
-        uptoMonth={uptoMonth}
-        uptoMonthOptions={uptoMonthOptions.map((m) => ({ value: m, label: monthLabel(m) }))}
-      />
 
       {error && <div className="card p-4 bg-danger-bg text-danger text-sm">{safeErrorMessage(error)}</div>}
 
@@ -233,59 +219,62 @@ export default async function ForecastPage({
             runningBalance: Number(row.running_balance),
           }))}
         >
-          {isAdmin ? (
-            <BankBalancePanel
-              bankAccountId={selectedAccount.id}
-              currentBalance={Number(selectedAccount.current_balance)}
-              balanceAsOf={selectedAccount.balance_as_of}
+          {/* 1) בחירת חשבון, 2) יתרת פתיחה, 3) הכנסות צפויות — כולן בריבוע אחד */}
+          <div className="card p-4 space-y-4">
+            <ForecastAccountSelect
+              bankAccountOptions={bankAccounts.map((b) => ({
+                id: b.id,
+                label: `${(b as { departments: { name: string } | null }).departments?.name ?? ""} — ${b.bank_name} (${b.account_number})`,
+              }))}
+              selectedAccountId={selectedAccountId}
             />
-          ) : (
-            <div className="card p-4">
-              <p className="text-sm text-muted mb-1">יתרת פתיחה נוכחית</p>
-              <p className="text-2xl font-bold">{formatCurrency(Number(selectedAccount.current_balance))}</p>
-              <p className="text-xs text-muted">{daysAgoLabel(selectedAccount.balance_as_of)}</p>
-            </div>
-          )}
 
-          {isAdmin && (
-            <ExpectedIncomeManager
-              bankAccountId={selectedAccount.id}
-              bankAccounts={bankAccounts.map((b) => ({ id: b.id, bank_name: b.bank_name, account_number: b.account_number }))}
-              expectedIncomes={expectedIncomes}
-            />
-          )}
+            <hr className="border-border" />
+
+            {isAdmin ? (
+              <BankBalancePanel
+                bankAccountId={selectedAccount.id}
+                currentBalance={Number(selectedAccount.current_balance)}
+                balanceAsOf={selectedAccount.balance_as_of}
+              />
+            ) : (
+              <div>
+                <p className="text-sm text-muted mb-1">יתרת פתיחה נוכחית</p>
+                <p className="text-2xl font-bold">{formatCurrency(Number(selectedAccount.current_balance))}</p>
+                <p className="text-xs text-muted">{daysAgoLabel(selectedAccount.balance_as_of)}</p>
+              </div>
+            )}
+
+            {isAdmin && (
+              <>
+                <hr className="border-border" />
+                <ExpectedIncomeManager
+                  bankAccountId={selectedAccount.id}
+                  bankAccounts={bankAccounts.map((b) => ({ id: b.id, bank_name: b.bank_name, account_number: b.account_number }))}
+                  expectedIncomes={expectedIncomes}
+                />
+              </>
+            )}
+          </div>
+
+          <ForecastHorizonPicker
+            selectedAccountId={selectedAccountId}
+            mode={horizonMode}
+            date={horizonDate}
+            month={uptoMonth}
+            monthOptions={uptoMonthOptions.map((m) => ({ value: m, label: monthLabel(m) }))}
+          />
 
           <ForecastSimulationBanner />
-          <ForecastDayLookup />
 
-          {monthlyIncomeRows.length > 0 && (
-            <div className="card p-4 overflow-x-auto">
-              <h2 className="font-semibold mb-2">הכנסות בפועל לפי חודש (12 חודשים אחרונים)</h2>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>חודש</th>
-                    <th>סה״כ הכנסות</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthlyIncomeRows.map(([month, total]) => (
-                    <tr key={month}>
-                      <td>{month}</td>
-                      <td className="font-semibold text-success">{formatCurrency(total)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <ForecastSimulationPanel monthlyCards={monthlyCards} dailyRowsByMonth={dailyRowsByMonth} />
 
           {undatedForecast.length > 0 && (
             <div className="card p-4 bg-warning-bg border-warning/40">
               <h2 className="font-semibold mb-1 text-warning">צ׳קים/העברות מאושרים ללא תאריך יעד</h2>
               <p className="text-xs text-muted mb-2">
                 מאושרים לתשלום אך טרם נקבע להם תאריך — לכן אינם משויכים לחודש מסוים ולא נכללים בסיכום היומי/חודשי
-                וביתרה החזויה למטה. סכום זה מייצג התחייבות עתידית אמיתית שעדיין לא ניתן לתזמן.
+                וביתרה החזויה למעלה. סכום זה מייצג התחייבות עתידית אמיתית שעדיין לא ניתן לתזמן.
               </p>
               <p className="text-lg font-bold text-danger mb-2">{formatCurrency(Math.abs(undatedTotal))}</p>
               <ul className="text-sm space-y-1">
@@ -298,8 +287,6 @@ export default async function ForecastPage({
               </ul>
             </div>
           )}
-
-          <ForecastSimulationPanel monthlyCards={monthlyCards} dailyRowsByMonth={dailyRowsByMonth} />
         </ForecastSimulationProvider>
       ) : (
         <>
