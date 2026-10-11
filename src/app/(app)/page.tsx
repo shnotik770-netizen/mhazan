@@ -5,7 +5,7 @@ import { todayIso } from "@/lib/format";
 import { NewManualEntryButton, PendingManualEntriesTable } from "@/components/manual-entries-client";
 import { UnifiedCheckForm } from "@/components/unified-check-form";
 import { QuickActionsPanel } from "@/components/quick-actions-fab";
-import { BankAccountsTable, LedgerBalancesTable } from "@/components/dashboard-tables-client";
+import { BankAccountsTable, DepartmentBalanceTable, type DepartmentBalanceRow } from "@/components/dashboard-tables-client";
 import { getBankAccountLedgerData } from "@/lib/bank-account-ledger-data";
 import { BankAccountLedgerTable } from "@/components/bank-account-ledger-client";
 
@@ -28,7 +28,8 @@ export default async function DashboardPage() {
   const [
     { data: bankAccounts },
     { data: pendingSummary },
-    { data: ledgerBalances },
+    { data: interDeptBalances },
+    { data: ownBalances },
     { data: departments },
     { data: categories },
     { data: grants },
@@ -38,7 +39,8 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase.from("bank_accounts").select("*, departments!bank_accounts_department_id_fkey(name)").order("bank_name"),
     supabase.from("v_pending_queue_summary").select("*"),
-    supabase.from("v_inter_department_balances").select("*"),
+    supabase.rpc("get_inter_department_balance_now_eom"),
+    supabase.rpc("get_department_own_balance_now_eom"),
     supabase.from("departments").select("*"),
     supabase.from("categories").select("id, name, department_id").order("name"),
     supabase.from("user_department_access").select("department_id").eq("user_id", user.id),
@@ -57,20 +59,38 @@ export default async function DashboardPage() {
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
 
-  const deptName = (id: string | null) => departments?.find((d) => d.id === id)?.name ?? "—";
+  const deptName = (id: string) => departments?.find((d) => d.id === id)?.name ?? "—";
 
   // A department that owns its own bank account already gets any cross-
   // account debt tracked precisely (with full transaction detail) by the
-  // "חוב בין חשבונות בנק" table below — including it here too would show
-  // the same debt twice. This simpler table is for the departments that
-  // share another department's account and have no such account-level
-  // tracking of their own.
+  // "חוב בין חשבונות בנק" table below — including it again in "התחשבנות
+  // פנימית" would show the same debt twice. Departments WITH their own
+  // account get their own separate balance table instead (their real
+  // income/expense net, not a cross-department one).
   const departmentsWithOwnAccount = new Set((bankAccounts ?? []).map((b) => b.department_id).filter((id): id is string => Boolean(id)));
-  const internalLedgerBalances = (ledgerBalances ?? []).filter(
-    (row) =>
-      !(row.debtor_department_id && departmentsWithOwnAccount.has(row.debtor_department_id)) &&
-      !(row.creditor_department_id && departmentsWithOwnAccount.has(row.creditor_department_id)),
-  );
+
+  // A balance this small/empty after rounding isn't worth a row — mostly
+  // departments whose only ledger entries just got cleaned up.
+  const isMeaningful = (r: { net_now: number | null; net_end_of_month: number | null }) =>
+    Math.abs(Number(r.net_now ?? 0)) > 0.005 || Math.abs(Number(r.net_end_of_month ?? 0)) > 0.005;
+
+  const internalBalanceRows: DepartmentBalanceRow[] = (interDeptBalances ?? [])
+    .filter((r) => !departmentsWithOwnAccount.has(r.department_id) && isMeaningful(r))
+    .map((r) => ({
+      departmentId: r.department_id,
+      departmentName: deptName(r.department_id),
+      netNow: Number(r.net_now ?? 0),
+      netEndOfMonth: Number(r.net_end_of_month ?? 0),
+    }));
+
+  const ownBalanceRows: DepartmentBalanceRow[] = (ownBalances ?? [])
+    .filter((r) => departmentsWithOwnAccount.has(r.department_id) && isMeaningful(r))
+    .map((r) => ({
+      departmentId: r.department_id,
+      departmentName: deptName(r.department_id),
+      netNow: Number(r.net_now ?? 0),
+      netEndOfMonth: Number(r.net_end_of_month ?? 0),
+    }));
 
   const totalPending = (pendingSummary ?? []).reduce((sum, p) => sum + Number(p.pending_count ?? 0), 0);
   const pendingCountFor = (source: string) =>
@@ -216,24 +236,27 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <div className="card p-4 overflow-x-auto">
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="font-semibold">התחשבנות פנימית בין מחלקות</h2>
-            <Link href="/ledger" className="text-sm text-primary">
-              לדוח המלא ←
-            </Link>
+        <div className="space-y-4">
+          <div className="card p-4 overflow-x-auto">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-semibold">התחשבנות פנימית בין מחלקות</h2>
+              <Link href="/ledger" className="text-sm text-primary">
+                לדוח המלא ←
+              </Link>
+            </div>
+            <p className="text-sm text-muted mb-3">
+              מחלקות ללא חשבון בנק משלהן (החולקות חשבון בנק של מחלקה אחרת) — מצב החוב/זכות שלהן מול החשבון שמנהל אותן, ממש עכשיו, ובסוגריים הצפי לסוף החודש. חוב בין מחלקות עם חשבונות נפרדים מופיע למעלה, ב&quot;חוב בין חשבונות בנק&quot;.
+            </p>
+            <DepartmentBalanceTable rows={internalBalanceRows} emptyMessage="אין חובות פנימיים פתוחים" />
           </div>
-          <p className="text-sm text-muted mb-3">
-            רק מחלקות ללא חשבון בנק משלהן (החולקות חשבון בנק של מחלקה אחרת) — חוב בין מחלקות עם חשבונות נפרדים מופיע למעלה, ב&quot;חוב בין חשבונות בנק&quot;.
-          </p>
-          <LedgerBalancesTable
-            rows={internalLedgerBalances.map((row, i) => ({
-              key: String(i),
-              debtorName: deptName(row.debtor_department_id),
-              creditorName: deptName(row.creditor_department_id),
-              amount: Number(row.net_amount),
-            }))}
-          />
+
+          <div className="card p-4 overflow-x-auto">
+            <h2 className="font-semibold mb-1">מאזן מחלקות עם חשבון בנק משלהן</h2>
+            <p className="text-sm text-muted mb-3">
+              ההכנסות פחות ההוצאות בפועל של כל מחלקה שמנהלת חשבון בנק משלה, ממש עכשיו, ובסוגריים הצפי לסוף החודש.
+            </p>
+            <DepartmentBalanceTable rows={ownBalanceRows} emptyMessage="אין נתונים" />
+          </div>
         </div>
       </div>
     </div>

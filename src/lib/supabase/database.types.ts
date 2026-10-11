@@ -2063,6 +2063,22 @@ export type Database = {
           source: string
         }[]
       }
+      get_department_own_balance_now_eom: {
+        Args: never
+        Returns: {
+          department_id: string
+          net_end_of_month: number
+          net_now: number
+        }[]
+      }
+      get_inter_department_balance_now_eom: {
+        Args: never
+        Returns: {
+          department_id: string
+          net_end_of_month: number
+          net_now: number
+        }[]
+      }
       get_pending_schedule_confirmations: {
         Args: never
         Returns: {

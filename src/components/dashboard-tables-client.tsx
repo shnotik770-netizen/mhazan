@@ -97,18 +97,27 @@ export function BankAccountsTable({ accounts, showForecast = false }: { accounts
   );
 }
 
-export type LedgerBalanceRow = {
-  key: string;
-  debtorName: string;
-  creditorName: string;
-  amount: number;
+export type DepartmentBalanceRow = {
+  departmentId: string;
+  departmentName: string;
+  netNow: number;
+  netEndOfMonth: number;
 };
 
-export function LedgerBalancesTable({ rows }: { rows: LedgerBalanceRow[] }) {
-  const columns: ColumnDef<LedgerBalanceRow>[] = [
-    { key: "debtor", label: "חייב", sortValue: (r) => r.debtorName, filterValue: (r) => r.debtorName },
-    { key: "creditor", label: "זכאי", sortValue: (r) => r.creditorName, filterValue: (r) => r.creditorName },
-    { key: "amount", label: "סכום", sortValue: (r) => r.amount },
+function balanceLabel(amount: number): string {
+  return amount >= 0 ? "זכאית" : "חייבת";
+}
+
+// One row per department instead of one per debtor/creditor pair — a pair
+// only means something for real cross-account debt (see "חוב בין חשבונות
+// בנק"); for everything else, what actually matters to an admin is "where
+// does this department stand right now" plus where that's headed by month
+// end, not which specific other department's account the money happens to
+// sit in at the moment.
+export function DepartmentBalanceTable({ rows, emptyMessage }: { rows: DepartmentBalanceRow[]; emptyMessage: string }) {
+  const columns: ColumnDef<DepartmentBalanceRow>[] = [
+    { key: "department", label: "מחלקה", sortValue: (r) => r.departmentName, filterValue: (r) => r.departmentName },
+    { key: "now", label: "מצב עכשיו", sortValue: (r) => r.netNow },
   ];
   const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(rows, columns);
 
@@ -131,16 +140,22 @@ export function LedgerBalancesTable({ rows }: { rows: LedgerBalanceRow[] }) {
       </thead>
       <tbody>
         {sorted.map((r) => (
-          <tr key={r.key}>
-            <td>{r.debtorName}</td>
-            <td>{r.creditorName}</td>
-            <td>{formatCurrency(r.amount)}</td>
+          <tr key={r.departmentId}>
+            <td>{r.departmentName}</td>
+            <td>
+              <span className={`font-semibold ${r.netNow >= 0 ? "text-success" : "text-danger"}`}>
+                {balanceLabel(r.netNow)} {formatCurrency(Math.abs(r.netNow))}
+              </span>
+              <div className="text-xs text-muted font-normal">
+                (צפי לסוף החודש: {balanceLabel(r.netEndOfMonth)} {formatCurrency(Math.abs(r.netEndOfMonth))})
+              </div>
+            </td>
           </tr>
         ))}
         {sorted.length === 0 && (
           <tr>
-            <td colSpan={3} className="text-center text-muted py-6">
-              {rows.length === 0 ? "אין חובות פנימיים פתוחים" : "אין תוצאות"}
+            <td colSpan={2} className="text-center text-muted py-6">
+              {emptyMessage}
             </td>
           </tr>
         )}
