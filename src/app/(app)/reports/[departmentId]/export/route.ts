@@ -61,11 +61,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ dep
   const { data: department } = await supabase.from("departments").select("name").eq("id", departmentId).single();
   if (!department) return NextResponse.json({ error: "מחלקה לא נמצאה" }, { status: 404 });
 
-  const { pastRows, futureRows, monthlyFlow } = await getDepartmentReportData(departmentId);
+  const { pastRows, futureRows, monthlyFlow, undatedExpenseRows } = await getDepartmentReportData(departmentId);
 
   const workbook = new ExcelJS.Workbook();
   addRowsSheet(workbook, "תנועות עד היום", pastRows);
   addRowsSheet(workbook, "תנועות עתידיות", futureRows);
+  if (undatedExpenseRows.length > 0) addRowsSheet(workbook, "מאושר ללא תאריך", undatedExpenseRows);
 
   const flowSheet = workbook.addWorksheet("תזרים חודשי", { views: [{ rightToLeft: true }] });
   flowSheet.columns = [

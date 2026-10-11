@@ -104,6 +104,10 @@ export type DepartmentReportData = {
   futureMonths: string[];
   monthlyFlow: MonthlyFlowRow[];
   missedStandingOrders: MissedStandingOrderNote[];
+  // Approved checks/transfers with no due_date yet — excluded from every
+  // total/table above (see undatedExpenseRows below for why), shown here
+  // instead so the commitment isn't lost track of.
+  undatedExpenseRows: CombinedRow[];
 };
 
 // All the data assembly behind a department's report — shared by the
@@ -496,9 +500,21 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
     });
   }
 
+  // An approved check with no due_date yet (still in the issuance queue)
+  // hasn't actually left the account — counting it toward today's balance
+  // would treat a commitment that isn't even scheduled yet as already
+  // happened, and it has no calendar month to sit in for the monthly
+  // cash-flow table either, which used to make the two numbers silently
+  // disagree. Kept out of the whole past/future pipeline below and shown
+  // in its own section instead (see undatedExpenseRows below) — the same
+  // "UNDATED" treatment get_cash_flow_forecast already uses for the
+  // bank-level forecast on /forecast.
+  const undatedExpenseRows = expenseRows.filter((r) => !r.date);
+  const datedExpenseRows = expenseRows.filter((r) => r.date);
+
   const allRows = [
     ...incomeRows,
-    ...expenseRows,
+    ...datedExpenseRows,
     ...manualRows,
     ...creditedTransferRows,
     ...pettyCashRows,
@@ -677,5 +693,6 @@ export async function getDepartmentReportData(departmentId: string): Promise<Dep
       categoryName: m.category_name,
       amount: Number(m.amount),
     })),
+    undatedExpenseRows,
   };
 }

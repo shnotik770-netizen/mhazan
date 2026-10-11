@@ -30,7 +30,9 @@ export async function DepartmentReport({
     futureMonths,
     monthlyFlow,
     missedStandingOrders,
+    undatedExpenseRows,
   } = await getDepartmentReportData(departmentId);
+  const undatedTotal = undatedExpenseRows.reduce((sum, r) => sum + -r.amount, 0);
 
   return (
     <div className="space-y-4">
@@ -65,6 +67,25 @@ export async function DepartmentReport({
           </div>
         </div>
       </div>
+
+      {undatedExpenseRows.length > 0 && (
+        <div className="card p-4 bg-warning-bg border-warning/40">
+          <h2 className="font-semibold mb-1 text-warning">צ׳קים/העברות מאושרים ללא תאריך עדיין</h2>
+          <p className="text-xs text-muted mb-2">
+            אושרו לתשלום אך טרם נקבע להם תאריך — לכן אינם נכללים ב&quot;מצב נוכחי&quot; או ב&quot;תזרים חודשי מלא&quot;
+            למעלה, בדיוק כמו בקשה שעדיין לא אושרה: ברגע שייקבע להם תאריך הם ייכנסו לחישוב.
+          </p>
+          <p className="text-lg font-bold text-danger mb-2">{formatCurrency(undatedTotal)}</p>
+          <ul className="text-sm space-y-1">
+            {undatedExpenseRows.map((r) => (
+              <li key={r.id} className="flex items-center justify-between gap-2 border-t border-border/60 pt-1 first:border-t-0 first:pt-0">
+                <span>{r.description}</span>
+                <span className="font-medium text-danger">{formatCurrency(-r.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <DepartmentMonthlyCashFlow rows={monthlyFlow} />
 
