@@ -187,27 +187,6 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      <div className="card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold">מאזן בנקים</h2>
-          <Link href="/forecast" className="text-sm text-primary">
-            תחזית תזרים ←
-          </Link>
-        </div>
-        <BankAccountCards
-          accounts={(bankAccounts ?? []).map((b) => ({
-            id: b.id,
-            departmentName: (b as { departments: { name: string } | null }).departments?.name ?? null,
-            bank_name: b.bank_name,
-            account_number: b.account_number,
-            current_balance: Number(b.current_balance),
-            balance_as_of: b.balance_as_of,
-            todayBalance: forecastByAccount.get(b.id)?.todayBalance,
-            endOfMonthBalance: forecastByAccount.get(b.id)?.endOfMonthBalance,
-          }))}
-        />
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card p-4 overflow-x-auto">
           <div className="flex items-center justify-between mb-1">
@@ -222,17 +201,40 @@ export default async function DashboardPage() {
           <DepartmentBalanceTable rows={internalBalanceRows} emptyMessage="אין חובות פנימיים פתוחים" />
         </div>
 
-        <div className="card p-4 overflow-x-auto">
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="font-semibold">חוב בין חשבונות בנק</h2>
-            <Link href="/ledger" className="text-sm text-primary">
-              לדוח המלא ←
-            </Link>
+        <div className="space-y-4">
+          <div className="card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold">מאזן בנקים</h2>
+              <Link href="/forecast" className="text-sm text-primary">
+                תחזית תזרים ←
+              </Link>
+            </div>
+            <BankAccountCards
+              accounts={(bankAccounts ?? []).map((b) => ({
+                id: b.id,
+                departmentName: (b as { departments: { name: string } | null }).departments?.name ?? null,
+                bank_name: b.bank_name,
+                account_number: b.account_number,
+                current_balance: Number(b.current_balance),
+                balance_as_of: b.balance_as_of,
+                todayBalance: forecastByAccount.get(b.id)?.todayBalance,
+                endOfMonthBalance: forecastByAccount.get(b.id)?.endOfMonthBalance,
+              }))}
+            />
           </div>
-          <p className="text-sm text-muted mb-3">
-            חוב אמיתי בין מחלקות שמנהלות חשבונות בנק נפרדים — לא כולל מחלקות שחולקות אותו חשבון בנק.
-          </p>
-          <BankAccountLedgerTable pairs={bankAccountLedgerPairs} />
+
+          <div className="card p-4 overflow-x-auto">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-semibold">חוב בין חשבונות בנק</h2>
+              <Link href="/ledger" className="text-sm text-primary">
+                לדוח המלא ←
+              </Link>
+            </div>
+            <p className="text-sm text-muted mb-3">
+              חוב אמיתי בין מחלקות שמנהלות חשבונות בנק נפרדים — לא כולל מחלקות שחולקות אותו חשבון בנק.
+            </p>
+            <BankAccountLedgerTable pairs={bankAccountLedgerPairs} />
+          </div>
         </div>
       </div>
     </div>
