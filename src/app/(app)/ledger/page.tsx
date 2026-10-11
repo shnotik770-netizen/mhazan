@@ -137,7 +137,11 @@ export default async function LedgerPage({
             <p className="text-sm text-muted mb-3">
               מחלקות ללא חשבון בנק משלהן (החולקות חשבון בנק של מחלקה אחרת) — מצב החוב/זכות שלהן מול החשבון שמנהל אותן, ממש עכשיו, ובסוגריים הצפי לסוף החודש.
             </p>
-            <DepartmentBalanceTable rows={internalBalanceRows} emptyMessage="אין חובות פנימיים פתוחים" />
+            <DepartmentBalanceTable
+              rows={internalBalanceRows}
+              emptyMessage="אין חובות פנימיים פתוחים"
+              departmentHref={(id) => `/ledger?department=${id}`}
+            />
           </div>
 
           <div className="card p-4 overflow-x-auto">
@@ -145,7 +149,11 @@ export default async function LedgerPage({
             <p className="text-sm text-muted mb-3">
               ההכנסות פחות ההוצאות בפועל של כל מחלקה שמנהלת חשבון בנק משלה, ממש עכשיו, ובסוגריים הצפי לסוף החודש.
             </p>
-            <DepartmentBalanceTable rows={ownBalanceRows} emptyMessage="אין נתונים" />
+            <DepartmentBalanceTable
+              rows={ownBalanceRows}
+              emptyMessage="אין נתונים"
+              departmentHref={(id) => `/ledger?department=${id}`}
+            />
           </div>
 
           <div className="card p-4">

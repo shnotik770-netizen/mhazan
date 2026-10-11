@@ -114,7 +114,18 @@ function balanceLabel(amount: number): string {
 // does this department stand right now" plus where that's headed by month
 // end, not which specific other department's account the money happens to
 // sit in at the moment.
-export function DepartmentBalanceTable({ rows, emptyMessage }: { rows: DepartmentBalanceRow[]; emptyMessage: string }) {
+export function DepartmentBalanceTable({
+  rows,
+  emptyMessage,
+  departmentHref,
+}: {
+  rows: DepartmentBalanceRow[];
+  emptyMessage: string;
+  // Only the full department-reports page (/ledger) wants a department's
+  // name to jump straight into its own report — the dashboard just links
+  // out to that page in general via its own "לדוח המלא" link instead.
+  departmentHref?: (departmentId: string) => string;
+}) {
   const columns: ColumnDef<DepartmentBalanceRow>[] = [
     { key: "department", label: "מחלקה", sortValue: (r) => r.departmentName, filterValue: (r) => r.departmentName },
     { key: "now", label: "מצב עכשיו", sortValue: (r) => r.netNow },
@@ -144,7 +155,15 @@ export function DepartmentBalanceTable({ rows, emptyMessage }: { rows: Departmen
       <tbody>
         {sorted.map((r) => (
           <tr key={r.departmentId}>
-            <td>{r.departmentName}</td>
+            <td>
+              {departmentHref ? (
+                <Link href={departmentHref(r.departmentId)} className="underline decoration-dotted hover:decoration-solid">
+                  {r.departmentName}
+                </Link>
+              ) : (
+                r.departmentName
+              )}
+            </td>
             <td>
               <span className={`font-semibold ${r.netNow >= 0 ? "text-success" : "text-danger"}`}>
                 {balanceLabel(r.netNow)} {formatCurrency(Math.abs(r.netNow))}
