@@ -140,7 +140,7 @@ export default async function LedgerPage({
             <DepartmentBalanceTable
               rows={internalBalanceRows}
               emptyMessage="אין חובות פנימיים פתוחים"
-              departmentHref={(id) => `/ledger?department=${id}`}
+              departmentHrefBase="/ledger?department="
             />
           </div>
 
@@ -152,7 +152,7 @@ export default async function LedgerPage({
             <DepartmentBalanceTable
               rows={ownBalanceRows}
               emptyMessage="אין נתונים"
-              departmentHref={(id) => `/ledger?department=${id}`}
+              departmentHrefBase="/ledger?department="
             />
           </div>
 

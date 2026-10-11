@@ -117,14 +117,16 @@ function balanceLabel(amount: number): string {
 export function DepartmentBalanceTable({
   rows,
   emptyMessage,
-  departmentHref,
+  departmentHrefBase,
 }: {
   rows: DepartmentBalanceRow[];
   emptyMessage: string;
   // Only the full department-reports page (/ledger) wants a department's
   // name to jump straight into its own report — the dashboard just links
-  // out to that page in general via its own "לדוח המלא" link instead.
-  departmentHref?: (departmentId: string) => string;
+  // out to that page in general via its own "לדוח המלא" link instead. A
+  // plain string prefix (not a function) — this is a Server Component prop,
+  // and a function can't cross that boundary into a "use client" component.
+  departmentHrefBase?: string;
 }) {
   const columns: ColumnDef<DepartmentBalanceRow>[] = [
     { key: "department", label: "מחלקה", sortValue: (r) => r.departmentName, filterValue: (r) => r.departmentName },
@@ -156,8 +158,8 @@ export function DepartmentBalanceTable({
         {sorted.map((r) => (
           <tr key={r.departmentId}>
             <td>
-              {departmentHref ? (
-                <Link href={departmentHref(r.departmentId)} className="underline decoration-dotted hover:decoration-solid">
+              {departmentHrefBase ? (
+                <Link href={`${departmentHrefBase}${r.departmentId}`} className="underline decoration-dotted hover:decoration-solid">
                   {r.departmentName}
                 </Link>
               ) : (
