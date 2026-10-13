@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { DateInput } from "@/components/date-input";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, todayIso } from "@/lib/format";
 import { useSimulation } from "@/components/forecast-simulation-client";
 
 type MonthOption = { value: string; label: string };
@@ -51,21 +51,32 @@ export function ForecastHorizonPicker({
   // means something concrete even without an exact date chosen.
   const lookupDate = mode === "date" ? date : monthEndDate(month);
 
-  let simulatedBalance = startingBalance;
-  let income = 0;
-  let expense = 0;
-  let matchedDate: string | null = null;
-  let matchedIndex = -1;
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    if (item.date > lookupDate) break;
-    simulatedBalance = item.runningBalance - heldAdjustment[i];
-    if (item.change >= 0) income += item.change;
-    else expense += item.change;
-    matchedDate = item.date;
-    matchedIndex = i;
+  // Walks the simulated items up through targetDate — used twice below: once
+  // for whatever the admin picked (today by default, via "עד סוף חודש" on
+  // the current month — or any other date/month), and once fixed on today's
+  // actual date, so today's balance is always visible as a reference point
+  // alongside it, even once a different date/month is selected.
+  function simulateUpTo(targetDate: string) {
+    let balance = startingBalance;
+    let income = 0;
+    let expense = 0;
+    let matchedDate: string | null = null;
+    let matchedIndex = -1;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.date > targetDate) break;
+      balance = item.runningBalance - heldAdjustment[i];
+      if (item.change >= 0) income += item.change;
+      else expense += item.change;
+      matchedDate = item.date;
+      matchedIndex = i;
+    }
+    const deferred = matchedIndex >= 0 ? -heldAdjustment[matchedIndex] : 0;
+    return { balance, income, expense, matchedDate, deferred };
   }
-  const deferred = matchedIndex >= 0 ? -heldAdjustment[matchedIndex] : 0;
+
+  const selected = simulateUpTo(lookupDate);
+  const todayBalance = simulateUpTo(todayIso()).balance;
 
   return (
     <div className="card p-4 space-y-3">
@@ -105,20 +116,30 @@ export function ForecastHorizonPicker({
       )}
 
       <p className="text-xs text-muted">
-        {matchedDate ? `לפי התנועות הצפויות עד ${formatDate(matchedDate)} (כולל)` : "לפני התחלת התנועות הצפויות — היתרה הנוכחית"}
+        {selected.matchedDate
+          ? `לפי התנועות הצפויות עד ${formatDate(selected.matchedDate)} (כולל)`
+          : "לפני התחלת התנועות הצפויות — היתרה הנוכחית"}
       </p>
 
       <div className="text-sm space-y-0.5">
-        <p className="text-danger">הוצאות: {formatCurrency(Math.abs(expense))}</p>
-        <p className="text-success">הכנסות: {formatCurrency(income)}</p>
-        {hasSimulation && <p className="text-primary">🧪 הוצאות מושהות: {formatCurrency(Math.abs(deferred))}</p>}
+        <p className="text-danger">הוצאות: {formatCurrency(Math.abs(selected.expense))}</p>
+        <p className="text-success">הכנסות: {formatCurrency(selected.income)}</p>
+        {hasSimulation && <p className="text-primary">🧪 הוצאות מושהות: {formatCurrency(Math.abs(selected.deferred))}</p>}
       </div>
 
-      <div className="pt-1">
-        <p className="text-xs text-muted">יתרה בסימולציה לתאריך זה</p>
-        <p className={`text-2xl font-bold ${simulatedBalance < 0 ? "text-danger" : "text-success"}`}>
-          {formatCurrency(simulatedBalance)}
-        </p>
+      <div className="pt-1 grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-xs text-muted">יתרה היום</p>
+          <p className={`text-2xl font-bold ${todayBalance < 0 ? "text-danger" : "text-success"}`}>
+            {formatCurrency(todayBalance)}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-muted">יתרה ל־{formatDate(lookupDate)}</p>
+          <p className={`text-2xl font-bold ${selected.balance < 0 ? "text-danger" : "text-success"}`}>
+            {formatCurrency(selected.balance)}
+          </p>
+        </div>
       </div>
     </div>
   );
