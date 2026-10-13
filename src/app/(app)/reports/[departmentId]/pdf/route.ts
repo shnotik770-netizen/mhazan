@@ -32,7 +32,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ depa
   const { data: department } = await supabase.from("departments").select("name").eq("id", departmentId).single();
   if (!department) return NextResponse.json({ error: "מחלקה לא נמצאה" }, { status: 404 });
 
-  const reportUrl = new URL(`/reports/${departmentId}`, request.url).toString();
+  // Puppeteer navigates to this server's OWN report page, internally — never
+  // through the public HTTPS domain. Building this from request.url looked
+  // reasonable but actually broke it: behind Railway's proxy, request.url
+  // reports the public https:// origin while the app itself only ever binds
+  // plain HTTP on PORT, so the derived URL became "https://localhost:8080"
+  // — a TLS handshake against a port with no TLS listener (ERR_SSL_PROTOCOL_
+  // ERROR). Always http + the actual bound port sidesteps that entirely.
+  const internalPort = process.env.PORT ?? "8080";
+  const reportUrl = `http://127.0.0.1:${internalPort}/reports/${departmentId}`;
   // Puppeteer's internal request to the report page needs the same session
   // the admin is already using — forwarded as a plain cookie header rather
   // than re-deriving auth, so the page's own requireUser()/department-access
