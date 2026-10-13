@@ -210,6 +210,7 @@ export default async function DashboardPage() {
               </Link>
             </div>
             <BankAccountCards
+              isAdmin={isAdmin}
               accounts={(bankAccounts ?? []).map((b) => ({
                 id: b.id,
                 departmentName: (b as { departments: { name: string } | null }).departments?.name ?? null,

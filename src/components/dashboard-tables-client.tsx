@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { updateBankBalance } from "@/app/(app)/forecast/actions";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
 import { formatCurrency, daysAgoLabel } from "@/lib/format";
 
@@ -22,13 +25,79 @@ export type BankAccountRow = {
   endOfMonthBalance?: number;
 };
 
+// Lets an admin correct a bank account's own balance right here on the
+// dashboard card — the same updateBankBalance action /forecast's
+// BankBalancePanel already uses, just inline and compact instead of its own
+// section, so fixing a stale balance doesn't require leaving the dashboard
+// at all. A refresh after saving recomputes both "צפי יתרה היום" and "צפי
+// לסוף החודש" from the new figure too, since those are derived from it.
+function BankBalanceQuickEditor({ bankAccountId, currentBalance }: { bankAccountId: string; currentBalance: number }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(currentBalance));
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateBankBalance(bankAccountId, Number(value) || 0);
+      if (result.error) setError(result.error);
+      else {
+        setEditing(false);
+        router.refresh();
+      }
+    });
+  }
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setValue(String(currentBalance));
+          setError(null);
+          setEditing(true);
+        }}
+        className="text-xs text-primary underline"
+      >
+        עדכון יתרה
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        autoFocus
+        className="w-24 rounded border border-border bg-transparent px-1.5 py-0.5 text-xs"
+      />
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={save}
+        className="rounded bg-primary text-primary-foreground text-xs px-2 py-0.5 disabled:opacity-50"
+      >
+        שמור
+      </button>
+      <button type="button" onClick={() => setEditing(false)} className="text-xs text-muted">
+        ביטול
+      </button>
+      {error && <span className="text-xs text-danger">{error}</span>}
+    </div>
+  );
+}
+
 // One card per bank account instead of a table row — with a department,
 // bank, account number and three separate balance figures per account,
 // a handful of accounts squeezed into a table got cramped (the header
 // labels alone forced a horizontal scrollbar on anything narrower than
 // the full page). A card per account has room to lay its fields out
 // however fits, wrapping naturally instead of scrolling.
-export function BankAccountCards({ accounts }: { accounts: BankAccountRow[] }) {
+export function BankAccountCards({ accounts, isAdmin = false }: { accounts: BankAccountRow[]; isAdmin?: boolean }) {
   if (accounts.length === 0) {
     return (
       <p className="text-sm text-muted text-center py-6">
@@ -53,7 +122,8 @@ export function BankAccountCards({ accounts }: { accounts: BankAccountRow[] }) {
             <div>
               <p className="text-xs text-muted mb-0.5">יתרה בבנק</p>
               <p className={`font-semibold ${b.current_balance < 0 ? "text-danger" : ""}`}>{formatCurrency(b.current_balance)}</p>
-              <p className="text-xs text-muted">{daysAgoLabel(b.balance_as_of)}</p>
+              <p className="text-xs text-muted mb-1">{daysAgoLabel(b.balance_as_of)}</p>
+              {isAdmin && <BankBalanceQuickEditor bankAccountId={b.id} currentBalance={b.current_balance} />}
             </div>
             <div>
               <p className="text-xs text-muted mb-0.5">צפי יתרה היום</p>
