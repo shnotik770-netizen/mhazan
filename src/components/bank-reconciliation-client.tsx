@@ -40,6 +40,7 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [quickCheckNumber, setQuickCheckNumber] = useState("");
   const [quickDropdownOpen, setQuickDropdownOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [quickAddError, setQuickAddError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -87,6 +88,10 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
     .filter((c) => !selectedSuggestions.has(c.id))
     .filter((c) => !trimmedQuickCheckNumber || c.check_number.includes(trimmedQuickCheckNumber));
   const quickDropdownVisible = quickDropdownOpen && quickDropdownCandidates.length > 0;
+  // Clamped against the candidate list's current (filtered) length rather
+  // than reset via an effect — the list shrinks/grows every keystroke, and
+  // this keeps the highlighted row always valid without an extra render.
+  const highlightedCandidateIndex = Math.min(highlightedIndex, Math.max(quickDropdownCandidates.length - 1, 0));
   const { ref: quickInputRef, container: quickDropdownContainer } = usePortalContainer();
 
   function toggleSuggestion(id: string) {
@@ -112,6 +117,18 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
     }
     setSelectedSuggestions((prev) => new Set(prev).add(found.id));
     setQuickCheckNumber("");
+  }
+
+  // What both clicking a dropdown row and pressing Enter on a highlighted
+  // one do — adds it straight to the selection, same as addByCheckNumber's
+  // end result, without needing a second "הוסף" click once it's already
+  // been picked from the list.
+  function pickCandidate(c: Candidate) {
+    setSelectedSuggestions((prev) => new Set(prev).add(c.id));
+    setQuickCheckNumber("");
+    setQuickAddError(null);
+    setQuickDropdownOpen(false);
+    setHighlightedIndex(0);
   }
 
   function checkMatches() {
@@ -209,15 +226,28 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
                   setQuickCheckNumber(e.target.value);
                   setQuickAddError(null);
                   setQuickDropdownOpen(true);
+                  setHighlightedIndex(0);
                 }}
                 onFocus={() => setQuickDropdownOpen(true)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
+                  if (e.key === "ArrowDown") {
                     e.preventDefault();
+                    setQuickDropdownOpen(true);
+                    setHighlightedIndex((i) => Math.min(i + 1, Math.max(quickDropdownCandidates.length - 1, 0)));
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setHighlightedIndex((i) => Math.max(i - 1, 0));
+                  } else if (e.key === "Enter") {
+                    e.preventDefault();
+                    const highlighted = quickDropdownVisible ? quickDropdownCandidates[highlightedCandidateIndex] : undefined;
+                    if (highlighted) pickCandidate(highlighted);
+                    else {
+                      setQuickDropdownOpen(false);
+                      addByCheckNumber();
+                    }
+                  } else if (e.key === "Escape") {
                     setQuickDropdownOpen(false);
-                    addByCheckNumber();
                   }
-                  if (e.key === "Escape") setQuickDropdownOpen(false);
                 }}
                 placeholder="מספר צ׳ק..."
                 className="w-40 rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
@@ -233,15 +263,15 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
                 className="popover-panel z-50 w-80 max-w-[90vw] overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
               >
                 <div className="max-h-60 overflow-y-auto p-1">
-                  {quickDropdownCandidates.map((c) => (
+                  {quickDropdownCandidates.map((c, i) => (
                     <button
                       key={c.id}
                       type="button"
-                      onClick={() => {
-                        setQuickCheckNumber(c.check_number);
-                        setQuickDropdownOpen(false);
-                      }}
-                      className="w-full rounded-lg px-3 py-2 text-right text-sm hover:bg-background"
+                      onClick={() => pickCandidate(c)}
+                      onMouseEnter={() => setHighlightedIndex(i)}
+                      className={`w-full rounded-lg px-3 py-2 text-right text-sm hover:bg-background ${
+                        i === highlightedCandidateIndex ? "bg-background" : ""
+                      }`}
                     >
                       <div className="font-semibold">
                         {c.check_number} — {c.payee}
