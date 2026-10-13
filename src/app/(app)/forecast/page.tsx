@@ -5,6 +5,7 @@ import { getAccessibleBankAccountIds } from "@/lib/bank-access";
 import { formatCurrency, formatDate, daysAgoLabel, todayIso } from "@/lib/format";
 import { safeErrorMessage } from "@/lib/safe-error";
 import { ForecastAccountSelect } from "@/components/forecast-account-select-client";
+import { ForecastPdfExportButton } from "@/components/forecast-pdf-export-client";
 import { BankBalancePanel, ExpectedIncomeManager } from "@/components/forecast-client";
 import { ForecastDailyTable } from "@/components/forecast-daily-table-client";
 import { ForecastHorizonPicker } from "@/components/forecast-horizon-picker-client";
@@ -199,9 +200,18 @@ export default async function ForecastPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold">תחזית תזרים מזומנים</h1>
-        <p className="text-sm text-muted">יתרה צפויה = יתרת בנק נוכחית − צ׳קים בחוץ − חיובים קבועים עתידיים + צפי הכנסות</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold">תחזית תזרים מזומנים</h1>
+          <p className="text-sm text-muted">יתרה צפויה = יתרת בנק נוכחית − צ׳קים בחוץ − חיובים קבועים עתידיים + צפי הכנסות</p>
+        </div>
+        <ForecastPdfExportButton
+          accounts={bankAccounts.map((b) => ({
+            id: b.id,
+            label: `${(b as { departments: { name: string } | null }).departments?.name ?? ""} — ${b.bank_name} (${b.account_number})`,
+          }))}
+          defaultAccountId={selectedAccountId}
+        />
       </div>
 
       {error && <div className="card p-4 bg-danger-bg text-danger text-sm">{safeErrorMessage(error)}</div>}
