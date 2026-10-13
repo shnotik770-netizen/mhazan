@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { DateInput } from "@/components/date-input";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, todayIso } from "@/lib/format";
 import { useSimulation } from "@/components/forecast-simulation-client";
 
 type MonthOption = { value: string; label: string };
@@ -67,6 +67,20 @@ export function ForecastHorizonPicker({
   }
   const deferred = matchedIndex >= 0 ? -heldAdjustment[matchedIndex] : 0;
 
+  // When the chosen date/month is further out than the current month, the
+  // current month's own closing balance is a useful nearer-term reference
+  // point alongside it — otherwise it's the same thing the box is already
+  // showing, so there's nothing extra to add.
+  const currentMonthEnd = monthEndDate(todayIso().slice(0, 7));
+  const showsCurrentMonthEnd = lookupDate > currentMonthEnd;
+  let currentMonthEndBalance = startingBalance;
+  if (showsCurrentMonthEnd) {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].date > currentMonthEnd) break;
+      currentMonthEndBalance = items[i].runningBalance - heldAdjustment[i];
+    }
+  }
+
   return (
     <div className="card p-4 space-y-3">
       <h2 className="font-semibold">צפי יתרה לתאריך מסוים</h2>
@@ -114,11 +128,21 @@ export function ForecastHorizonPicker({
         {hasSimulation && <p className="text-primary">🧪 הוצאות מושהות: {formatCurrency(Math.abs(deferred))}</p>}
       </div>
 
-      <div className="pt-1">
-        <p className="text-xs text-muted">יתרה בסימולציה לתאריך זה</p>
-        <p className={`text-2xl font-bold ${simulatedBalance < 0 ? "text-danger" : "text-success"}`}>
-          {formatCurrency(simulatedBalance)}
-        </p>
+      <div className={`pt-1 ${showsCurrentMonthEnd ? "grid grid-cols-2 gap-3" : ""}`}>
+        <div>
+          <p className="text-xs text-muted">יתרה בסימולציה לתאריך זה</p>
+          <p className={`text-2xl font-bold ${simulatedBalance < 0 ? "text-danger" : "text-success"}`}>
+            {formatCurrency(simulatedBalance)}
+          </p>
+        </div>
+        {showsCurrentMonthEnd && (
+          <div>
+            <p className="text-xs text-muted">צפי לסוף החודש הנוכחי</p>
+            <p className={`text-2xl font-bold ${currentMonthEndBalance < 0 ? "text-danger" : "text-success"}`}>
+              {formatCurrency(currentMonthEndBalance)}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
