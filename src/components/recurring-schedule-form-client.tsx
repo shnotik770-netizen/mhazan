@@ -129,14 +129,13 @@ export function NewRecurringScheduleForm({
   }
 
   function validate(): string | null {
+    if (!bankAccountId) return "יש לבחור חשבון בנק";
     if (split) {
       const valid = allocations.filter((a) => a.departmentId && a.amount > 0);
       if (valid.length < 2) return "פיצול דורש לפחות שתי מחלקות עם סכום";
       if (Math.abs(allocatedSum - Number(expectedAmount)) > 0.01) {
         return `סכום הפיצול (${allocatedSum}) חייב להיות שווה לסכום הצפוי (${expectedAmount})`;
       }
-    } else if (!departmentId) {
-      return "יש לבחור מחלקה";
     }
     if (limited && (!durationMonths || Number(durationMonths) <= 0)) {
       return "יש להזין מספר חודשים תקין, או לבטל את הגבלת הזמן";
@@ -277,22 +276,18 @@ export function NewRecurringScheduleForm({
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         />
 
-        {!split ? (
-          <select
-            value={departmentId}
-            onChange={(e) => setDepartmentId(e.target.value)}
-            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          >
-            <option value="">מחלקה...</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <div className="text-xs text-muted flex items-center">פיצול בין מחלקות — למטה</div>
-        )}
+        <select
+          value={bankAccountId}
+          onChange={(e) => setBankAccountId(e.target.value)}
+          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+        >
+          <option value="">חשבון בנק...</option>
+          {bankAccounts.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.bank_name} ({b.account_number})
+            </option>
+          ))}
+        </select>
 
         <select
           value={type}
@@ -361,18 +356,22 @@ export function NewRecurringScheduleForm({
           className="rounded border border-border bg-transparent px-2 py-1 text-sm"
         />
 
-        <select
-          value={bankAccountId}
-          onChange={(e) => setBankAccountId(e.target.value)}
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-        >
-          <option value="">חשבון בנק...</option>
-          {bankAccounts.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.bank_name} ({b.account_number})
-            </option>
-          ))}
-        </select>
+        {!split ? (
+          <select
+            value={departmentId}
+            onChange={(e) => setDepartmentId(e.target.value)}
+            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+          >
+            <option value="">מחלקה (אופציונלי)...</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="text-xs text-muted flex items-center">פיצול בין מחלקות — למטה</div>
+        )}
 
         <select
           value={categoryId}

@@ -112,7 +112,7 @@ export async function createRecurringSchedule(formData: FormData): Promise<void>
   const { data: schedule, error } = await supabase
     .from("recurring_schedules")
     .insert({
-      department_id: allocations.length >= 2 ? null : String(formData.get("department_id") ?? ""),
+      department_id: allocations.length >= 2 ? null : String(formData.get("department_id") ?? "") || null,
       name: String(formData.get("name") ?? ""),
       type,
       direction: String(formData.get("direction") ?? "EXPENSE"),
@@ -176,7 +176,7 @@ export async function updateRecurringSchedule(scheduleId: string, formData: Form
   const { error } = await supabase
     .from("recurring_schedules")
     .update({
-      department_id: allocations.length >= 2 ? null : String(formData.get("department_id") ?? ""),
+      department_id: allocations.length >= 2 ? null : String(formData.get("department_id") ?? "") || null,
       name: String(formData.get("name") ?? ""),
       type,
       direction: String(formData.get("direction") ?? "EXPENSE"),

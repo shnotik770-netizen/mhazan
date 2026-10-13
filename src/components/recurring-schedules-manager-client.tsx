@@ -77,7 +77,9 @@ export type ScheduleRow = {
 };
 
 function departmentLabel(s: ScheduleRow) {
-  return s.departmentName ?? `מפוצל (${s.allocations.length} מחלקות)`;
+  if (s.departmentName) return s.departmentName;
+  if (s.allocations.length > 0) return `מפוצל (${s.allocations.length} מחלקות)`;
+  return "—";
 }
 
 // A schedule that's inactive, whose end date has already passed, or — for a
