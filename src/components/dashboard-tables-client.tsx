@@ -109,30 +109,34 @@ export function BankAccountCards({ accounts, isAdmin = false }: { accounts: Bank
     );
   }
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {accounts.map((b) => (
-        <div key={b.id} className="rounded-lg border border-border p-3">
-          <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1 mb-2">
-            <span className="font-semibold">{b.departmentName}</span>
-            <span className="text-sm text-muted">
-              {b.bank_name} · {b.account_number}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <p className="text-xs text-muted mb-0.5">יתרה בבנק</p>
-              <p className={`font-semibold ${b.current_balance < 0 ? "text-danger" : ""}`}>{formatCurrency(b.current_balance)}</p>
-              <p className="text-xs text-muted mb-1">{daysAgoLabel(b.balance_as_of)}</p>
+        <div key={b.id} className="rounded-lg border border-border p-2.5">
+          <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-0.5 mb-1.5">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="font-semibold text-sm">{b.departmentName}</span>
+              <span className="text-xs text-muted">
+                {b.bank_name} · {b.account_number}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap text-xs text-muted">
+              <span>{daysAgoLabel(b.balance_as_of)}</span>
               {isAdmin && <BankBalanceQuickEditor bankAccountId={b.id} currentBalance={b.current_balance} />}
             </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <p className="text-xs text-muted mb-0.5">צפי יתרה היום</p>
+              <p className="text-xs text-muted">יתרה בבנק</p>
+              <p className={`font-semibold ${b.current_balance < 0 ? "text-danger" : ""}`}>{formatCurrency(b.current_balance)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">צפי יתרה היום</p>
               <p className={`font-semibold ${(b.todayBalance ?? b.current_balance) < 0 ? "text-danger" : ""}`}>
                 {formatCurrency(b.todayBalance ?? b.current_balance)}
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted mb-0.5">צפי לסוף החודש</p>
+              <p className="text-xs text-muted">צפי לסוף החודש</p>
               <p className={`font-semibold ${(b.endOfMonthBalance ?? b.current_balance) < 0 ? "text-danger" : ""}`}>
                 {formatCurrency(b.endOfMonthBalance ?? b.current_balance)}
               </p>
