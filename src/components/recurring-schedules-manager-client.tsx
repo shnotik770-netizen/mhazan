@@ -43,6 +43,20 @@ function isVariableDateType(type: string) {
   return type === "VARIABLE_DATE_ESTIMATED_AMOUNT" || type === "VARIABLE_DATE_FIXED_AMOUNT";
 }
 
+// A numeric key for the "תאריך" column's sort — sorting by scheduleDateLabel
+// itself (the display text, e.g. "7 לחודש" vs "15 לחודש" vs "29 לחודש")
+// compares those as strings, so "10 לחודש" sorts before "7 לחודש" ("1" < "7"
+// lexicographically). Every fixed-date schedule actually has a day number to
+// sort by — weekly by day_of_week, monthly/yearly by day_of_month, and a
+// one-time schedule by the day-of-month its exact date falls on (keeping it
+// in the same 1–31 domain as the recurring rows it's mixed in with here).
+function scheduleDateSortValue(s: { frequency: string; day_of_month: number | null; day_of_week: number | null; one_time_date: string | null }): number | null {
+  if (s.frequency === "WEEKLY" && s.day_of_week !== null) return s.day_of_week;
+  if ((s.frequency === "MONTHLY" || s.frequency === "YEARLY") && s.day_of_month !== null) return s.day_of_month;
+  if (s.frequency === "ONCE" && s.one_time_date) return Number(s.one_time_date.slice(8, 10));
+  return null;
+}
+
 export type ScheduleRow = {
   id: string;
   name: string;
@@ -284,7 +298,7 @@ function ScheduleTable({ schedules, onEdit }: { schedules: ScheduleRow[]; onEdit
     {
       key: "date",
       label: "תאריך",
-      sortValue: (s) => (isVariableDateType(s.type) ? "" : scheduleDateLabel(s)),
+      sortValue: (s) => (isVariableDateType(s.type) ? null : scheduleDateSortValue(s)),
       filterValue: (s) => (isVariableDateType(s.type) ? "משוער" : "קבוע"),
     },
     {
