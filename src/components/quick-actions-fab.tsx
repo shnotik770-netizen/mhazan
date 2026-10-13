@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { UnifiedCheckForm } from "@/components/unified-check-form";
 import { NewManualEntryButton } from "@/components/manual-entries-client";
@@ -37,11 +37,11 @@ type ActionGroup = "create" | "checks" | "reports" | "admin";
 
 // Literal class strings (not built from a shared "color name" at runtime)
 // so Tailwind's static scan actually picks them up.
-const GROUP_INFO: Record<ActionGroup, { title: string; borderClass: string; dotClass: string }> = {
-  create: { title: "פעולות יומיומיות", borderClass: "border-t-primary", dotClass: "bg-primary" },
-  checks: { title: "צ׳קים ותשלומים", borderClass: "border-t-warning", dotClass: "bg-warning" },
-  reports: { title: "דוחות וצפי", borderClass: "border-t-success", dotClass: "bg-success" },
-  admin: { title: "ניהול מערכת", borderClass: "border-t-muted", dotClass: "bg-muted" },
+const GROUP_INFO: Record<ActionGroup, { title: string; dotClass: string }> = {
+  create: { title: "פעולות יומיומיות", dotClass: "bg-primary" },
+  checks: { title: "צ׳קים ותשלומים", dotClass: "bg-warning" },
+  reports: { title: "דוחות וצפי", dotClass: "bg-success" },
+  admin: { title: "ניהול מערכת", dotClass: "bg-muted" },
 };
 
 type ActionDef =
@@ -137,144 +137,142 @@ function useQuickActionsState() {
   return { openAction, pendingKey, modals };
 }
 
-export function QuickActionsFab() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const { openAction, pendingKey, modals } = useQuickActionsState();
+const GROUP_ORDER: ActionGroup[] = ["create", "checks", "reports", "admin"];
 
-  function handleClick(action: ActionDef) {
-    setMenuOpen(false);
-    if (action.type === "modal") openAction(action.key);
+// A single search screen for every quick action — grouped sections like the
+// dashboard panel used to render inline, but in a modal with a search box on
+// top, autofocused so typing starts filtering immediately. This is now the
+// one place both the floating "+" and the dashboard's "פעולות מהירות" panel
+// open into, instead of each having its own separate UI (a speed-dial list
+// vs. an inline expanding grid) for what's really the same job: finding one
+// action out of 18+ quickly.
+function ActionsSearchModal({
+  onClose,
+  openAction,
+  pendingKey,
+}: {
+  onClose: () => void;
+  openAction: (key: ModalActionKey) => void;
+  pendingKey: ModalActionKey | null;
+}) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const filtered = normalizedQuery ? ACTIONS.filter((a) => a.label.toLowerCase().includes(normalizedQuery)) : ACTIONS;
+
+  function handleModalAction(key: ModalActionKey) {
+    openAction(key);
+    onClose();
   }
 
   return (
-    <>
-      <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2 no-print">
-        {menuOpen && (
-          <div className="flex flex-col items-end gap-2 mb-1 max-h-[70vh] overflow-y-auto py-1 px-0.5">
-            {ACTIONS.map((a) =>
-              a.type === "link" ? (
-                <Link
-                  key={a.key}
-                  href={a.href}
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-2 rounded-full bg-surface border border-border shadow-lg px-4 py-2 text-sm font-medium hover:bg-background whitespace-nowrap"
-                >
-                  <span className={`h-2 w-2 rounded-full shrink-0 ${GROUP_INFO[a.group].dotClass}`} />
-                  {a.label}
-                </Link>
-              ) : (
-                <button
-                  key={a.key}
-                  type="button"
-                  disabled={pendingKey === a.key}
-                  onClick={() => handleClick(a)}
-                  className="flex items-center gap-2 rounded-full bg-surface border border-border shadow-lg px-4 py-2 text-sm font-medium hover:bg-background whitespace-nowrap disabled:opacity-60"
-                >
-                  <span className={`h-2 w-2 rounded-full shrink-0 ${GROUP_INFO[a.group].dotClass}`} />
-                  {pendingKey === a.key ? "…" : a.label}
-                </button>
-              ),
-            )}
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => setMenuOpen((v) => !v)}
-          className={`h-14 w-14 rounded-full bg-primary text-primary-foreground text-2xl font-bold shadow-lg flex items-center justify-center transition-transform ${menuOpen ? "rotate-45" : ""}`}
-          aria-label="פעולות מהירות"
-          title="פעולות מהירות"
-        >
-          +
-        </button>
+    <Modal onClose={onClose}>
+      <div className="card p-4 space-y-3 flex flex-col max-h-[80vh]">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)" }}>
+            חיפוש פעולה
+          </h2>
+          <button type="button" onClick={onClose} className="text-muted hover:text-foreground">
+            ✕
+          </button>
+        </div>
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="הקלידו כדי לחפש פעולה..."
+          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm w-full"
+        />
+        <div className="overflow-y-auto space-y-3 -mx-1 px-1">
+          {GROUP_ORDER.map((group) => {
+            const groupActions = filtered.filter((a) => a.group === group);
+            if (groupActions.length === 0) return null;
+            const { title, dotClass } = GROUP_INFO[group];
+            return (
+              <div key={group}>
+                <h3 className="text-xs font-semibold text-muted mb-1">{title}</h3>
+                <div className="space-y-0.5">
+                  {groupActions.map((a) =>
+                    a.type === "link" ? (
+                      <Link
+                        key={a.key}
+                        href={a.href}
+                        onClick={onClose}
+                        className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-background"
+                      >
+                        <span className={`h-2 w-2 rounded-full shrink-0 ${dotClass}`} />
+                        {a.label}
+                      </Link>
+                    ) : (
+                      <button
+                        key={a.key}
+                        type="button"
+                        disabled={pendingKey === a.key}
+                        onClick={() => handleModalAction(a.key)}
+                        className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-background text-right w-full disabled:opacity-60"
+                      >
+                        <span className={`h-2 w-2 rounded-full shrink-0 ${dotClass}`} />
+                        {pendingKey === a.key ? "…" : a.label}
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {filtered.length === 0 && <p className="text-sm text-muted text-center py-4">אין פעולה שתואמת את החיפוש</p>}
+        </div>
       </div>
+    </Modal>
+  );
+}
 
+export function QuickActionsFab() {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const { openAction, pendingKey, modals } = useQuickActionsState();
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setSearchOpen(true)}
+        className="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-primary text-primary-foreground text-2xl font-bold shadow-lg flex items-center justify-center no-print"
+        aria-label="חיפוש פעולות"
+        title="חיפוש פעולות"
+      >
+        +
+      </button>
+
+      {searchOpen && <ActionsSearchModal onClose={() => setSearchOpen(false)} openAction={openAction} pendingKey={pendingKey} />}
       {modals}
     </>
   );
 }
 
-const GROUP_ORDER: ActionGroup[] = ["create", "checks", "reports", "admin"];
-
-// The same actions rendered as a proper button grid on the dashboard, for
-// admins who'd rather see them up front than discover the floating button.
-// Grouped into labeled, color-accented sections (rather than one flat grid)
-// so 18+ actions still read at a glance, with a search box on top for
-// jumping straight to one by name instead of scanning every section.
+// A single entry point into ActionsSearchModal from the dashboard — same
+// modal the floating "+" opens, so there's one consistent way to find any
+// of the 18+ actions instead of two different UIs doing the same job.
 export function QuickActionsPanel() {
   const { openAction, pendingKey, modals } = useQuickActionsState();
-  const [query, setQuery] = useState("");
-  // Collapsed by default — with 18+ actions across four groups, this panel
-  // used to push everything else on the dashboard down below the fold. The
-  // search box and buttons only matter once someone actually wants them, so
-  // they stay hidden behind one click instead of always taking up the space.
-  const [expanded, setExpanded] = useState(false);
-
-  const normalizedQuery = query.trim().toLowerCase();
-  const filtered = normalizedQuery
-    ? ACTIONS.filter((a) => a.label.toLowerCase().includes(normalizedQuery))
-    : ACTIONS;
+  const [searchOpen, setSearchOpen] = useState(false);
 
   return (
     <div className="card p-4">
       <button
         type="button"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => setSearchOpen(true)}
         className="flex items-center justify-between gap-3 w-full text-right"
-        aria-expanded={expanded}
       >
         <h2 className="font-semibold">פעולות מהירות</h2>
-        <span className={`text-muted transition-transform ${expanded ? "rotate-180" : ""}`}>▾</span>
+        <span className="text-sm text-primary">חיפוש פעולה ←</span>
       </button>
 
-      {expanded && (
-        <>
-          <div className="flex items-center justify-between gap-3 mb-3 mt-3 flex-wrap">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="חיפוש פעולה..."
-              className="rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm w-full sm:w-56"
-            />
-          </div>
-
-          <div className="space-y-4">
-            {GROUP_ORDER.map((group) => {
-              const groupActions = filtered.filter((a) => a.group === group);
-              if (groupActions.length === 0) return null;
-              const { title, borderClass } = GROUP_INFO[group];
-              return (
-                <div key={group}>
-                  <h3 className="text-xs font-semibold text-muted mb-2">{title}</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {groupActions.map((a) =>
-                      a.type === "link" ? (
-                        <Link
-                          key={a.key}
-                          href={a.href}
-                          className={`rounded-xl border-t-2 border border-border ${borderClass} bg-background hover:bg-surface transition-colors px-4 py-4 text-sm font-semibold text-center`}
-                        >
-                          {a.label}
-                        </Link>
-                      ) : (
-                        <button
-                          key={a.key}
-                          type="button"
-                          disabled={pendingKey === a.key}
-                          onClick={() => openAction(a.key)}
-                          className={`rounded-xl border-t-2 border border-border ${borderClass} bg-background hover:bg-surface transition-colors px-4 py-4 text-sm font-semibold text-center disabled:opacity-60`}
-                        >
-                          {pendingKey === a.key ? "…" : a.label}
-                        </button>
-                      ),
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {filtered.length === 0 && <p className="text-sm text-muted text-center py-4">אין פעולה שתואמת את החיפוש</p>}
-          </div>
-        </>
-      )}
+      {searchOpen && <ActionsSearchModal onClose={() => setSearchOpen(false)} openAction={openAction} pendingKey={pendingKey} />}
       {modals}
     </div>
   );
