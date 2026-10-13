@@ -5,6 +5,7 @@ import { DepartmentReport } from "@/components/department-report";
 import { NewManualEntryButton } from "@/components/manual-entries-client";
 import { DepartmentBalanceTable, type DepartmentBalanceRow } from "@/components/dashboard-tables-client";
 import { DepartmentPickerSelect } from "@/components/department-picker-select-client";
+import { DepartmentReportsPdfExportButton } from "@/components/department-reports-pdf-export-client";
 import { getBankAccountLedgerData } from "@/lib/bank-account-ledger-data";
 import { BankAccountLedgerTable, BankAccountPairReport } from "@/components/bank-account-ledger-client";
 
@@ -96,6 +97,7 @@ export default async function LedgerPage({
             categories={categories ?? []}
             isAdmin={isAdmin}
           />
+          <DepartmentReportsPdfExportButton departments={myDepartments.map((d) => ({ id: d.id, name: d.name }))} />
         </div>
       </div>
 
