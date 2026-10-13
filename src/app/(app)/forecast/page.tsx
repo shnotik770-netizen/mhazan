@@ -6,6 +6,7 @@ import { formatCurrency, formatDate, daysAgoLabel, todayIso } from "@/lib/format
 import { safeErrorMessage } from "@/lib/safe-error";
 import { ForecastAccountSelect } from "@/components/forecast-account-select-client";
 import { ForecastPdfExportButton } from "@/components/forecast-pdf-export-client";
+import { computeDailyBreakdown, computeMonthlyCards, monthsInHorizon as computeMonthsInHorizon } from "@/lib/forecast-breakdown";
 import { BankBalancePanel, ExpectedIncomeManager, TodayBalanceLine } from "@/components/forecast-client";
 import { ForecastDailyTable } from "@/components/forecast-daily-table-client";
 import { ForecastHorizonPicker } from "@/components/forecast-horizon-picker-client";
@@ -117,57 +118,9 @@ export default async function ForecastPage({
   // Group the flat per-item forecast rows into a per-day breakdown by
   // category (checks / transfers / recurring / expected income) — the
   // per-item list further down stays for anyone who wants to see exactly
-  // what's behind a day's total.
-  const dailyBreakdown = (() => {
-    const byDate = new Map<
-      string,
-      {
-        checks: number;
-        transfers: number;
-        recurring: number;
-        income: number;
-        overdue: number;
-        total: number;
-        runningBalance: number;
-      }
-    >();
-    for (const row of datedForecast) {
-      const d = row.forecast_date!;
-      const entry =
-        byDate.get(d) ??
-        { checks: 0, transfers: 0, recurring: 0, income: 0, overdue: 0, total: 0, runningBalance: 0 };
-      const change = Number(row.expected_change);
-      if (row.category === "CHECK") entry.checks += change;
-      else if (row.category === "TRANSFER") entry.transfers += change;
-      else if (row.category === "RECURRING") entry.recurring += change;
-      else if (row.category === "INCOME") entry.income += change;
-      // "OVERDUE" — still-unpaid checks/transfers whose due date already
-      // passed: kept separate from the regular checks/transfers bucket so
-      // the current month's card can show them as their own line, distinct
-      // from newly-scheduled expenses.
-      else if (row.category === "OVERDUE") entry.overdue += change;
-      entry.total += change;
-      entry.runningBalance = Number(row.running_balance);
-      byDate.set(d, entry);
-    }
-    return [...byDate.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
-  })();
-
-  // Every calendar month touched by the horizon, from the current month
-  // onward — used both to size the monthly cards and to drive the "עד
-  // חודש" cumulative selector on the daily table below.
-  const monthsInHorizon = (() => {
-    const months: string[] = [];
-    const cursor = new Date();
-    cursor.setDate(1);
-    const horizonEnd = new Date();
-    horizonEnd.setDate(horizonEnd.getDate() + horizonDays);
-    while (cursor <= horizonEnd) {
-      months.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
-      cursor.setMonth(cursor.getMonth() + 1);
-    }
-    return months;
-  })();
+  // what's behind a day's total. Shared with /forecast/print so the PDF
+  // export shows identically-computed numbers, not a separate summary.
+  const dailyBreakdown = computeDailyBreakdown(forecast ?? []);
 
   // One box per month covered by the horizon: that month's forecasted
   // income/expenses, plus the balance it closes with — starting from the
@@ -176,27 +129,9 @@ export default async function ForecastPage({
   // dailyRowsByMonth is built alongside it (same per-month grouping) so the
   // page can render each month's card immediately followed by its own daily
   // breakdown, instead of two separate top-level sections.
-  const dailyRowsByMonth = new Map<string, typeof dailyBreakdown>();
-  const monthlyCards = selectedAccount
-    ? (() => {
-        const startBalance = Number(selectedAccount.current_balance);
-        let openingBalance = startBalance;
-        return monthsInHorizon.map((month) => {
-          const monthRows = dailyBreakdown.filter(([date]) => date.startsWith(month));
-          dailyRowsByMonth.set(month, monthRows);
-          const income = monthRows.reduce((sum, [, d]) => sum + d.income, 0);
-          const expense = monthRows.reduce((sum, [, d]) => sum + d.checks + d.transfers + d.recurring, 0);
-          // Only ever lands in the current month, since overdue rows are
-          // attributed to today's date — kept as a separate line rather
-          // than folded into "expense" above.
-          const oldExpense = monthRows.reduce((sum, [, d]) => sum + d.overdue, 0);
-          const opening = openingBalance;
-          const closing = monthRows.length > 0 ? monthRows[monthRows.length - 1][1].runningBalance : opening;
-          openingBalance = closing;
-          return { month, opening, income, expense, oldExpense, closing };
-        });
-      })()
-    : [];
+  const { monthlyCards, dailyRowsByMonth } = selectedAccount
+    ? computeMonthlyCards(dailyBreakdown, computeMonthsInHorizon(horizonDays), Number(selectedAccount.current_balance))
+    : { monthlyCards: [], dailyRowsByMonth: new Map<string, typeof dailyBreakdown>() };
 
   return (
     <div className="space-y-6">
