@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import * as Popover from "@radix-ui/react-popover";
 import { bulkMarkChecksCleared, getUnpaidChecksForReconciliation } from "@/app/(app)/checks/actions";
 import { formatCurrency, formatDate, todayIso } from "@/lib/format";
 import { Modal } from "@/components/modal";
+import { usePortalContainer } from "@/lib/use-portal-container";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type BankAccount = Tables<"bank_accounts"> & { departments: { name: string } | null };
@@ -37,6 +39,7 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
   const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [quickCheckNumber, setQuickCheckNumber] = useState("");
+  const [quickDropdownOpen, setQuickDropdownOpen] = useState(false);
   const [quickAddError, setQuickAddError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -73,6 +76,18 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
   const quickCheckPreview = trimmedQuickCheckNumber
     ? (allCandidates.find((c) => c.check_number.trim() === trimmedQuickCheckNumber) ?? null)
     : undefined;
+  // Candidates for the dropdown shown while typing/focused — every open
+  // check number containing what's typed so far (or every open check, if
+  // nothing's typed yet, same "browse everything" capability the old
+  // native <datalist> had before typing narrowed it). Each row carries its
+  // own full detail (payee/amount/due date) so there's no separate preview
+  // line competing with the dropdown for the same space underneath the
+  // input — the dropdown itself is the detail view while it's open.
+  const quickDropdownCandidates = allCandidates
+    .filter((c) => !selectedSuggestions.has(c.id))
+    .filter((c) => !trimmedQuickCheckNumber || c.check_number.includes(trimmedQuickCheckNumber));
+  const quickDropdownVisible = quickDropdownOpen && quickDropdownCandidates.length > 0;
+  const { ref: quickInputRef, container: quickDropdownContainer } = usePortalContainer();
 
   function toggleSuggestion(id: string) {
     setSelectedSuggestions((prev) => {
@@ -185,29 +200,61 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">הקלידו מספר צ׳ק</h3>
         <div className="flex items-center gap-2">
-          <input
-            value={quickCheckNumber}
-            onChange={(e) => {
-              setQuickCheckNumber(e.target.value);
-              setQuickAddError(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addByCheckNumber();
-              }
-            }}
-            list="reconciliation-check-numbers"
-            placeholder="מספר צ׳ק..."
-            className="w-40 rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
-          />
-          <datalist id="reconciliation-check-numbers">
-            {allCandidates
-              .filter((c) => !selectedSuggestions.has(c.id))
-              .map((c) => (
-                <option key={c.id} value={c.check_number} />
-              ))}
-          </datalist>
+          <Popover.Root open={quickDropdownVisible} onOpenChange={(next) => !next && setQuickDropdownOpen(false)}>
+            <Popover.Anchor asChild>
+              <input
+                ref={quickInputRef}
+                value={quickCheckNumber}
+                onChange={(e) => {
+                  setQuickCheckNumber(e.target.value);
+                  setQuickAddError(null);
+                  setQuickDropdownOpen(true);
+                }}
+                onFocus={() => setQuickDropdownOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    setQuickDropdownOpen(false);
+                    addByCheckNumber();
+                  }
+                  if (e.key === "Escape") setQuickDropdownOpen(false);
+                }}
+                placeholder="מספר צ׳ק..."
+                className="w-40 rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
+              />
+            </Popover.Anchor>
+            <Popover.Portal container={quickDropdownContainer}>
+              <Popover.Content
+                dir="rtl"
+                align="start"
+                sideOffset={6}
+                collisionPadding={8}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                className="popover-panel z-50 w-80 max-w-[90vw] overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
+              >
+                <div className="max-h-60 overflow-y-auto p-1">
+                  {quickDropdownCandidates.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setQuickCheckNumber(c.check_number);
+                        setQuickDropdownOpen(false);
+                      }}
+                      className="w-full rounded-lg px-3 py-2 text-right text-sm hover:bg-background"
+                    >
+                      <div className="font-semibold">
+                        {c.check_number} — {c.payee}
+                      </div>
+                      <div className="text-xs text-muted">
+                        סכום: {formatCurrency(c.amount)}, תאריך פירעון: {c.due_date ? formatDate(c.due_date) : "—"}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
           <button
             type="button"
             onClick={addByCheckNumber}
@@ -218,7 +265,8 @@ export function BankReconciliationPanel({ bankAccounts }: { bankAccounts: BankAc
           </button>
         </div>
         {quickAddError && <p className="text-xs text-danger">{quickAddError}</p>}
-        {quickCheckPreview !== undefined &&
+        {!quickDropdownVisible &&
+          quickCheckPreview !== undefined &&
           (quickCheckPreview ? (
             <p className="text-xs text-muted">
               <span className="font-semibold text-foreground">{quickCheckPreview.payee}</span> — סכום:{" "}
