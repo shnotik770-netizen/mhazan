@@ -12,6 +12,7 @@ import { DateInput } from "@/components/date-input";
 import { ExpectedIncomeBatchForm } from "@/components/expected-income-batch-form";
 import { Modal } from "@/components/modal";
 import { useSortFilter, SortFilterTh, type ColumnDef } from "@/components/sortable-table";
+import { useSimulation } from "@/components/forecast-simulation-client";
 import { formatCurrency, formatDate, todayIso, daysAgoLabel } from "@/lib/format";
 import type { Tables } from "@/lib/supabase/database.types";
 
@@ -26,6 +27,29 @@ function dueDateIso(expectedDate: string): string {
   const d = new Date(`${expectedDate}T00:00:00`);
   d.setDate(d.getDate() - CONFIRMATION_WINDOW_DAYS);
   return d.toISOString().slice(0, 10);
+}
+
+// The account's bank-reported balance (currentBalance below) can be stale by
+// days or weeks — this walks the same simulated items the rest of the page
+// already uses to show what the balance actually is right now, accounting
+// for everything already scheduled up through today. Shown in green/red like
+// an income/expense figure (never plain text) so it reads as a real number,
+// not just a label next to the bank's own stale one.
+export function TodayBalanceLine() {
+  const { items, startingBalance, heldAdjustment } = useSimulation();
+  const today = todayIso();
+  let balance = startingBalance;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.date > today) break;
+    balance = item.runningBalance - heldAdjustment[i];
+  }
+  return (
+    <span className="text-sm">
+      <span className="text-muted">יתרה היום: </span>
+      <span className={`font-semibold ${balance < 0 ? "text-danger" : "text-success"}`}>{formatCurrency(balance)}</span>
+    </span>
+  );
 }
 
 export function BankBalancePanel({
@@ -59,9 +83,10 @@ export function BankBalancePanel({
     <div>
       <p className="text-sm text-muted mb-1">יתרת פתיחה נוכחית בבנק</p>
       {!editing ? (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <p className="text-2xl font-bold">{formatCurrency(currentBalance)}</p>
           <span className="text-xs text-muted">{daysAgoLabel(balanceAsOf)}</span>
+          <TodayBalanceLine />
           <button onClick={() => setEditing(true)} className="text-xs text-primary underline">
             עדכון יתרה
           </button>

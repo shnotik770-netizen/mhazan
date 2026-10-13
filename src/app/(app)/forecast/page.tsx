@@ -6,7 +6,7 @@ import { formatCurrency, formatDate, daysAgoLabel, todayIso } from "@/lib/format
 import { safeErrorMessage } from "@/lib/safe-error";
 import { ForecastAccountSelect } from "@/components/forecast-account-select-client";
 import { ForecastPdfExportButton } from "@/components/forecast-pdf-export-client";
-import { BankBalancePanel, ExpectedIncomeManager } from "@/components/forecast-client";
+import { BankBalancePanel, ExpectedIncomeManager, TodayBalanceLine } from "@/components/forecast-client";
 import { ForecastDailyTable } from "@/components/forecast-daily-table-client";
 import { ForecastHorizonPicker } from "@/components/forecast-horizon-picker-client";
 import {
@@ -250,8 +250,11 @@ export default async function ForecastPage({
             ) : (
               <div>
                 <p className="text-sm text-muted mb-1">יתרת פתיחה נוכחית</p>
-                <p className="text-2xl font-bold">{formatCurrency(Number(selectedAccount.current_balance))}</p>
-                <p className="text-xs text-muted">{daysAgoLabel(selectedAccount.balance_as_of)}</p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <p className="text-2xl font-bold">{formatCurrency(Number(selectedAccount.current_balance))}</p>
+                  <span className="text-xs text-muted">{daysAgoLabel(selectedAccount.balance_as_of)}</span>
+                  <TodayBalanceLine />
+                </div>
               </div>
             )}
 
