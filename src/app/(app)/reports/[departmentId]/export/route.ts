@@ -4,6 +4,10 @@ import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getDepartmentReportData, monthLabel, type CombinedRow } from "@/lib/department-report-data";
 import { formatDate } from "@/lib/format";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+const EXPORT_RATE_LIMIT = 60;
+const EXPORT_RATE_WINDOW_MS = 5 * 60 * 1000;
 
 function kindLabel(kind: CombinedRow["kind"]): string {
   if (kind === "income") return "הכנסה";
@@ -45,6 +49,15 @@ function addRowsSheet(workbook: ExcelJS.Workbook, title: string, rows: CombinedR
 export async function GET(_request: Request, { params }: { params: Promise<{ departmentId: string }> }) {
   const { departmentId } = await params;
   const user = await requireUser();
+
+  const rate = checkRateLimit(`export:${user.id}`, EXPORT_RATE_LIMIT, EXPORT_RATE_WINDOW_MS);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: `יותר מדי בקשות ייצוא — נסו שוב בעוד ${rate.retryAfterSeconds} שניות` },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } },
+    );
+  }
+
   const supabase = await createClient();
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
 

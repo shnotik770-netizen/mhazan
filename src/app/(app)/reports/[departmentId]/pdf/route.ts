@@ -3,6 +3,15 @@ import puppeteer from "puppeteer";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { safeErrorMessage } from "@/lib/safe-error";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+// Each request here launches a full headless Chromium process — by far the
+// most expensive route in the app. 30 per 5 minutes per user comfortably
+// covers a real "כל המחלקות" batch (the export button calls this once per
+// department, sequentially) while still cutting off a scripted flood long
+// before it could exhaust the server's CPU/memory.
+const PDF_RATE_LIMIT = 30;
+const PDF_RATE_WINDOW_MS = 5 * 60 * 1000;
 
 // A real, downloadable PDF per department — unlike the browser's own
 // print-to-PDF (what PrintButton elsewhere in the app still uses), this
@@ -16,6 +25,15 @@ import { safeErrorMessage } from "@/lib/safe-error";
 export async function GET(request: Request, { params }: { params: Promise<{ departmentId: string }> }) {
   const { departmentId } = await params;
   const user = await requireUser();
+
+  const rate = checkRateLimit(`pdf:${user.id}`, PDF_RATE_LIMIT, PDF_RATE_WINDOW_MS);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: `יותר מדי בקשות להפקת PDF — נסו שוב בעוד ${rate.retryAfterSeconds} שניות` },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } },
+    );
+  }
+
   const supabase = await createClient();
   const isAdmin = user.profile.role === "FINANCE_ADMIN";
 

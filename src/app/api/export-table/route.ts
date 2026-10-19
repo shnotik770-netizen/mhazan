@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { requireUser } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+const EXPORT_RATE_LIMIT = 60;
+const EXPORT_RATE_WINDOW_MS = 5 * 60 * 1000;
 
 // Generic "export whatever is currently on screen" endpoint: the client
 // already computed the filtered/sorted rows for its own table (search box,
@@ -16,7 +20,15 @@ const MAX_ROWS = 20000;
 const MAX_COLUMNS = 40;
 
 export async function POST(request: Request) {
-  await requireUser();
+  const user = await requireUser();
+
+  const rate = checkRateLimit(`export-table:${user.id}`, EXPORT_RATE_LIMIT, EXPORT_RATE_WINDOW_MS);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: `יותר מדי בקשות ייצוא — נסו שוב בעוד ${rate.retryAfterSeconds} שניות` },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } },
+    );
+  }
 
   let body: { title?: unknown; columns?: unknown; rows?: unknown };
   try {

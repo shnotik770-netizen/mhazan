@@ -49,11 +49,14 @@ export function DepartmentReportsPdfExportButton({ departments }: { departments:
     setError(null);
     setProgress({ done: 0, total: targets.length });
     let failedCount = 0;
+    let lastErrorMessage: string | null = null;
     for (const d of targets) {
       try {
         const res = await fetch(`/reports/${d.id}/pdf`);
         if (!res.ok) {
           failedCount += 1;
+          const body = await res.json().catch(() => null);
+          if (body?.error) lastErrorMessage = body.error;
         } else {
           const blob = await res.blob();
           downloadBlob(blob, `דוח ${d.name}.pdf`, res.headers.get("content-disposition"));
@@ -64,8 +67,11 @@ export function DepartmentReportsPdfExportButton({ departments }: { departments:
       setProgress((p) => (p ? { done: p.done + 1, total: p.total } : p));
     }
     setIsIssuing(false);
-    if (failedCount > 0) setError(`${failedCount} מתוך ${targets.length} דוחות נכשלו בהפקה — נסו שוב`);
-    else setOpen(false);
+    if (failedCount > 0) {
+      setError(lastErrorMessage ?? `${failedCount} מתוך ${targets.length} דוחות נכשלו בהפקה — נסו שוב`);
+    } else {
+      setOpen(false);
+    }
   }
 
   if (!open) {
