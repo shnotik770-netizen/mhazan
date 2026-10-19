@@ -38,6 +38,9 @@ export async function createCheck(input: {
   markCleared?: boolean;
 }): Promise<{ error?: string }> {
   await requireFinanceAdmin();
+  if (!input.bankAccountId) return { error: "יש לבחור חשבון בנק" };
+  if (!input.payee.trim()) return { error: "יש להזין שם מוטב" };
+  if (!input.amount || input.amount <= 0) return { error: "סכום לא תקין" };
   const supabase = await createClient();
   const {
     data: { user },
@@ -100,6 +103,10 @@ export async function createDeptExpenseRequest(input: {
   notes: string | null;
 }): Promise<{ error?: string }> {
   const currentUser = await requireUser();
+  if (!input.departmentId) return { error: "יש לבחור מחלקה" };
+  if (!input.bankAccountId) return { error: "יש לבחור חשבון בנק" };
+  if (!input.payee.trim()) return { error: "יש להזין שם מוטב" };
+  if (!input.amount || input.amount <= 0) return { error: "סכום לא תקין" };
   const supabase = await createClient();
 
   const { error } = await supabase.from("checks").insert({
