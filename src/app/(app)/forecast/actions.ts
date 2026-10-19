@@ -37,6 +37,7 @@ export async function createExpectedIncome(input: {
   const admin = await requireFinanceAdmin();
   if (!input.bankAccountId) return { error: "יש לבחור חשבון בנק" };
   if (!input.expectedDate) return { error: "יש להזין תאריך" };
+  if (!(input.amount > 0)) return { error: "יש להזין סכום תקין" };
   const supabase = await createClient();
   const months = Math.max(1, Math.floor(input.repeatMonths ?? 1));
   const [y, m, d] = input.expectedDate.split("-").map(Number);
@@ -103,6 +104,7 @@ export async function updateExpectedIncome(
   await requireFinanceAdmin();
   if (!input.bankAccountId) return { error: "יש לבחור חשבון בנק" };
   if (!input.expectedDate) return { error: "יש להזין תאריך" };
+  if (!(input.amount > 0)) return { error: "יש להזין סכום תקין" };
   const supabase = await createClient();
   const { error } = await supabase
     .from("expected_incomes")
