@@ -84,9 +84,18 @@ export function UsersTable({ users, departments }: { users: UserAccessRowData[];
   );
 }
 
+// Math.random() is not a cryptographically secure source and shouldn't be
+// used to generate a credential, even a temporary one the admin hands off
+// out-of-band — crypto.getRandomValues() (available in every browser this
+// app targets) is the right tool for that. 12 random bytes, base36-encoded,
+// comfortably clears MIN_PASSWORD_LENGTH below.
 function randomPassword(): string {
-  return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(36).padStart(2, "0")).join("").slice(0, 14);
 }
+
+const MIN_PASSWORD_LENGTH = 8;
 
 export function NewUserForm() {
   const router = useRouter();
@@ -149,6 +158,7 @@ export function NewUserForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="סיסמה זמנית"
+            minLength={MIN_PASSWORD_LENGTH}
             className="rounded border border-border bg-transparent px-2 py-1 text-sm flex-1"
           />
           <button type="button" onClick={() => setPassword(randomPassword())} className="text-xs text-primary underline whitespace-nowrap">
@@ -158,10 +168,13 @@ export function NewUserForm() {
       </div>
       <p className="text-xs text-muted">
         לאחר היצירה יש להעביר למשתמש את הדוא&quot;ל והסיסמה בדרך מאובטחת, ולקבוע לו למטה הרשאות ומחלקות.
+        {password.length > 0 && password.length < MIN_PASSWORD_LENGTH && (
+          <span className="text-danger"> הסיסמה קצרה מ-{MIN_PASSWORD_LENGTH} תווים.</span>
+        )}
       </p>
       <div className="flex items-center gap-2">
         <button
-          disabled={isPending || !email || !password}
+          disabled={isPending || !email || !password || password.length < MIN_PASSWORD_LENGTH}
           onClick={submit}
           className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-50"
         >
