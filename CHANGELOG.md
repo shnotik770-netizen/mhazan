@@ -4,6 +4,11 @@
 
 ---
 
+## 2026-10-20
+
+### אבטחה: הרצת "Israeli AppSec Scanner" (סקריפטים שהמשתמש העלה) — שני פערים קטנים ב-.gitignore תוקנו
+המשתמש העלה חבילת סריקת אבטחה ייעודית לאפליקציות ישראליות (`israeli-appsec-scanner`, מחברת צד שלישי skills-il) — נבדק קוד המקור של שני הסקריפטים (bash+python, קריאה-בלבד, ללא קריאות רשת) לפני הרצה, והורצו נגד כל הריפו. כל ממצאי ה-CRITICAL/HIGH היו false positives (למשל `type Supplier = ...` זוהה בטעות כ"Tranzila Supplier Code"; regex שמנקה תווי bidi-control מקלט חיפוש RTL זוהה בטעות כ"Trojan Source"). שני ממצאים אמיתיים וזניחים תוקנו: נוספו `*.key` ו-`serviceAccountKey.json` ל-`.gitignore` (לא בשימוש בפרויקט הזה כרגע, אבל תוספת זולה וללא סיכון).
+
 ## 2026-10-19 (המשך 6)
 
 ### אבטחה: תוקן ב-DB (חל מיד) — `materialize_known_recurring_occurrences` דרשה הרשאת מנהל כספים
