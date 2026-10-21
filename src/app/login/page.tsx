@@ -3,9 +3,11 @@ import { login } from "./actions";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; reason?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, reason } = await searchParams;
+  const idleMessage =
+    reason === "idle" ? "התחברות אוטומטית בוטלה עקב חוסר פעילות — יש להתחבר מחדש" : null;
 
   return (
     <div className="flex-1 flex items-center justify-center p-6">
@@ -16,6 +18,11 @@ export default async function LoginPage({
         {error && (
           <div className="mb-4 rounded-lg bg-danger-bg text-danger text-sm px-3 py-2">
             {error}
+          </div>
+        )}
+        {!error && idleMessage && (
+          <div className="mb-4 rounded-lg bg-warning-bg text-warning text-sm px-3 py-2">
+            {idleMessage}
           </div>
         )}
 
