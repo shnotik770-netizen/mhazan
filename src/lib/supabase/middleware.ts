@@ -71,6 +71,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isAuthRoute = request.nextUrl.pathname.startsWith("/login");
+  // /api/health is hit by an unauthenticated uptime check -- it must not be
+  // redirected to /login, but it also doesn't belong in isAuthRoute (a
+  // logged-in user hitting it shouldn't be bounced to "/" the way visiting
+  // /login while signed in is).
+  const isPublicRoute = isAuthRoute || request.nextUrl.pathname === "/api/health";
 
   if (user && !isAuthRoute) {
     const lastActivity = Number(request.cookies.get(LAST_ACTIVITY_COOKIE)?.value ?? 0);
@@ -100,7 +105,7 @@ export async function updateSession(request: NextRequest) {
     });
   }
 
-  if (!user && !isAuthRoute) {
+  if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
