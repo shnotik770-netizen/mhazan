@@ -146,6 +146,16 @@ export default async function LedgerPage({
             />
           </div>
 
+          <div className="card p-4">
+            <h3 className="font-semibold mb-1">חוב בין חשבונות בנק</h3>
+            <p className="text-sm text-muted mb-3">
+              רוב המחלקות משתמשות באותו חשבון בנק מרכזי, כך שחוב בין מחלקות ברוב המקרים אינו חוב אמיתי. הטבלה הזו מציגה רק
+              חוב אמיתי בין חשבונות בנק שונים — העברות בין מחלקות עם חשבונות שונים, וכל הכנסה/הוצאה/רישום ידני שנרשם דרך
+              חשבון אחר מהחשבון שאליו הוא שייך — כולל פירוט כל תנועה שמרכיבה את החוב ועמלת האשראי של 2% במקרים הרלוונטיים.
+            </p>
+            <BankAccountLedgerTable pairs={bankAccountLedgerPairs} />
+          </div>
+
           <div className="card p-4 overflow-x-auto">
             <h3 className="font-semibold mb-1">מאזן מחלקות עם חשבון בנק משלהן</h3>
             <p className="text-sm text-muted mb-3">
@@ -156,16 +166,6 @@ export default async function LedgerPage({
               emptyMessage="אין נתונים"
               departmentHrefBase="/ledger?department="
             />
-          </div>
-
-          <div className="card p-4">
-            <h3 className="font-semibold mb-1">חוב בין חשבונות בנק</h3>
-            <p className="text-sm text-muted mb-3">
-              רוב המחלקות משתמשות באותו חשבון בנק מרכזי, כך שחוב בין מחלקות ברוב המקרים אינו חוב אמיתי. הטבלה הזו מציגה רק
-              חוב אמיתי בין חשבונות בנק שונים — העברות בין מחלקות עם חשבונות שונים, וכל הכנסה/הוצאה/רישום ידני שנרשם דרך
-              חשבון אחר מהחשבון שאליו הוא שייך — כולל פירוט כל תנועה שמרכיבה את החוב ועמלת האשראי של 2% במקרים הרלוונטיים.
-            </p>
-            <BankAccountLedgerTable pairs={bankAccountLedgerPairs} />
           </div>
         </div>
       )}
