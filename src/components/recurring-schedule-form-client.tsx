@@ -130,6 +130,9 @@ export function NewRecurringScheduleForm({
 
   function validate(): string | null {
     if (!bankAccountId) return "יש לבחור חשבון בנק";
+    // A native date input reports "" until a complete date is chosen, so a
+    // blank or half-typed date would otherwise reach the server as "".
+    if (frequency === "ONCE" && !oneTimeDate) return "יש לבחור תאריך מלא לתשלום החד-פעמי";
     if (split) {
       const valid = allocations.filter((a) => a.departmentId && a.amount > 0);
       if (valid.length < 2) return "פיצול דורש לפחות שתי מחלקות עם סכום";

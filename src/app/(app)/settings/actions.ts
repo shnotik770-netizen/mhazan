@@ -76,11 +76,24 @@ export async function createBankAccount(formData: FormData): Promise<void> {
   revalidatePath("/");
 }
 
+// Never hand Postgres "" for a date column -- it rejects it outright
+// ("invalid input syntax for type date"), which surfaced in production as
+// the opaque "Minified React error #441".
+function parseOneTimeDate(frequency: string, formData: FormData): string | null {
+  if (frequency !== "ONCE") return null;
+  const value = String(formData.get("one_time_date") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error("יש לבחור תאריך מלא לתשלום החד-פעמי");
+  }
+  return value;
+}
+
 export async function createRecurringSchedule(formData: FormData): Promise<void> {
   await requireFinanceAdmin();
   const supabase = await createClient();
   const frequency = String(formData.get("frequency") ?? "MONTHLY");
   const type = String(formData.get("type") ?? "FIXED_DATE_FIXED_AMOUNT");
+  const oneTimeDate = parseOneTimeDate(frequency, formData);
   // A variable-date monthly schedule (its whole point: the day isn't known
   // in advance) is allowed to skip day_of_month — either because the type
   // never has one (VARIABLE_DATE_ESTIMATED_AMOUNT) or because this
@@ -119,7 +132,7 @@ export async function createRecurringSchedule(formData: FormData): Promise<void>
       frequency,
       day_of_month: frequency === "MONTHLY" || frequency === "YEARLY" ? dayOfMonth : null,
       day_of_week: frequency === "WEEKLY" ? Number(formData.get("day_of_week")) : null,
-      one_time_date: frequency === "ONCE" ? String(formData.get("one_time_date")) : null,
+      one_time_date: oneTimeDate,
       expected_amount: Number(formData.get("expected_amount") ?? 0),
       category_id: String(formData.get("category_id") ?? "") || null,
       bank_account_id: String(formData.get("bank_account_id") ?? "") || null,
@@ -155,6 +168,7 @@ export async function updateRecurringSchedule(scheduleId: string, formData: Form
   const supabase = await createClient();
   const frequency = String(formData.get("frequency") ?? "MONTHLY");
   const type = String(formData.get("type") ?? "FIXED_DATE_FIXED_AMOUNT");
+  const oneTimeDate = parseOneTimeDate(frequency, formData);
   const dayOfMonthRaw = formData.get("day_of_month");
   const dayOfMonth =
     (frequency === "MONTHLY" &&
@@ -183,7 +197,7 @@ export async function updateRecurringSchedule(scheduleId: string, formData: Form
       frequency,
       day_of_month: frequency === "MONTHLY" || frequency === "YEARLY" ? dayOfMonth : null,
       day_of_week: frequency === "WEEKLY" ? Number(formData.get("day_of_week")) : null,
-      one_time_date: frequency === "ONCE" ? String(formData.get("one_time_date")) : null,
+      one_time_date: oneTimeDate,
       expected_amount: Number(formData.get("expected_amount") ?? 0),
       category_id: String(formData.get("category_id") ?? "") || null,
       bank_account_id: String(formData.get("bank_account_id") ?? "") || null,
