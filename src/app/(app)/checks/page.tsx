@@ -224,6 +224,7 @@ export default async function ChecksPage({
   const grantedIds = new Set((grants ?? []).map((g) => g.department_id));
   const myDepartments = isAdmin ? (departments ?? []) : (departments ?? []).filter((d) => grantedIds.has(d.id));
 
+  const bankAccountById = new Map((bankAccounts ?? []).map((b) => [b.id, b]));
   const pendingConfirmationRows: PendingConfirmation[] = (pendingConfirmations ?? []).map((p) => {
     const row = p as unknown as {
       schedule_id: string;
@@ -231,17 +232,21 @@ export default async function ChecksPage({
       direction: string;
       department_id: string | null;
       department_name: string | null;
+      bank_account_id: string | null;
       expected_amount: number;
       period_date: string;
       is_split: boolean;
       split_allocations: { departmentId: string; departmentName: string; amount: number }[] | null;
     };
+    const bank = row.bank_account_id ? bankAccountById.get(row.bank_account_id) : undefined;
     return {
       scheduleId: row.schedule_id,
       scheduleName: row.schedule_name,
       direction: row.direction,
       departmentId: row.department_id,
       departmentName: row.department_name,
+      bank_name: bank?.bank_name ?? "ללא חשבון בנק",
+      account_number: bank?.account_number ?? "—",
       expectedAmount: Number(row.expected_amount),
       periodDate: row.period_date,
       isSplit: row.is_split,
