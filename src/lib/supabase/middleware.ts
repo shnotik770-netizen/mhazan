@@ -16,14 +16,18 @@ const LAST_ACTIVITY_COOKIE = "mhz_last_activity";
 // script without 'unsafe-inline' (which defeats most of the point of a
 // script-src restriction); a fresh nonce per request lets us allow exactly
 // that one script, and nothing else, without widening the policy at all.
-// Verified via a headless-browser console check against a real build: no
-// console errors, and 'strict-dynamic' means the policy doesn't even need a
-// host allowlist (nothing third-party is loaded anywhere in this app).
+// 'strict-dynamic' means the policy doesn't even need a host allowlist
+// (nothing third-party is loaded anywhere in this app).
+// style-src deliberately allows 'unsafe-inline' instead of the nonce: Radix
+// (every ⋮ row menu and popover) injects an un-nonced <style> tag for its
+// scroll lock, which a nonce'd style-src blocked on every menu open. Inline
+// styles can't execute code -- the XSS protection lives in script-src, which
+// stays nonce-only.
 function buildCsp(nonce: string, isDev: boolean) {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self'",
     "connect-src 'self'",
