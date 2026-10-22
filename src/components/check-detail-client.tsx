@@ -117,6 +117,12 @@ function CheckDetailModal({ checkId, onClose }: { checkId: string; onClose: () =
                   <span className="text-muted">חשבון בנק: </span>
                   {detail.check.bankName} ({detail.check.accountNumber})
                 </div>
+                {detail.check.internalBeneficiary && (
+                  <div className="col-span-2">
+                    <span className="text-muted">מוטב פנימי בתוך הספק: </span>
+                    {detail.check.internalBeneficiary}
+                  </div>
+                )}
                 {detail.check.notes && (
                   <div className="col-span-2">
                     <span className="text-muted">הערות: </span>
@@ -368,6 +374,12 @@ function PayeeExpensesTable({
       filterValue: (r) => (r.payment_method === "TRANSFER" ? "העברה" : "צ׳ק"),
     },
     { key: "check_number", label: "מס׳ צ׳ק", sortValue: (r) => r.check_number ?? "" },
+    {
+      key: "internal_beneficiary",
+      label: "מוטב פנימי",
+      sortValue: (r) => r.internal_beneficiary ?? "",
+      filterValue: (r) => r.internal_beneficiary ?? "—",
+    },
     { key: "department", label: "מחלקה", sortValue: (r) => r.departmentName ?? "", filterValue: (r) => r.departmentName ?? "בהמתנה" },
     { key: "category", label: "קטגוריה", sortValue: (r) => r.categoryName ?? "", filterValue: (r) => r.categoryName ?? "—" },
     { key: "status", label: "סטטוס", sortValue: (r) => statusLabel(r.status), filterValue: (r) => statusLabel(r.status) },
@@ -406,6 +418,7 @@ function PayeeExpensesTable({
                 </span>
               )}
             </td>
+            <td>{r.internal_beneficiary ?? <span className="text-muted">—</span>}</td>
             <td>{r.departmentName ?? <span className="text-warning">בהמתנה</span>}</td>
             <td>{r.categoryName ?? "—"}</td>
             <td>{statusLabel(r.status)}</td>
@@ -432,7 +445,7 @@ function PayeeExpensesTable({
         ))}
         {sorted.length === 0 && (
           <tr>
-            <td colSpan={8} className="text-center text-muted py-4">
+            <td colSpan={9} className="text-center text-muted py-4">
               {rows.length === 0 ? "אין הוצאות" : "אין תוצאות"}
             </td>
           </tr>

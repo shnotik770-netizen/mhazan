@@ -586,6 +586,44 @@ export async function updateCheckStatus(
   return { error: safeErrorMessage(error) };
 }
 
+// Several overdue transfers often go out as one real bank transfer (e.g.
+// three payment requests to the same supplier paid at once) -- confirms them
+// together with one actual date and one optional internal beneficiary. A
+// blank beneficiary leaves any existing value alone rather than clearing it.
+export async function confirmTransfersBatch(
+  checkIds: string[],
+  actualDate: string,
+  internalBeneficiary: string,
+): Promise<{ error?: string }> {
+  await requireFinanceAdmin();
+  if (!Array.isArray(checkIds) || checkIds.length === 0 || checkIds.length > 200) {
+    return { error: "לא נבחרו העברות" };
+  }
+  if (!checkIds.every((id) => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id))) {
+    return { error: "בחירה לא תקינה" };
+  }
+  if (typeof actualDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(actualDate)) {
+    return { error: "יש לבחור תאריך מלא" };
+  }
+  const beneficiary = String(internalBeneficiary ?? "").trim().slice(0, 200);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("checks")
+    .update({ status: "CLEARED", due_date: actualDate, ...(beneficiary ? { internal_beneficiary: beneficiary } : {}) })
+    .in("id", checkIds)
+    .eq("payment_method", "TRANSFER")
+    .eq("status", "UNPAID")
+    .select("id");
+  revalidateCheckPaths();
+  if (error) return { error: safeErrorMessage(error) };
+  const updated = data?.length ?? 0;
+  if (updated !== checkIds.length) {
+    return { error: `אושרו ${updated} מתוך ${checkIds.length} — חלק מההעברות כבר אושרו או שונו בינתיים` };
+  }
+  return {};
+}
+
 // Cancels an existing check/transfer and, in the same action, files its
 // replacement: same payee, amount, department/split, category and notes as
 // the original — only the payment method, date, and (for a check) number
@@ -700,6 +738,7 @@ export type CheckSpreadDetail = {
     payee: string;
     payment_method: string;
     notes: string | null;
+    internalBeneficiary: string | null;
     bankName: string | null;
     accountNumber: string | null;
   };
@@ -767,6 +806,7 @@ export async function getCheckSpreadDetail(checkId: string): Promise<{ error?: s
         payee: check.payee,
         payment_method: check.payment_method,
         notes: check.notes,
+        internalBeneficiary: check.internal_beneficiary,
         bankName: bankAccounts.bank_accounts?.bank_name ?? null,
         accountNumber: bankAccounts.bank_accounts?.account_number ?? null,
       },
@@ -831,6 +871,7 @@ export type PayeeExpenseRow = {
   category_id: string | null;
   categoryName: string | null;
   notes: string | null;
+  internal_beneficiary: string | null;
   spread_id: string | null;
 };
 
@@ -854,7 +895,7 @@ export async function getExpensesByPayee(payee: string, departmentId?: string): 
   let checksQuery = supabase
     .from("checks")
     .select(
-      "id, due_date, amount, payment_method, check_number, status, department_id, category_id, notes, spread_id, departments(name), categories(name)",
+      "id, due_date, amount, payment_method, check_number, status, department_id, category_id, notes, internal_beneficiary, spread_id, departments(name), categories(name)",
     )
     .ilike("payee", payee)
     .not("due_date", "is", null)
@@ -878,6 +919,7 @@ export async function getExpensesByPayee(payee: string, departmentId?: string): 
     department_id: string | null;
     category_id: string | null;
     notes: string | null;
+    internal_beneficiary: string | null;
     spread_id: string | null;
     departments: { name: string } | null;
     categories: { name: string } | null;
@@ -906,6 +948,7 @@ export async function getExpensesByPayee(payee: string, departmentId?: string): 
       category_id: r.category_id,
       categoryName: r.categories?.name ?? null,
       notes: r.notes,
+      internal_beneficiary: r.internal_beneficiary,
       spread_id: r.spread_id,
     })),
     departments: departments ?? [],

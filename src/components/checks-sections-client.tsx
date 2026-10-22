@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { confirmTransfersBatch } from "@/app/(app)/checks/actions";
 import {
   ApprovePaymentRequestRow,
   CancelAndReplaceCheckButton,
@@ -9,6 +11,7 @@ import {
   EditCheckButton,
   VerifyTransferButton,
 } from "@/components/checks-client";
+import { DateInput } from "@/components/date-input";
 import type { Tables } from "@/lib/supabase/database.types";
 import { PayeeLink } from "@/components/check-detail-client";
 import { RowActionsMenu } from "@/components/row-actions-menu";
@@ -272,18 +275,49 @@ export function OverdueTransfersTable({
   ];
   const { rows: filtered, sort, toggleSort, filters, setColumnFilter } = useSortFilter(searched, columns);
   const grouped = groupByBank(filtered);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const selectedRows = flat.filter((r) => selected.has(r.id));
+
+  function toggle(ids: string[], on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
 
   return (
     <div className="mb-4">
       <h2 className="font-semibold mb-1">⚠ {rows.length} העברות שטרם אושרו כבוצעו</h2>
+      <p className="text-xs text-muted mb-1">
+        כמה העברות שיצאו בפועל כהעברה אחת? סמנו אותן בתיבות שבצד ואשרו את כולן יחד.
+      </p>
       <SearchBox value={query} onChange={setQuery} placeholder="חיפוש לפי מוטב" />
-      {grouped.map(([bankLabel, bankRows]) => (
+      {selectedRows.length > 0 && (
+        <BatchConfirmTransfersBar rows={selectedRows} onClear={() => setSelected(new Set())} />
+      )}
+      {grouped.map(([bankLabel, bankRows]) => {
+        const groupIds = bankRows.map((r) => r.id);
+        const allSelected = groupIds.every((id) => selected.has(id));
+        return (
         <div key={bankLabel} className={`mb-3 border-r-4 ${bankColorFor(bankLabel).border} pr-3`}>
           <BankGroupHeading label={bankLabel} count={bankRows.length} unit="העברות" />
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>
+                  <th className="w-8">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={(e) => toggle(groupIds, e.target.checked)}
+                      aria-label="בחר את כל ההעברות בחשבון זה"
+                      title="בחר הכל בחשבון זה"
+                    />
+                  </th>
                   {columns.map((col) => (
                     <SortFilterTh
                       key={col.key}
@@ -300,7 +334,15 @@ export function OverdueTransfersTable({
               </thead>
               <tbody>
                 {bankRows.map((row) => (
-                  <tr key={row.id}>
+                  <tr key={row.id} className={selected.has(row.id) ? "bg-primary/5" : undefined}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(row.id)}
+                        onChange={(e) => toggle([row.id], e.target.checked)}
+                        aria-label={`בחר העברה ל${row.payee}`}
+                      />
+                    </td>
                     <td>
                       <PayeeLink payee={row.payee} />
                     </td>
@@ -348,8 +390,92 @@ export function OverdueTransfersTable({
             </table>
           </div>
         </div>
-      ))}
+        );
+      })}
       {filtered.length === 0 && <p className="text-center text-muted py-4">אין תוצאות</p>}
+    </div>
+  );
+}
+
+// Confirms every selected overdue transfer at once -- the common case being
+// several payment requests to one supplier that went out as a single real
+// bank transfer, so they share one actual date and one internal beneficiary.
+function BatchConfirmTransfersBar({ rows, onClear }: { rows: OverdueTransferFlatRow[]; onClear: () => void }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [beneficiary, setBeneficiary] = useState("");
+  // null = follow the selection's latest recorded date, until the admin picks one.
+  const [dateOverride, setDateOverride] = useState<string | null>(null);
+
+  const total = rows.reduce((sum, r) => sum + Number(r.amount), 0);
+  const payees = new Set(rows.map((r) => r.payee.trim()));
+  const latestDueDate = rows.reduce((max, r) => (r.due_date > max ? r.due_date : max), rows[0].due_date);
+  const actualDate = dateOverride ?? latestDueDate;
+
+  function submit() {
+    setError(null);
+    if (!actualDate) {
+      setError("יש לבחור תאריך מלא");
+      return;
+    }
+    const message = `לאשר ${rows.length} העברות (סה״כ ${formatCurrency(total)}) כבוצעו בתאריך ${formatDate(actualDate)}?`;
+    if (!confirm(message)) return;
+    startTransition(async () => {
+      const result = await confirmTransfersBatch(
+        rows.map((r) => r.id),
+        actualDate,
+        beneficiary,
+      );
+      if (result.error) {
+        setError(result.error);
+        router.refresh();
+        return;
+      }
+      onClear();
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="mb-3 rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
+      <p className="text-sm font-semibold">
+        נבחרו {rows.length} העברות · סה״כ {formatCurrency(total)}
+      </p>
+      {payees.size > 1 && (
+        <p className="text-xs text-warning">שימו לב: נבחרו העברות לכמה מוטבים שונים ({[...payees].join(", ")}).</p>
+      )}
+      <div className="flex flex-wrap items-end gap-2">
+        <div>
+          <label className="block text-xs text-muted mb-1">תאריך ההעברה בפועל</label>
+          <DateInput
+            value={actualDate}
+            onChange={setDateOverride}
+            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+          />
+        </div>
+        <div className="flex-1 min-w-[12rem]">
+          <label className="block text-xs text-muted mb-1">מוטב פנימי בתוך הספק (אופציונלי, לכל ההעברות)</label>
+          <input
+            value={beneficiary}
+            onChange={(e) => setBeneficiary(e.target.value)}
+            maxLength={200}
+            className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm"
+          />
+        </div>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={submit}
+          className="rounded bg-primary text-primary-foreground text-sm px-3 py-1.5 disabled:opacity-50"
+        >
+          אשר את כולן כבוצעו
+        </button>
+        <button type="button" disabled={isPending} onClick={onClear} className="text-sm text-muted underline">
+          נקה בחירה
+        </button>
+      </div>
+      {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );
 }
