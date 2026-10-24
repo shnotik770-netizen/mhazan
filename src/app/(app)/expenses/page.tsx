@@ -26,14 +26,27 @@ export default async function ExpensesPage() {
   // "הוצאות" = every expense already approved (out of the "דרישות תשלום"
   // stage — i.e. has a due date) regardless of whether it's since been
   // paid, plus approved manual expense entries.
-  let checksQuery = supabase
-    .from("checks")
-    .select(
-      "id, due_date, amount, payee, notes, status, payment_method, check_number, department_id, category_id, bank_account_id, spread_id, skip_department_ledger, has_invoice, departments(name), categories(name), bank_accounts(bank_name, account_number)",
-    )
-    .not("due_date", "is", null)
-    .order("due_date", { ascending: false })
-    .limit(300);
+  // The full history is loaded (not just the latest few hundred) because the
+  // search box filters client-side -- a cap here silently made any payee
+  // paid only before the cutoff unfindable. The table itself still renders
+  // only the most recent rows until a search/filter is applied. Fetched in
+  // pages because Supabase returns at most 1000 rows per request regardless
+  // of the requested limit.
+  const PAGE_SIZE = 1000;
+  const MAX_PAGES = 10;
+  function checksPage(from: number) {
+    let q = supabase
+      .from("checks")
+      .select(
+        "id, due_date, amount, payee, notes, internal_beneficiary, status, payment_method, check_number, department_id, category_id, bank_account_id, spread_id, skip_department_ledger, has_invoice, departments(name), categories(name), bank_accounts(bank_name, account_number)",
+      )
+      .not("due_date", "is", null)
+      .order("due_date", { ascending: false })
+      .order("id")
+      .range(from, from + PAGE_SIZE - 1);
+    if (myDepartmentIds) q = q.in("department_id", [...myDepartmentIds]);
+    return q;
+  }
   let manualQuery = supabase
     .from("manual_department_entries")
     .select(
@@ -42,27 +55,38 @@ export default async function ExpensesPage() {
     .eq("status", "APPROVED")
     .eq("direction", "EXPENSE")
     .order("entry_date", { ascending: false })
-    .limit(300);
+    .limit(PAGE_SIZE);
+  if (myDepartmentIds) manualQuery = manualQuery.in("department_id", [...myDepartmentIds]);
 
-  if (myDepartmentIds) {
-    checksQuery = checksQuery.in("department_id", [...myDepartmentIds]);
-    manualQuery = manualQuery.in("department_id", [...myDepartmentIds]);
+  type CheckRecord = NonNullable<Awaited<ReturnType<typeof checksPage>>["data"]>[number];
+  async function fetchAllChecks(): Promise<CheckRecord[]> {
+    const all: CheckRecord[] = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const { data } = await checksPage(page * PAGE_SIZE);
+      all.push(...(data ?? []));
+      if (!data || data.length < PAGE_SIZE) break;
+    }
+    return all;
   }
 
-  const [{ data: checks }, { data: manualEntries }] = await Promise.all([checksQuery, manualQuery]);
+  const [checks, { data: manualEntries }] = await Promise.all([fetchAllChecks(), manualQuery]);
 
   // A split check has no single department_id (it's divided across several
   // departments via check_allocations) — that's a different, resolved state
   // from a check that's simply unclassified, so the two need distinct
   // labels rather than both falling back to "pending".
   const unclassifiedCheckIds = (checks ?? []).filter((c) => !c.department_id).map((c) => c.id);
-  const { data: allocationRows } =
-    unclassifiedCheckIds.length > 0
-      ? await supabase
-          .from("check_allocations")
-          .select("check_id, department_id, amount, category_id")
-          .in("check_id", unclassifiedCheckIds)
-      : { data: [] as { check_id: string; department_id: string; amount: number; category_id: string | null }[] };
+  // Batched: every id goes into the request URL, and a few hundred UUIDs in
+  // one .in() can exceed URL length limits and fail silently.
+  const idBatches: string[][] = [];
+  for (let i = 0; i < unclassifiedCheckIds.length; i += 100) idBatches.push(unclassifiedCheckIds.slice(i, i + 100));
+  const allocationRows = (
+    await Promise.all(
+      idBatches.map((ids) =>
+        supabase.from("check_allocations").select("check_id, department_id, amount, category_id").in("check_id", ids),
+      ),
+    )
+  ).flatMap((r) => r.data ?? []);
   const splitCheckIds = new Set((allocationRows ?? []).map((a) => a.check_id));
   const allocationsByCheckId = new Map<string, { departmentId: string; amount: number; categoryId: string | null }[]>();
   for (const a of allocationRows ?? []) {
@@ -78,6 +102,7 @@ export default async function ExpensesPage() {
     source: string;
     description: string;
     payeeName: string;
+    internalBeneficiary: string | null;
     notes: string | null;
     amount: number;
     departmentId: string | null;
@@ -103,6 +128,7 @@ export default async function ExpensesPage() {
         amount: number;
         payee: string;
         notes: string | null;
+        internal_beneficiary: string | null;
         status: string;
         payment_method: string;
         check_number: string | null;
@@ -123,6 +149,7 @@ export default async function ExpensesPage() {
         source: row.payment_method === "TRANSFER" ? "העברה" : "צ׳ק",
         description: row.payee + (row.notes ? ` — ${row.notes}` : ""),
         payeeName: row.payee,
+        internalBeneficiary: row.internal_beneficiary,
         notes: row.notes,
         amount: Number(row.amount),
         departmentId: row.department_id,
@@ -160,6 +187,7 @@ export default async function ExpensesPage() {
         source: row.recurring_schedule_id ? "חיוב קבוע" : "הוצאה ידנית",
         description: row.notes ?? "—",
         payeeName: "",
+        internalBeneficiary: null,
         notes: row.notes,
         amount: Number(row.amount),
         departmentId: row.department_id,

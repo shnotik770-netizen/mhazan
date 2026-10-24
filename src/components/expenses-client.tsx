@@ -32,6 +32,7 @@ export type ExpenseRow = {
   source: string;
   description: string;
   payeeName: string;
+  internalBeneficiary: string | null;
   notes: string | null;
   amount: number;
   departmentId: string | null;
@@ -95,6 +96,7 @@ export function ExpensesTable({
     if (!q) return true;
     return (
       normalizeSearchQuery(r.description).includes(q) ||
+      normalizeSearchQuery(r.internalBeneficiary ?? "").includes(q) ||
       normalizeSearchQuery(r.departmentName ?? "").includes(q) ||
       normalizeSearchQuery(r.categoryName ?? "").includes(q) ||
       normalizeSearchQuery(r.bankAccountName ?? "").includes(q) ||
@@ -124,7 +126,13 @@ export function ExpensesTable({
       filterValue: (r) => (r.isCheck ? (r.hasInvoice ? "יש חשבונית" : "אין חשבונית") : "—"),
     },
   ];
-  const { rows: sorted, sort, toggleSort, filters, setColumnFilter } = useSortFilter(filtered, columns);
+  const { rows: sorted, sort, toggleSort, filters, setColumnFilter, hasActiveFilters } = useSortFilter(filtered, columns);
+  // The whole history is loaded so search reaches every expense, but
+  // rendering all of it unfiltered would be slow (especially on phones) --
+  // show the most recent rows until the user actually narrows it down.
+  const RECENT_LIMIT = 300;
+  const isNarrowed = Boolean(normalizeSearchQuery(query)) || onlyUnclassified || Boolean(fromDate) || Boolean(toDate) || hasActiveFilters;
+  const visible = isNarrowed ? sorted : sorted.slice(0, RECENT_LIMIT);
 
   const exportColumns: ExportColumn[] = [
     { header: "סוג", key: "source", width: 14 },
@@ -147,7 +155,7 @@ export function ExpensesTable({
     spreadTotals.set(r.spreadId, (spreadTotals.get(r.spreadId) ?? 0) + r.amount);
   }
 
-  const selectableIds = new Set(sorted.filter((r) => r.isCheck).map((r) => r.id));
+  const selectableIds = new Set(visible.filter((r) => r.isCheck).map((r) => r.id));
   const allSelectableSelected = selectableIds.size > 0 && [...selectableIds].every((id) => selected.has(id));
 
   function toggleRow(id: string) {
@@ -255,7 +263,7 @@ export function ExpensesTable({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="חיפוש לפי תיאור / ספק / מחלקה / קטגוריה / בנק / מספר צ׳ק"
+          placeholder="חיפוש לפי ספק / מוטב פנימי / תיאור / מחלקה / קטגוריה / בנק / מספר צ׳ק"
           className="w-full max-w-sm rounded-lg border border-border bg-transparent px-3 py-2 text-sm"
         />
         <label className="flex items-center gap-2 text-sm">
@@ -391,6 +399,12 @@ export function ExpensesTable({
         </div>
       )}
 
+      {!isNarrowed && sorted.length > RECENT_LIMIT && (
+        <p className="text-xs text-muted mb-2">
+          מוצגות {RECENT_LIMIT} ההוצאות האחרונות מתוך {sorted.length}. החיפוש והסינון עוברים על כל ההיסטוריה.
+        </p>
+      )}
+
       <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
@@ -415,7 +429,7 @@ export function ExpensesTable({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r) => (
+            {visible.map((r) => (
               <tr key={`${r.source}-${r.id}`}>
                 {isAdmin && (
                   <td>
@@ -429,6 +443,9 @@ export function ExpensesTable({
                   {r.isCheck ? (
                     <>
                       <PayeeLink payee={r.payeeName} />
+                      {r.internalBeneficiary && (
+                        <span className="text-xs text-muted mr-1">(מוטב פנימי: {r.internalBeneficiary})</span>
+                      )}
                       {r.spreadId && (
                         <span className="badge bg-background text-muted mr-1">
                           פריסה · סה״כ {formatCurrency(spreadTotals.get(r.spreadId) ?? 0)}
